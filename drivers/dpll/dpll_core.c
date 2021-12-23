@@ -115,6 +115,8 @@ struct dpll_device *dpll_device_alloc(struct dpll_device_ops *ops, const char *n
 	mutex_unlock(&dpll_device_xa_lock);
 	dpll->priv = priv;
 
+	dpll_notify_device_create(dpll->id, dev_name(&dpll->dev));
+
 	return dpll;
 
 error:
@@ -150,6 +152,7 @@ void dpll_device_unregister(struct dpll_device *dpll)
 
 	mutex_lock(&dpll_device_xa_lock);
 	xa_erase(&dpll_device_xa, dpll->id);
+	dpll_notify_device_delete(dpll->id);
 	mutex_unlock(&dpll_device_xa_lock);
 }
 EXPORT_SYMBOL_GPL(dpll_device_unregister);
