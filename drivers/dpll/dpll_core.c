@@ -98,6 +98,8 @@ struct dpll_device *dpll_device_alloc(struct dpll_device_ops *ops, int sources_c
 	mutex_unlock(&dpll_device_xa_lock);
 	dpll->priv = priv;
 
+	dpll_notify_device_create(dpll->id, dev_name(&dpll->dev));
+
 	return dpll;
 
 error:
