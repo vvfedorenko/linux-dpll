@@ -283,7 +283,8 @@ static int dpll_genl_cmd_set_source(struct param *p)
 	ret = dpll->ops->set_source_type(dpll, src_id, type);
 	mutex_unlock(&dpll->lock);
 
-	dpll_notify_source_change(dpll->id, src_id, type);
+	if (!ret)
+		dpll_notify_source_change(dpll->id, src_id, type);
 
 	return ret;
 }
@@ -308,7 +309,8 @@ static int dpll_genl_cmd_set_output(struct param *p)
 	ret = dpll->ops->set_source_type(dpll, out_id, type);
 	mutex_unlock(&dpll->lock);
 
-	dpll_notify_source_change(dpll->id, out_id, type);
+	if (!ret)
+		dpll_notify_source_change(dpll->id, out_id, type);
 
 	return ret;
 }
@@ -333,7 +335,8 @@ static int dpll_genl_cmd_set_source_prio(struct param *p)
 	ret = dpll->ops->set_source_prio(dpll, src_id, prio);
 	mutex_unlock(&dpll->lock);
 
-	dpll_notify_source_prio_change(dpll->id, src_id, prio);
+	if (!ret)
+		dpll_notify_source_prio_change(dpll->id, src_id, prio);
 
 	return ret;
 }
@@ -356,7 +359,8 @@ static int dpll_genl_cmd_set_select_mode(struct param *p)
 	ret = dpll->ops->set_source_select_mode(dpll, mode);
 	mutex_unlock(&dpll->lock);
 
-	dpll_notify_source_select_mode_change(dpll->id, mode);
+	if (!ret)
+		dpll_notify_source_select_mode_change(dpll->id, mode);
 
 	return ret;
 }
