@@ -21,7 +21,7 @@ struct dpll_device_ops {
 };
 
 struct dpll_device *dpll_device_alloc(struct dpll_device_ops *ops, int sources_count,
-					 int outputs_count, void *priv);
+				      const char *name, int outputs_count, void *priv);
 void dpll_device_register(struct dpll_device *dpll);
 void dpll_device_unregister(struct dpll_device *dpll);
 void dpll_device_free(struct dpll_device *dpll);
