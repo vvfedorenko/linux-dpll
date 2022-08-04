@@ -224,7 +224,7 @@ out_cancel_nest:
 
 static int dpll_genl_cmd_set_source(struct param *p)
 {
-	const struct nlattr **attrs = p->attrs;
+	const struct nlattr **attrs = (const struct nlattr **)p->attrs;
 	struct dpll_device *dpll = p->dpll;
 	int ret = 0, src_id, type;
 
@@ -249,7 +249,7 @@ static int dpll_genl_cmd_set_source(struct param *p)
 
 static int dpll_genl_cmd_set_output(struct param *p)
 {
-	const struct nlattr **attrs = p->attrs;
+	const struct nlattr **attrs = (const struct nlattr **)p->attrs;
 	struct dpll_device *dpll = p->dpll;
 	int ret = 0, out_id, type;
 
