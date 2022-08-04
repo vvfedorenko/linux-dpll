@@ -306,11 +306,11 @@ static int dpll_genl_cmd_set_output(struct param *p)
 	type = nla_get_u32(attrs[DPLLA_OUTPUT_TYPE]);
 
 	mutex_lock(&dpll->lock);
-	ret = dpll->ops->set_source_type(dpll, out_id, type);
+	ret = dpll->ops->set_output_type(dpll, out_id, type);
 	mutex_unlock(&dpll->lock);
 
 	if (!ret)
-		dpll_notify_source_change(dpll->id, out_id, type);
+		dpll_notify_output_change(dpll->id, out_id, type);
 
 	return ret;
 }
