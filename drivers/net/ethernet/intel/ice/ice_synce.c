@@ -608,7 +608,6 @@ release_info:
 	return ret;
 }
 
-#define NAME_SIZE	32
 /**
  * ice_synce_init_dpll
  * @pf: Board private structure
@@ -623,9 +622,9 @@ static int ice_synce_init_dpll(struct ice_pf *pf)
 {
 	struct device *dev = ice_pf_to_dev(pf);
 	struct ice_synce *se = &pf->synce;
-	char name[NAME_SIZE];
+	char name[DPLL_NAME_LENGTH];
 
-	snprintf(name, NAME_SIZE, "%s-SyncE-%s",
+	snprintf(name, DPLL_NAME_LENGTH, "%s-SyncE-%s",
 		 dev_driver_string(dev), dev_name(dev));
 
 	se->dpll = dpll_device_alloc(&ice_synce_dpll_ops, name, se->num_inputs,
