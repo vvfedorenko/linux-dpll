@@ -34,6 +34,17 @@ void dpll_device_unregister(struct dpll_device *dpll);
 void dpll_device_free(struct dpll_device *dpll);
 void *dpll_priv(struct dpll_device *dpll);
 
+/*
+ * dpll_device_get_by_name - find a dpll by its name
+ * @name: name of device
+ *
+ * Allows multiple driver instances using one physical DPLL to find
+ * and share already registered DPLL device.
+ *
+ * Return: pointer if device was found, NULL otherwise.
+ **/
+struct dpll_device *dpll_device_get_by_name(const char *name);
+
 int dpll_notify_status_locked(int dpll_id);
 int dpll_notify_status_unlocked(int dpll_id);
 int dpll_notify_source_change(int dpll_id, int source_id, int source_type);

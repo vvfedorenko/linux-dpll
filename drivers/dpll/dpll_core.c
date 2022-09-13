@@ -69,6 +69,7 @@ struct dpll_device *dpll_device_get_by_name(const char *name)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(dpll_device_get_by_name);
 
 void *dpll_priv(struct dpll_device *dpll)
 {
