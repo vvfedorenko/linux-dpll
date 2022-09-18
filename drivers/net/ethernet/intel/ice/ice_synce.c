@@ -102,13 +102,19 @@ static int ice_synce_get_lock_status(struct dpll_device *dpll)
  * Check current type of a given pin.
  * Return: current type value of a pin.
  */
-static int ice_synce_get_source_type(struct dpll_device *dpll, int id)
+static int ice_synce_get_source_type(struct dpll_pin *pin)
 {
-	struct ice_pf *pf = dpll_priv(dpll);
+	struct ice_pf *pf = pin_priv(pin);
 	int ret;
+	u8 id;
 
+	if (!pf)
+		return DPLL_TYPE_NONE;
+
+	id = (u8)pin_id(pin);
 	if (id < 0 || id >= pf->synce.num_inputs)
 		return DPLL_TYPE_NONE;
+
 	mutex_lock(&pf->synce.lock);
 	ret = pf->synce.inputs[id].type;
 	mutex_unlock(&pf->synce.lock);
@@ -127,13 +133,22 @@ static int ice_synce_get_source_type(struct dpll_device *dpll, int id)
  * * 0 - success,
  * * negative - failure.
  */
-static int ice_synce_set_source_type(struct dpll_device *dpll, int id, int type)
+static int ice_synce_set_source_type(struct dpll_pin *pin, int type)
 {
-	struct ice_pf *pf = dpll_priv(dpll);
-	struct ice_synce *se = &pf->synce;
+	struct ice_pf *pf = pin_priv(pin);
 	struct ice_synce_pin *inputs;
+	struct ice_synce *se;
 	int ret;
+	u8 id;
 
+	if (!pf)
+		return -ENODEV;
+
+	se = &pf->synce;
+	if (!se)
+		return -ENOSPC;
+
+	id = (u8)pin_id(pin);
 	if (id < 0 || id >= se->num_inputs)
 		return -EINVAL;
 	inputs = se->inputs;
@@ -171,14 +186,22 @@ static int ice_synce_set_source_type(struct dpll_device *dpll, int id, int type)
  * dpll subsystem callback.
  * Check if given type is supported on a given pin.
  * Return:
- * * true - if supported
- * * false - if not supported
+ * * value - if supported
+ * * 0 - if not supported
  */
 static int
-ice_synce_get_source_supported(struct dpll_device *dpll, int id, int type)
+ice_synce_get_source_supported(struct dpll_pin *pin, int type)
 {
-	struct ice_pf *pf = dpll_priv(dpll);
+	struct ice_pf *pf = pin_priv(pin);
 	int ret;
+	u8 id;
+
+	if (!pf)
+		return 0;
+
+	id = (u8)pin_id(pin);
+	if (id >= pf->synce.num_outputs)
+		return 0;
 
 	mutex_lock(&pf->synce.lock);
 	ret = !!(pf->synce.inputs[id].types_supported & BIT(type));
@@ -196,13 +219,19 @@ ice_synce_get_source_supported(struct dpll_device *dpll, int id, int type)
  * Check current type of a given pin.
  * Return: current type value of a pin.
  */
-static int ice_synce_get_output_type(struct dpll_device *dpll, int id)
+static int ice_synce_get_output_type(struct dpll_pin *pin)
 {
-	struct ice_pf *pf = dpll_priv(dpll);
+	struct ice_pf *pf = pin_priv(pin);
 	int ret;
+	u8 id;
 
+	if (!pf)
+		return DPLL_TYPE_NONE;
+
+	id = (u8)pin_id(pin);
 	if (id < 0 || id >= pf->synce.num_outputs)
 		return DPLL_TYPE_NONE;
+
 	mutex_lock(&pf->synce.lock);
 	ret = pf->synce.outputs[id].type;
 	mutex_unlock(&pf->synce.lock);
@@ -212,26 +241,35 @@ static int ice_synce_get_output_type(struct dpll_device *dpll, int id)
 
 /**
  * ice_synce_set_output_type
- * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
  * @id: output pin index
  *
- * dpll subsystem callback.
+ * pin subsystem callback.
  * Set type of a given output pin.
  * Return:
  * * 0 - success,
  * * negative - failure.
  */
-static int ice_synce_set_output_type(struct dpll_device *dpll, int id, int type)
+static int ice_synce_set_output_type(struct dpll_pin *pin, int type)
 {
-	struct ice_pf *pf = dpll_priv(dpll);
-	struct ice_synce *se = &pf->synce;
+	struct ice_pf *pf = pin_priv(pin);
 	struct ice_synce_pin *outputs;
+	struct ice_synce *se;
 	int ret;
+	u8 id;
 
+	if (!pf)
+		return -ENODEV;
+
+	se = &pf->synce;
+	if (!se)
+		return -ENOSPC;
+
+	id = (u8)pin_id(pin);
 	if (id < 0 || id >= se->num_outputs)
 		return -EINVAL;
-	outputs = se->outputs;
 
+	outputs = se->outputs;
 	if (type == outputs[id].type)
 		return 0;
 
@@ -258,21 +296,29 @@ static int ice_synce_set_output_type(struct dpll_device *dpll, int id, int type)
 
 /**
  * ice_synce_get_output_supported
- * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
  * @id: output pin index
  * @type: id of type
  *
- * dpll subsystem callback.
+ * pin subsystem callback.
  * Check if given type is supported on a given pin.
  * Return:
- * * true - if supported
- * * false - if not supported
+ * * value - if supported
+ * * 0 - if not supported
  */
 static int
-ice_synce_get_output_supported(struct dpll_device *dpll, int id, int type)
+ice_synce_get_output_supported(struct dpll_pin *pin, int type)
 {
-	struct ice_pf *pf = dpll_priv(dpll);
+	struct ice_pf *pf = pin_priv(pin);
 	int ret;
+	u8 id;
+
+	if (!pf)
+		return 0;
+
+	id = (u8)pin_id(pin);
+	if (id >= pf->synce.num_outputs)
+		return 0;
 
 	mutex_lock(&pf->synce.lock);
 	ret = !!(pf->synce.outputs[id].types_supported & BIT(type));
@@ -322,11 +368,14 @@ static int ice_synce_get_src_select_supported(struct dpll_device *dpll, int mode
  * Get source priority value.
  * Return: source priority value
  */
-static int ice_synce_get_source_prio(struct dpll_device *dpll, int id)
+static int ice_synce_get_source_prio(struct dpll_pin *pin, struct dpll_device *dpll)
 {
 	struct ice_pf *pf = dpll_priv(dpll);
-	u8 idx = (u8)id;
+	u8 idx = (u8)pin_id(pin);
 	int ret;
+
+	if (!pf)
+		return -ENODEV;
 
 	if (idx >= pf->synce.num_inputs)
 		return 0xFF;
@@ -350,16 +399,22 @@ static int ice_synce_get_source_prio(struct dpll_device *dpll, int id)
  * * 0 - success
  * * negative - failure
  */
-static int ice_synce_set_source_prio(struct dpll_device *dpll, int id, int prio)
+static int ice_synce_set_source_prio(struct dpll_pin *pin,
+				     struct dpll_device *dpll, int prio)
 {
 	struct ice_pf *pf = dpll_priv(dpll);
-	struct ice_synce *se = &pf->synce;
-	u8 idx = (u8)id, priov = (u8)prio;
+	u8 idx, priov = (u8)prio;
+	struct ice_synce *se;
 	int ret;
+
+	if (!pf)
+		return -ENODEV;
+	se = &pf->synce;
 
 	if (priov > ICE_SYNCE_PRIO_MAX)
 		return -EINVAL;
 
+	idx = (u8)pin_id(pin);
 	if (idx >= pf->synce.num_inputs)
 		return -EINVAL;
 
@@ -377,43 +432,25 @@ static int ice_synce_set_source_prio(struct dpll_device *dpll, int id, int prio)
 	return ret;
 }
 
-const char *ice_synce_get_source_name(struct dpll_device *dpll, int id)
-{
-	struct ice_pf *pf = dpll_priv(dpll);
-	u8 idx = (u8)id;
+static struct dpll_pin_ops ice_synce_source_ops = {
+	.get_type = ice_synce_get_source_type,
+	.set_type = ice_synce_set_source_type,
+	.is_type_supported = ice_synce_get_source_supported,
+	.get_prio = ice_synce_get_source_prio,
+	.set_prio = ice_synce_set_source_prio,
+};
 
-	if (idx >= pf->synce.num_inputs)
-		return NULL;
-
-	return pf->synce.inputs[idx].name;
-}
-
-const char *ice_synce_get_output_name(struct dpll_device *dpll, int id)
-{
-	struct ice_pf *pf = dpll_priv(dpll);
-	u8 idx = (u8)id;
-
-	if (idx >= pf->synce.num_outputs)
-		return NULL;
-
-	return pf->synce.outputs[idx].name;
-}
+static struct dpll_pin_ops ice_synce_output_ops = {
+	.get_type = ice_synce_get_output_type,
+	.set_type = ice_synce_set_output_type,
+	.is_type_supported = ice_synce_get_output_supported,
+};
 
 static struct dpll_device_ops ice_synce_dpll_ops = {
 	.get_status = ice_synce_get_status,
 	.get_lock_status = ice_synce_get_lock_status,
-	.get_source_type = ice_synce_get_source_type,
-	.set_source_type = ice_synce_set_source_type,
-	.get_source_supported = ice_synce_get_source_supported,
-	.get_output_type = ice_synce_get_output_type,
-	.set_output_type = ice_synce_set_output_type,
-	.get_output_supported = ice_synce_get_output_supported,
 	.get_source_select_mode = ice_synce_get_source_select_mode,
 	.get_source_select_mode_supported = ice_synce_get_src_select_supported,
-	.get_source_prio = ice_synce_get_source_prio,
-	.set_source_prio = ice_synce_set_source_prio,
-	.get_source_name = ice_synce_get_source_name,
-	.get_output_name = ice_synce_get_output_name,
 };
 
 /**
@@ -581,11 +618,70 @@ static int ice_synce_init_pins(struct ice_hw *hw, bool input, int num_pins,
 	return ret;
 }
 
+static void ice_synce_release_pins(struct dpll_device *dpll,
+				   struct ice_synce_pin *pins, int count)
+{
+	int i;
+
+	for (i = 0; i < count; count++) {
+		if (pins[i].pin) {
+			dpll_pin_deregister(dpll, pins[i].pin);
+			dpll_pin_free(pins[i].pin);
+			pins[i].pin = NULL;
+		}
+	}
+}
+
+/**
+ * ice_synce_register_pins - register pins
+ * @pf: Board private structure
+ *
+ * Register pins within a SyncE dpll in dpll subsystem.
+ *
+ * Return:
+ * * 0 - success
+ * * negative - error
+ */
+static int ice_synce_register_pins(struct ice_pf *pf, struct dpll_device *dpll,
+				   struct ice_synce_pin *pins, int count,
+				   bool inputs)
+{
+	struct dpll_pin_ops *ops;
+	enum dpll_pin_type type;
+	int ret, i;
+
+	if (inputs) {
+		type = DPLL_PIN_TYPE_SOURCE;
+		ops = &ice_synce_source_ops;
+
+	} else {
+		type = DPLL_PIN_TYPE_OUTPUT;
+		ops = &ice_synce_output_ops;
+	}
+
+	for (i = 0; i < count; i++) {
+		pins[i].pin = dpll_pin_alloc(ops, i, type, pins[i].name, pf);
+		if (!pins[i].pin) {
+			ice_synce_release_pins(dpll, pins, i);
+			return -ENOMEM;
+		}
+
+		ret = dpll_pin_register(dpll, pins[i].pin);
+		if (ret) {
+			ice_synce_release_pins(dpll, pins, i + 1);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 /**
  * ice_synce_init_info
  * @pf: Board private structure
  *
  * Acquire (from HW) and set basic dpll information (on pf->synce struct).
+ *
  * Return:
  * * 0 - success
  * * negative - AQ error
@@ -652,8 +748,7 @@ static int ice_synce_init_dpll(struct ice_pf *pf)
 	snprintf(name, DPLL_NAME_LENGTH, "%s-SyncE-%s",
 		 dev_driver_string(dev), dev_name(dev));
 
-	se->dpll = dpll_device_alloc(&ice_synce_dpll_ops, name, se->num_inputs,
-				     se->num_outputs, pf);
+	se->dpll = dpll_device_alloc(&ice_synce_dpll_ops, name, pf);
 	if (!se->dpll) {
 		dev_err(ice_pf_to_dev(pf), "dpll_device_alloc failed\n");
 		return -ENOMEM;
@@ -782,6 +877,18 @@ int ice_synce_init(struct ice_pf *pf)
 	err = ice_synce_init_dpll(pf);
 	if (err)
 		goto free_info;
+	err = ice_synce_register_pins(pf, pf->synce.dpll, pf->synce.inputs,
+				      pf->synce.num_inputs, true);
+	if (err)
+		goto free_info;
+	err = ice_synce_register_pins(pf, pf->synce.dpll, pf->synce.outputs,
+				      pf->synce.num_outputs, false);
+	if (err) {
+		ice_synce_release_pins(pf->synce.dpll, pf->synce.inputs,
+				       pf->synce.num_inputs);
+		goto free_info;
+	}
+
 	dev_dbg(ice_pf_to_dev(pf), "SyncE init successful\n");
 	mutex_unlock(&pf->synce.lock);
 

@@ -16,6 +16,10 @@
 #define DPLL_FLAG_OUTPUTS	2
 #define DPLL_FLAG_STATUS	4
 
+#define DPLL_PIN_FLAG_SOURCE	1
+#define DPLL_PIN_FLAG_OUTPUT	2
+#define DPLL_PIN_FLAG_ENABLED	4
+
 /* Attributes of dpll_genl_family */
 enum dpll_genl_attr {
 	DPLLA_UNSPEC,
@@ -24,16 +28,14 @@ enum dpll_genl_attr {
 	DPLLA_DEVICE_SRC_SELECT_MODE,
 	DPLLA_DEVICE_SRC_SELECT_MODE_SUPPORTED,
 	DPLLA_SOURCE,
-	DPLLA_SOURCE_ID,
-	DPLLA_SOURCE_TYPE,
-	DPLLA_SOURCE_NAME,
-	DPLLA_SOURCE_SUPPORTED,
-	DPLLA_SOURCE_PRIO,
 	DPLLA_OUTPUT,
-	DPLLA_OUTPUT_ID,
-	DPLLA_OUTPUT_TYPE,
-	DPLLA_OUTPUT_NAME,
-	DPLLA_OUTPUT_SUPPORTED,
+	DPLLA_PIN_ID,
+	DPLLA_PIN_NAME,
+	DPLLA_PIN_TYPE,
+	DPLLA_PIN_FLAGS,
+	DPLLA_PIN_TYPE_SUPPORTED,
+	DPLLA_PARENT_PIN_ID,
+	DPLLA_SOURCE_PIN_PRIO,
 	DPLLA_STATUS,
 	DPLLA_TEMP,
 	DPLLA_LOCK_STATUS,
@@ -48,6 +50,7 @@ enum dpll_genl_status {
 	DPLL_STATUS_NONE,
 	DPLL_STATUS_CALIBRATING,
 	DPLL_STATUS_LOCKED,
+	DPLL_STATUS_HOLDOVER,
 
 	__DPLL_STATUS_MAX,
 };
@@ -83,14 +86,19 @@ enum dpll_genl_lock_status {
 /* Events of dpll_genl_family */
 enum dpll_genl_event {
 	DPLL_EVENT_UNSPEC,
-	DPLL_EVENT_DEVICE_CREATE,		/* DPLL device creation */
-	DPLL_EVENT_DEVICE_DELETE,		/* DPLL device deletion */
-	DPLL_EVENT_STATUS_LOCKED,		/* DPLL device locked to source */
-	DPLL_EVENT_STATUS_UNLOCKED,	/* DPLL device freerun */
-	DPLL_EVENT_SOURCE_CHANGE,		/* DPLL device source changed */
-	DPLL_EVENT_OUTPUT_CHANGE,		/* DPLL device output changed */
-	DPLL_EVENT_SOURCE_PRIO,
-	DPLL_EVENT_SELECT_MODE,
+	DPLL_EVENT_DEVICE_CREATE,	/* DPLL device creation */
+	DPLL_EVENT_DEVICE_DELETE,	/* DPLL device deletion */
+	DPLL_EVENT_STATUS_LOCKED,	/* DPLL device locked to source */
+	DPLL_EVENT_STATUS_UNLOCKED,	/* DPLL device freerun or holdover */
+	DPLL_EVENT_SOURCE_CHANGE,	/* DPLL device source changed */
+	DPLL_EVENT_PIN_TYPE_CHANGE,	/* DPLL device pin type changed */
+	DPLL_EVENT_PIN_FLAGS_CHANGE,	/* DPLL device output changed */
+	DPLL_EVENT_SOURCE_PRIO_CHANGE,	/* DPLL device source pin prio changed */
+	DPLL_EVENT_SELECT_MODE_CHANGE,	/* DPLL device select source mode changed */
+	DPLL_EVENT_PIN_REGISTER,	/* DPLL device registered new pin */
+	DPLL_EVENT_PIN_DEREGISTER,	/* DPLL device deregistered a pin */
+	DPLL_EVENT_MUXED_PIN_REGISTER,	/* DPLL device registered new pin within parent pin */
+	DPLL_EVENT_MUXED_PIN_DEREGISTER,/* DPLL device deregistered a pin from a parent pin */
 
 	__DPLL_EVENT_MAX,
 };
@@ -100,9 +108,10 @@ enum dpll_genl_event {
 enum dpll_genl_cmd {
 	DPLL_CMD_UNSPEC,
 	DPLL_CMD_DEVICE_GET,		/* List of DPLL devices id */
-	DPLL_CMD_SET_SOURCE_TYPE,	/* Set the DPLL device source type */
-	DPLL_CMD_SET_OUTPUT_TYPE,	/* Set the DPLL device output type */
-	DPLL_CMD_SET_SRC_SELECT_MODE,/* Set mode for selection of a source */
+	DPLL_CMD_SET_SOURCE,		/* Set the DPLL device source */
+	DPLL_CMD_SET_PIN_TYPE,		/* Set the DPLL device source type */
+	DPLL_CMD_SET_PIN_FLAGS,		/* Set the DPLL device output */
+	DPLL_CMD_SET_SRC_SELECT_MODE,	/* Set mode for selection of a source */
 	DPLL_CMD_SET_SOURCE_PRIO,	/* Set priority of a source */
 
 	__DPLL_CMD_MAX,

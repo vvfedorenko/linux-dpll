@@ -23,24 +23,24 @@ static const struct nla_policy dpll_genl_get_policy[] = {
 	[DPLLA_DEVICE_ID]	= { .type = NLA_U32 },
 	[DPLLA_DEVICE_NAME]	= { .type = NLA_STRING,
 				    .len = DPLL_NAME_LENGTH },
-	[DPLLA_DEVICE_SRC_SELECT_MODE] = { .type = NLA_U32 },
 	[DPLLA_FLAGS]		= { .type = NLA_U32 },
+};
+
+static const struct nla_policy dpll_genl_set_pin_type_policy[] = {
+	[DPLLA_DEVICE_ID]	= { .type = NLA_U32 },
+	[DPLLA_PIN_ID]		= { .type = NLA_U32 },
+	[DPLLA_PIN_TYPE]	= { .type = NLA_U32 },
 };
 
 static const struct nla_policy dpll_genl_set_source_policy[] = {
 	[DPLLA_DEVICE_ID]	= { .type = NLA_U32 },
-	[DPLLA_SOURCE_ID]	= { .type = NLA_U32 },
-	[DPLLA_SOURCE_TYPE]	= { .type = NLA_U32 },
-	[DPLLA_SOURCE_NAME]	= { .type = NLA_STRING,
-				    .len = DPLL_NAME_LENGTH },
+	[DPLLA_PIN_ID]		= { .type = NLA_U32 },
 };
 
-static const struct nla_policy dpll_genl_set_output_policy[] = {
+static const struct nla_policy dpll_genl_set_pin_flags_policy[] = {
 	[DPLLA_DEVICE_ID]	= { .type = NLA_U32 },
-	[DPLLA_OUTPUT_ID]	= { .type = NLA_U32 },
-	[DPLLA_OUTPUT_TYPE]	= { .type = NLA_U32 },
-	[DPLLA_OUTPUT_NAME]	= { .type = NLA_STRING,
-				    .len = DPLL_NAME_LENGTH },
+	[DPLLA_PIN_ID]		= { .type = NLA_U32 },
+	[DPLLA_PIN_FLAGS]	= { .type = NLA_U32 },
 };
 
 static const struct nla_policy dpll_genl_set_src_select_mode_policy[] = {
@@ -50,23 +50,26 @@ static const struct nla_policy dpll_genl_set_src_select_mode_policy[] = {
 
 static const struct nla_policy dpll_genl_set_source_prio_policy[] = {
 	[DPLLA_DEVICE_ID]	= { .type = NLA_U32 },
-	[DPLLA_SOURCE_ID]	= { .type = NLA_U32 },
-	[DPLLA_SOURCE_PRIO]	= { .type = NLA_U32 },
+	[DPLLA_PIN_ID]		= { .type = NLA_U32 },
+	[DPLLA_SOURCE_PIN_PRIO]	= { .type = NLA_U32 },
 };
 
 struct param {
 	struct netlink_callback *cb;
 	struct dpll_device *dpll;
+	struct dpll_pin *dpll_shared_pin;
 	struct sk_buff *msg;
 	int dpll_id;
 	int dpll_src_select_mode;
-	int dpll_source_id;
-	int dpll_source_type;
+	int dpll_pin_type;
 	int dpll_source_prio;
-	int dpll_output_id;
-	int dpll_output_type;
+	int dpll_pin_id;
+	int dpll_pin_flags;
+	int dpll_parent_pin_id;
 	int dpll_status;
 	int dpll_event_group;
+	int dpll_event;
+
 	const char *dpll_name;
 };
 
@@ -102,45 +105,44 @@ static int __dpll_cmd_device_dump_one(struct dpll_device *dpll,
 static int __dpll_cmd_dump_sources(struct dpll_device *dpll,
 					   struct sk_buff *msg)
 {
-	int i, ret = 0, type, prio;
+	int ret = 0, type, prio, count;
 	struct nlattr *src_attr;
-	const char *name;
+	struct dpll_pin *pin;
+	unsigned long i;
 
-	for (i = 0; i < dpll->sources_count; i++) {
+	FOR_EACH_SOURCE(dpll, i, count, pin) {
 		src_attr = nla_nest_start(msg, DPLLA_SOURCE);
 		if (!src_attr) {
 			ret = -EMSGSIZE;
 			break;
 		}
-		type = dpll->ops->get_source_type(dpll, i);
-		if (nla_put_u32(msg, DPLLA_SOURCE_ID, i) ||
-		    nla_put_u32(msg, DPLLA_SOURCE_TYPE, type)) {
+		type = pin->ops->get_type(pin);
+		if (nla_put_u32(msg, DPLLA_PIN_ID, pin->id) ||
+		    nla_put_u32(msg, DPLLA_PIN_TYPE, type)) {
 			nla_nest_cancel(msg, src_attr);
 			ret = -EMSGSIZE;
 			break;
 		}
-		if (dpll->ops->get_source_supported) {
+		if (pin->ops->is_type_supported) {
 			for (type = 0; type <= DPLL_TYPE_MAX; type++) {
-				ret = dpll->ops->get_source_supported(dpll, i, type);
-				if (ret && nla_put_u32(msg, DPLLA_SOURCE_SUPPORTED, type)) {
+				ret = pin->ops->is_type_supported(pin, type);
+				if (ret && nla_put_u32(msg, DPLLA_PIN_TYPE_SUPPORTED, type)) {
 					ret = -EMSGSIZE;
 					break;
 				}
 			}
 			ret = 0;
 		}
-		if (dpll->ops->get_source_prio) {
-			prio = dpll->ops->get_source_prio(dpll, i);
-			if (nla_put_u32(msg, DPLLA_SOURCE_PRIO, prio)) {
+		if (pin->ops->get_prio) {
+			prio = pin->ops->get_prio(pin, dpll);
+			if (nla_put_u32(msg, DPLLA_SOURCE_PIN_PRIO, prio)) {
 				nla_nest_cancel(msg, src_attr);
 				ret = -EMSGSIZE;
 				break;
 			}
 		}
-		if (dpll->ops->get_source_name) {
-			name = dpll->ops->get_source_name(dpll, i);
-			if (name && nla_put_string(msg, DPLLA_SOURCE_NAME,
-						   name)) {
+		if (pin->name) {
+			if (nla_put_string(msg, DPLLA_PIN_NAME, pin->name)) {
 				nla_nest_cancel(msg, src_attr);
 				ret = -EMSGSIZE;
 				break;
@@ -155,42 +157,40 @@ static int __dpll_cmd_dump_sources(struct dpll_device *dpll,
 static int __dpll_cmd_dump_outputs(struct dpll_device *dpll,
 					   struct sk_buff *msg)
 {
+	int ret = 0, type, count;
 	struct nlattr *out_attr;
-	int i, ret = 0, type;
-	const char *name;
+	struct dpll_pin *pin;
+	unsigned long i;
 
-	for (i = 0; i < dpll->outputs_count; i++) {
+	FOR_EACH_OUTPUT(dpll, i, count, pin) {
 		out_attr = nla_nest_start(msg, DPLLA_OUTPUT);
 		if (!out_attr) {
 			ret = -EMSGSIZE;
 			break;
 		}
-		type = dpll->ops->get_output_type(dpll, i);
-		if (nla_put_u32(msg, DPLLA_OUTPUT_ID, i) ||
-		    nla_put_u32(msg, DPLLA_OUTPUT_TYPE, type)) {
+		type = pin->ops->get_type(pin);
+		if (nla_put_u32(msg, DPLLA_PIN_ID, pin->id) ||
+		    nla_put_u32(msg, DPLLA_PIN_TYPE, type)) {
 			nla_nest_cancel(msg, out_attr);
 			ret = -EMSGSIZE;
 			break;
 		}
-		if (dpll->ops->get_output_supported) {
+		if (pin->ops->is_type_supported) {
 			for (type = 0; type <= DPLL_TYPE_MAX; type++) {
-				ret = dpll->ops->get_output_supported(dpll, i, type);
-				if (ret && nla_put_u32(msg, DPLLA_OUTPUT_SUPPORTED, type)) {
+				ret = pin->ops->is_type_supported(pin, type);
+				if (ret && nla_put_u32(msg, DPLLA_PIN_TYPE_SUPPORTED, type)) {
 					ret = -EMSGSIZE;
 					break;
 				}
 			}
 			ret = 0;
 		}
-		if (dpll->ops->get_output_name) {
-			name = dpll->ops->get_output_name(dpll, i);
-			if (name && nla_put_string(msg, DPLLA_OUTPUT_NAME,
-						   name)) {
-				nla_nest_cancel(msg, out_attr);
-				ret = -EMSGSIZE;
-				break;
-			}
+		if (nla_put_string(msg, DPLLA_PIN_NAME, pin->name)) {
+			nla_nest_cancel(msg, out_attr);
+			ret = -EMSGSIZE;
+			break;
 		}
+
 		nla_nest_end(msg, out_attr);
 	}
 
@@ -259,13 +259,13 @@ dpll_device_dump_one(struct dpll_device *dpll, struct sk_buff *msg,
 	if (ret)
 		goto out_unlock;
 
-	if (flags & DPLL_FLAG_SOURCES && dpll->ops->get_source_type) {
+	if (flags & DPLL_FLAG_SOURCES) {
 		ret = __dpll_cmd_dump_sources(dpll, msg);
 		if (ret)
 			goto out_unlock;
 	}
 
-	if (flags & DPLL_FLAG_OUTPUTS && dpll->ops->get_output_type) {
+	if (flags & DPLL_FLAG_OUTPUTS) {
 		ret = __dpll_cmd_dump_outputs(dpll, msg);
 		if (ret)
 			goto out_unlock;
@@ -288,54 +288,85 @@ out_unlock:
 	return ret;
 }
 
-static int dpll_genl_cmd_set_source(struct sk_buff *skb, struct genl_info *info)
+static int dpll_genl_cmd_set_pin_type(struct sk_buff *skb,
+				      struct genl_info *info)
 {
 	struct dpll_device *dpll = info->user_ptr[0];
 	struct nlattr **attrs = info->attrs;
-	int ret = 0, src_id, type;
+	int ret = 0, pin_id, type;
+	struct dpll_pin *pin;
 
-	if (!attrs[DPLLA_SOURCE_ID] ||
-	    !attrs[DPLLA_SOURCE_TYPE])
+	if (!attrs[DPLLA_PIN_ID] ||
+	    !attrs[DPLLA_PIN_TYPE])
 		return -EINVAL;
 
-	if (!dpll->ops->set_source_type)
-		return -EOPNOTSUPP;
-
-	src_id = nla_get_u32(attrs[DPLLA_SOURCE_ID]);
-	type = nla_get_u32(attrs[DPLLA_SOURCE_TYPE]);
+	pin_id = nla_get_u32(attrs[DPLLA_PIN_ID]);
+	type = nla_get_u32(attrs[DPLLA_PIN_TYPE]);
 
 	mutex_lock(&dpll->lock);
-	ret = dpll->ops->set_source_type(dpll, src_id, type);
+	pin = dpll_pin_get_by_id(dpll, pin_id);
+	if (!pin || !pin->ops || !pin->ops->set_type)
+		ret = -EOPNOTSUPP;
+	else
+		ret = pin->ops->set_type(pin, type);
 	mutex_unlock(&dpll->lock);
 
 	if (!ret)
-		dpll_notify_source_change(dpll->id, src_id, type);
+		dpll_notify_pin_type_change(dpll->id, pin_id, type);
 
 	return ret;
 }
 
-static int dpll_genl_cmd_set_output(struct sk_buff *skb, struct genl_info *info)
+static int dpll_genl_cmd_set_source(struct sk_buff *skb, struct genl_info *info)
 {
 	struct dpll_device *dpll = info->user_ptr[0];
 	struct nlattr **attrs = info->attrs;
-	int ret = 0, out_id, type;
+	int ret = 0, src_id;
+	struct dpll_pin *pin;
 
-	if (!attrs[DPLLA_OUTPUT_ID] ||
-	    !attrs[DPLLA_OUTPUT_TYPE])
+	if (!attrs[DPLLA_PIN_ID])
 		return -EINVAL;
 
-	if (!dpll->ops->set_output_type)
-		return -EOPNOTSUPP;
-
-	out_id = nla_get_u32(attrs[DPLLA_OUTPUT_ID]);
-	type = nla_get_u32(attrs[DPLLA_OUTPUT_TYPE]);
+	src_id = nla_get_u32(attrs[DPLLA_PIN_ID]);
 
 	mutex_lock(&dpll->lock);
-	ret = dpll->ops->set_output_type(dpll, out_id, type);
+	pin = dpll_pin_get_by_id(dpll, src_id);
+	if (!pin || !pin->ops || !pin->ops->set_source)
+		ret = -EOPNOTSUPP;
+	else
+		ret = pin->ops->set_source(pin, dpll, src_id);
 	mutex_unlock(&dpll->lock);
 
 	if (!ret)
-		dpll_notify_output_change(dpll->id, out_id, type);
+		dpll_notify_source_change(dpll->id, src_id);
+
+	return ret;
+}
+
+static int dpll_genl_cmd_set_pin_flags(struct sk_buff *skb, struct genl_info *info)
+{
+	struct dpll_device *dpll = info->user_ptr[0];
+	struct nlattr **attrs = info->attrs;
+	int ret = 0, pin_id, flags;
+	struct dpll_pin *pin;
+
+	if (!attrs[DPLLA_PIN_ID] ||
+	    !attrs[DPLLA_PIN_FLAGS])
+		return -EINVAL;
+
+	pin_id = nla_get_u32(attrs[DPLLA_PIN_ID]);
+	flags = nla_get_u32(attrs[DPLLA_PIN_FLAGS]);
+
+	mutex_lock(&dpll->lock);
+	pin = dpll_pin_get_by_id(dpll, pin_id);
+	if (!pin || !pin->ops || !pin->ops->set_flags)
+		ret = -EOPNOTSUPP;
+	else
+		ret = pin->ops->set_flags(pin, dpll, flags);
+	mutex_unlock(&dpll->lock);
+
+	if (!ret)
+		dpll_notify_pin_flags_change(dpll->id, pin_id, flags);
 
 	return ret;
 }
@@ -345,19 +376,21 @@ static int dpll_genl_cmd_set_source_prio(struct sk_buff *skb, struct genl_info *
 	struct dpll_device *dpll = info->user_ptr[0];
 	struct nlattr **attrs = info->attrs;
 	int ret = 0, src_id, prio;
+	struct dpll_pin *pin;
 
-	if (!attrs[DPLLA_SOURCE_ID] ||
-	    !attrs[DPLLA_SOURCE_PRIO])
+	if (!attrs[DPLLA_PIN_ID] ||
+	    !attrs[DPLLA_SOURCE_PIN_PRIO])
 		return -EINVAL;
 
-	if (!dpll->ops->set_source_prio)
-		return -EOPNOTSUPP;
-
-	src_id = nla_get_u32(attrs[DPLLA_SOURCE_ID]);
-	prio = nla_get_u32(attrs[DPLLA_SOURCE_PRIO]);
+	src_id = nla_get_u32(attrs[DPLLA_PIN_ID]);
+	prio = nla_get_u32(attrs[DPLLA_SOURCE_PIN_PRIO]);
 
 	mutex_lock(&dpll->lock);
-	ret = dpll->ops->set_source_prio(dpll, src_id, prio);
+	pin = dpll_pin_get_by_id(dpll, src_id);
+	if (!pin || !pin->ops || !pin->ops->set_prio)
+		ret = -EOPNOTSUPP;
+	else
+		ret = pin->ops->set_prio(pin, dpll, prio);
 	mutex_unlock(&dpll->lock);
 
 	if (!ret)
@@ -498,18 +531,25 @@ static const struct genl_ops dpll_genl_ops[] = {
 		.maxattr = ARRAY_SIZE(dpll_genl_get_policy) - 1,
 	},
 	{
-		.cmd	= DPLL_CMD_SET_SOURCE_TYPE,
+		.cmd	= DPLL_CMD_SET_SOURCE,
 		.flags	= GENL_UNS_ADMIN_PERM,
 		.doit	= dpll_genl_cmd_set_source,
 		.policy	= dpll_genl_set_source_policy,
 		.maxattr = ARRAY_SIZE(dpll_genl_set_source_policy) - 1,
 	},
 	{
-		.cmd	= DPLL_CMD_SET_OUTPUT_TYPE,
+		.cmd	= DPLL_CMD_SET_PIN_TYPE,
 		.flags	= GENL_UNS_ADMIN_PERM,
-		.doit	= dpll_genl_cmd_set_output,
-		.policy	= dpll_genl_set_output_policy,
-		.maxattr = ARRAY_SIZE(dpll_genl_set_output_policy) - 1,
+		.doit	= dpll_genl_cmd_set_pin_type,
+		.policy	= dpll_genl_set_pin_type_policy,
+		.maxattr = ARRAY_SIZE(dpll_genl_set_pin_type_policy) - 1,
+	},
+	{
+		.cmd	= DPLL_CMD_SET_PIN_FLAGS,
+		.flags	= GENL_UNS_ADMIN_PERM,
+		.doit	= dpll_genl_cmd_set_pin_flags,
+		.policy	= dpll_genl_set_pin_flags_policy,
+		.maxattr = ARRAY_SIZE(dpll_genl_set_pin_flags_policy) - 1,
 	},
 	{
 		.cmd	= DPLL_CMD_SET_SRC_SELECT_MODE,
@@ -558,7 +598,7 @@ static int dpll_event_device_delete(struct param *p)
 static int dpll_event_status(struct param *p)
 {
 	if (nla_put_u32(p->msg, DPLLA_DEVICE_ID, p->dpll_id) ||
-		nla_put_u32(p->msg, DPLLA_LOCK_STATUS, p->dpll_status))
+	    nla_put_u32(p->msg, DPLLA_LOCK_STATUS, p->dpll_status))
 		return -EMSGSIZE;
 
 	return 0;
@@ -567,18 +607,17 @@ static int dpll_event_status(struct param *p)
 static int dpll_event_source_change(struct param *p)
 {
 	if (nla_put_u32(p->msg, DPLLA_DEVICE_ID, p->dpll_id) ||
-	    nla_put_u32(p->msg, DPLLA_SOURCE_ID, p->dpll_source_id) ||
-		nla_put_u32(p->msg, DPLLA_SOURCE_TYPE, p->dpll_source_type))
+	    nla_put_u32(p->msg, DPLLA_PIN_ID, p->dpll_pin_id))
 		return -EMSGSIZE;
 
 	return 0;
 }
 
-static int dpll_event_output_change(struct param *p)
+static int dpll_event_pin_flags_change(struct param *p)
 {
 	if (nla_put_u32(p->msg, DPLLA_DEVICE_ID, p->dpll_id) ||
-	    nla_put_u32(p->msg, DPLLA_OUTPUT_ID, p->dpll_output_id) ||
-		nla_put_u32(p->msg, DPLLA_OUTPUT_TYPE, p->dpll_output_type))
+	    nla_put_u32(p->msg, DPLLA_PIN_ID, p->dpll_pin_id) ||
+	    nla_put_u32(p->msg, DPLLA_PIN_FLAGS, p->dpll_pin_flags))
 		return -EMSGSIZE;
 
 	return 0;
@@ -587,8 +626,8 @@ static int dpll_event_output_change(struct param *p)
 static int dpll_event_source_prio(struct param *p)
 {
 	if (nla_put_u32(p->msg, DPLLA_DEVICE_ID, p->dpll_id) ||
-	    nla_put_u32(p->msg, DPLLA_SOURCE_ID, p->dpll_source_id) ||
-	    nla_put_u32(p->msg, DPLLA_SOURCE_PRIO, p->dpll_source_prio))
+	    nla_put_u32(p->msg, DPLLA_PIN_ID, p->dpll_pin_id) ||
+	    nla_put_u32(p->msg, DPLLA_SOURCE_PIN_PRIO, p->dpll_source_prio))
 		return -EMSGSIZE;
 
 	return 0;
@@ -604,22 +643,46 @@ static int dpll_event_select_mode(struct param *p)
 	return 0;
 }
 
+static int dpll_event_pin_register(struct param *p)
+{
+	if (nla_put_u32(p->msg, DPLLA_DEVICE_ID, p->dpll_id) ||
+	    nla_put_u32(p->msg, DPLLA_PIN_ID, p->dpll_pin_id))
+		return -EMSGSIZE;
+
+	return 0;
+}
+
+static int dpll_event_muxed_pin_register(struct param *p)
+{
+	if (nla_put_u32(p->msg, DPLLA_DEVICE_ID, p->dpll_id) ||
+	    nla_put_u32(p->msg, DPLLA_PIN_ID, p->dpll_pin_id) ||
+	    nla_put_u32(p->msg, DPLLA_PARENT_PIN_ID, p->dpll_parent_pin_id))
+		return -EMSGSIZE;
+
+	return 0;
+}
+
 static const cb_t event_cb[] = {
 	[DPLL_EVENT_DEVICE_CREATE]	= dpll_event_device_create,
 	[DPLL_EVENT_DEVICE_DELETE]	= dpll_event_device_delete,
 	[DPLL_EVENT_STATUS_LOCKED]	= dpll_event_status,
 	[DPLL_EVENT_STATUS_UNLOCKED]	= dpll_event_status,
 	[DPLL_EVENT_SOURCE_CHANGE]	= dpll_event_source_change,
-	[DPLL_EVENT_OUTPUT_CHANGE]	= dpll_event_output_change,
-	[DPLL_EVENT_SOURCE_PRIO]        = dpll_event_source_prio,
-	[DPLL_EVENT_SELECT_MODE]        = dpll_event_select_mode,
+	[DPLL_EVENT_PIN_TYPE_CHANGE]	= dpll_event_pin_flags_change,
+	[DPLL_EVENT_PIN_FLAGS_CHANGE]	= dpll_event_pin_flags_change,
+	[DPLL_EVENT_SOURCE_PRIO_CHANGE] = dpll_event_source_prio,
+	[DPLL_EVENT_SELECT_MODE_CHANGE] = dpll_event_select_mode,
+	[DPLL_EVENT_PIN_REGISTER]	= dpll_event_pin_register,
+	[DPLL_EVENT_PIN_DEREGISTER]	= dpll_event_pin_register,
+	[DPLL_EVENT_MUXED_PIN_REGISTER]	= dpll_event_muxed_pin_register,
+	[DPLL_EVENT_MUXED_PIN_DEREGISTER] = dpll_event_muxed_pin_register,
 };
 
 /*
  * Generic netlink DPLL event encoding
  */
 static int dpll_send_event(enum dpll_genl_event event,
-				   struct param *p)
+			   struct param *p)
 {
 	struct sk_buff *msg;
 	int ret = -EMSGSIZE;
@@ -685,23 +748,33 @@ int dpll_notify_status_unlocked(int dpll_id)
 }
 EXPORT_SYMBOL_GPL(dpll_notify_status_unlocked);
 
-int dpll_notify_source_change(int dpll_id, int source_id, int source_type)
+int dpll_notify_source_change(int dpll_id, int source_id)
 {
-	struct param p =  { .dpll_id = dpll_id, .dpll_source_id = source_id,
-			    .dpll_source_type = source_type, .dpll_event_group = 1 };
+	struct param p =  { .dpll_id = dpll_id, .dpll_pin_id = source_id,
+			    .dpll_event_group = 1 };
 
 	return dpll_send_event(DPLL_EVENT_SOURCE_CHANGE, &p);
 }
 EXPORT_SYMBOL_GPL(dpll_notify_source_change);
 
-int dpll_notify_output_change(int dpll_id, int output_id, int output_type)
-{
-	struct param p =  { .dpll_id = dpll_id, .dpll_output_id = output_id,
-			    .dpll_output_type = output_type, .dpll_event_group = 2 };
 
-	return dpll_send_event(DPLL_EVENT_OUTPUT_CHANGE, &p);
+int dpll_notify_pin_type_change(int dpll_id, int pin_id, int output_type)
+{
+	struct param p =  { .dpll_id = dpll_id, .dpll_pin_id = pin_id,
+			    .dpll_pin_type = output_type, .dpll_event_group = 2 };
+
+	return dpll_send_event(DPLL_EVENT_PIN_TYPE_CHANGE, &p);
 }
-EXPORT_SYMBOL_GPL(dpll_notify_output_change);
+EXPORT_SYMBOL_GPL(dpll_notify_pin_type_change);
+
+int dpll_notify_pin_flags_change(int dpll_id, int pin_id, int flags)
+{
+	struct param p =  { .dpll_id = dpll_id, .dpll_pin_id = pin_id,
+			    .dpll_pin_flags = flags, .dpll_event_group = 2 };
+
+	return dpll_send_event(DPLL_EVENT_PIN_FLAGS_CHANGE, &p);
+}
+EXPORT_SYMBOL_GPL(dpll_notify_pin_flags_change);
 
 int dpll_notify_source_select_mode_change(int dpll_id, int new_mode)
 {
@@ -709,19 +782,76 @@ int dpll_notify_source_select_mode_change(int dpll_id, int new_mode)
 			    .dpll_src_select_mode = new_mode,
 			    .dpll_event_group = 0 };
 
-	return dpll_send_event(DPLL_EVENT_SELECT_MODE, &p);
+	return dpll_send_event(DPLL_EVENT_SELECT_MODE_CHANGE, &p);
 }
 EXPORT_SYMBOL_GPL(dpll_notify_source_select_mode_change);
 
 int dpll_notify_source_prio_change(int dpll_id, int source_id, int prio)
 {
-	struct param p =  { .dpll_id = dpll_id, .dpll_source_id = source_id,
+	struct param p =  { .dpll_id = dpll_id, .dpll_pin_id = source_id,
 			    .dpll_source_prio = prio,
 			    .dpll_event_group = 1 };
 
-	return dpll_send_event(DPLL_EVENT_SOURCE_PRIO, &p);
+	return dpll_send_event(DPLL_EVENT_SOURCE_PRIO_CHANGE, &p);
 }
 EXPORT_SYMBOL_GPL(dpll_notify_source_prio_change);
+
+int dpll_notify_pin_register(int dpll_id, int pin_id)
+{
+	struct param p =  { .dpll_id = dpll_id, .dpll_pin_id = pin_id,
+			    .dpll_event_group = 1 };
+
+	return dpll_send_event(DPLL_EVENT_PIN_REGISTER, &p);
+}
+EXPORT_SYMBOL_GPL(dpll_notify_pin_register);
+
+int dpll_notify_pin_deregister(int dpll_id, int pin_id)
+{
+	struct param p =  { .dpll_id = dpll_id, .dpll_pin_id = pin_id,
+			    .dpll_event_group = 1 };
+
+	return dpll_send_event(DPLL_EVENT_PIN_DEREGISTER, &p);
+}
+EXPORT_SYMBOL_GPL(dpll_notify_pin_deregister);
+
+static int dpll_shared_pins_notify_cb(struct dpll_device *dpll, void *data)
+{
+	struct param *p = data;
+	struct dpll_pin *pin;
+	unsigned long i;
+
+	FOR_EACH_SOURCE(dpll, i, dpll->sources_count, pin)
+		if (pin == p->dpll_shared_pin) {
+			p->dpll_id = dpll->id;
+			return dpll_send_event(p->dpll_event, p);
+		}
+
+	return 0;
+}
+
+int dpll_notify_muxed_pin_register(struct dpll_pin *parent_pin, int pin_id)
+{
+	struct param p =  { .dpll_pin_id = pin_id,
+			    .dpll_shared_pin = parent_pin,
+			    .dpll_parent_pin_id = parent_pin->id,
+			    .dpll_event_group = 1,
+			    .dpll_event = DPLL_EVENT_MUXED_PIN_REGISTER	};
+
+	return for_each_dpll_device(0, dpll_shared_pins_notify_cb, &p);
+}
+EXPORT_SYMBOL_GPL(dpll_notify_muxed_pin_register);
+
+int dpll_notify_muxed_pin_deregister(struct dpll_pin *parent_pin, int pin_id)
+{
+	struct param p =  { .dpll_pin_id = pin_id,
+			    .dpll_shared_pin = parent_pin,
+			    .dpll_parent_pin_id = parent_pin->id,
+			    .dpll_event_group = 1,
+			    .dpll_event = DPLL_EVENT_MUXED_PIN_DEREGISTER};
+
+	return for_each_dpll_device(0, dpll_shared_pins_notify_cb, &p);
+}
+EXPORT_SYMBOL_GPL(dpll_notify_muxed_pin_deregister);
 
 int __init dpll_netlink_init(void)
 {
