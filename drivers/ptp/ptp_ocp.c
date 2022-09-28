@@ -3857,7 +3857,7 @@ ptp_ocp_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	ptp_ocp_info(bp);
 	devlink_register(devlink);
 
-	bp->dpll = dpll_device_alloc(&dpll_ops, "ocp", ARRAY_SIZE(bp->sma), ARRAY_SIZE(bp->sma), bp);
+	bp->dpll = dpll_device_alloc(&dpll_ops, "ocp", bp);
 	if (!bp->dpll) {
 		dev_err(&pdev->dev, "dpll_device_alloc failed\n");
 		return 0;

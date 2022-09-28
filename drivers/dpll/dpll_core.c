@@ -15,6 +15,7 @@
 #include "dpll_core.h"
 
 static DEFINE_MUTEX(dpll_device_xa_lock);
+
 static DEFINE_XARRAY_FLAGS(dpll_device_xa, XA_FLAGS_ALLOC);
 #define DPLL_REGISTERED XA_MARK_1
 
@@ -23,6 +24,7 @@ static DEFINE_XARRAY_FLAGS(dpll_device_xa, XA_FLAGS_ALLOC);
 #define ASSERT_DPLL_NOT_REGISTERED(d)                                      \
 	WARN_ON_ONCE(xa_get_mark(&dpll_device_xa, (d)->id, DPLL_REGISTERED))
 
+#define IS_TYPE_SOURCE(t) (t == DPLL_PIN_TYPE_SOURCE)
 
 int for_each_dpll_device(int id, int (*cb)(struct dpll_device *, void *),
 			 void *data)
@@ -69,12 +71,25 @@ struct dpll_device *dpll_device_get_by_name(const char *name)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(dpll_device_get_by_name);
 
 void *dpll_priv(struct dpll_device *dpll)
 {
 	return dpll->priv;
 }
 EXPORT_SYMBOL_GPL(dpll_priv);
+
+void *pin_priv(struct dpll_pin *pin)
+{
+	return pin->priv;
+}
+EXPORT_SYMBOL_GPL(pin_priv);
+
+int pin_id(struct dpll_pin *pin)
+{
+	return pin->id;
+}
+EXPORT_SYMBOL_GPL(pin_id);
 
 static void dpll_device_release(struct device *dev)
 {
@@ -92,7 +107,7 @@ static struct class dpll_class = {
 };
 
 struct dpll_device *dpll_device_alloc(struct dpll_device_ops *ops, const char *name,
-				      int sources_count, int outputs_count, void *priv)
+				      void *priv)
 {
 	struct dpll_device *dpll;
 	int ret;
@@ -104,16 +119,19 @@ struct dpll_device *dpll_device_alloc(struct dpll_device_ops *ops, const char *n
 	mutex_init(&dpll->lock);
 	dpll->ops = ops;
 	dpll->dev.class = &dpll_class;
-	dpll->sources_count = sources_count;
-	dpll->outputs_count = outputs_count;
 
 	mutex_lock(&dpll_device_xa_lock);
 	ret = xa_alloc(&dpll_device_xa, &dpll->id, dpll, xa_limit_16b, GFP_KERNEL);
 	if (ret)
 		goto error;
-	dev_set_name(&dpll->dev, "%s%d", name ? name : "dpll", dpll->id);
+	if (name)
+		dev_set_name(&dpll->dev, "%s", name);
+	else
+		dev_set_name(&dpll->dev, "%s%d", "dpll", dpll->id);
+
 	mutex_unlock(&dpll_device_xa_lock);
 	dpll->priv = priv;
+	xa_init_flags(&dpll->pins, XA_FLAGS_ALLOC);
 
 	dpll_notify_device_create(dpll->id, dev_name(&dpll->dev));
 
@@ -130,6 +148,11 @@ void dpll_device_free(struct dpll_device *dpll)
 {
 	if (!dpll)
 		return;
+
+//	if (!xa_empty(dpll->pins))
+//		return;
+
+	xa_destroy(&dpll->pins);
 
 	mutex_destroy(&dpll->lock);
 	kfree(dpll);
@@ -156,6 +179,241 @@ void dpll_device_unregister(struct dpll_device *dpll)
 	mutex_unlock(&dpll_device_xa_lock);
 }
 EXPORT_SYMBOL_GPL(dpll_device_unregister);
+
+void dpll_init_pin(struct dpll_pin **pin, enum dpll_pin_type type,
+		   struct dpll_pin_ops *ops, void *priv, const char *name,
+		   int id)
+{
+	*pin = kmalloc(sizeof(**pin), GFP_KERNEL);
+
+	(*pin)->ops = ops;
+	(*pin)->type = type;
+	(*pin)->priv = priv;
+	(*pin)->id = id;
+	if (name)
+		snprintf((*pin)->name, PIN_NAME_LENGTH, "%s", name);
+	else
+		snprintf((*pin)->name, PIN_NAME_LENGTH, "%s%d",
+			IS_TYPE_SOURCE((*pin)->type) ? "source" : "output",
+			(*pin)->id);
+}
+EXPORT_SYMBOL_GPL(dpll_init_pin);
+
+static int pin_register(struct xarray *pins, struct dpll_pin *pin)
+{
+	struct dpll_pin *pos;
+	unsigned long index;
+	int ret;
+	u32 id;
+
+	xa_for_each(pins, index, pos) {
+		if (pos == pin)
+			return -EEXIST;
+	}
+
+	ret = xa_alloc(pins, &id, pin, xa_limit_16b, GFP_KERNEL);
+	if (!ret)
+		xa_set_mark(pins, id, PIN_TYPE_TO_MARK(pin->type));
+
+	return ret;
+}
+
+static void change_pin_count(struct dpll_device *dpll, struct dpll_pin *pin,
+					     bool increment)
+{
+	if (IS_TYPE_SOURCE(pin->type)) {
+		if (increment)
+			dpll->sources_count++;
+		else
+			dpll->sources_count--;
+	} else {
+		if (increment)
+			dpll->outputs_count++;
+		else
+			dpll->outputs_count--;
+	}
+}
+
+int dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin)
+{
+	int ret;
+
+	mutex_lock(&dpll->lock);
+	ret = pin_register(&dpll->pins, pin);
+	if (!ret) {
+		pin->ref_count++;
+		change_pin_count(dpll, pin, true);
+		xa_set_mark(&dpll->pins, dpll->id, DPLL_REGISTERED);
+	}
+
+	mutex_unlock(&dpll->lock);
+
+	if (!ret)
+		dpll_notify_pin_register(dpll->id, pin->id);
+
+	return ret;
+
+}
+EXPORT_SYMBOL_GPL(dpll_pin_register);
+
+static int pin_deregister(struct xarray *xa_pins, struct dpll_pin *pin)
+{
+	struct dpll_pin *pos;
+	unsigned long index;
+
+	xa_for_each(xa_pins, index, pos) {
+		if (pos == pin) {
+			if (pin == xa_erase(xa_pins, index))
+				return 0;
+			break;
+		}
+	}
+
+	return -ENOENT;
+}
+
+int dpll_pin_deregister(struct dpll_device *dpll, struct dpll_pin *pin)
+{
+	int ret = 0;
+
+	if (xa_empty(&dpll->pins))
+		return -ENOENT;
+
+	mutex_lock(&dpll->lock);
+	ret = pin_deregister(&dpll->pins, pin);
+	if (!ret)
+		change_pin_count(dpll, pin, false);
+
+	mutex_unlock(&dpll->lock);
+
+	if (!ret) {
+		mutex_lock(&pin->lock);
+		pin->ref_count--;
+		mutex_unlock(&pin->lock);
+		dpll_notify_pin_deregister(dpll->id, pin->id);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(dpll_pin_deregister);
+
+void dpll_pin_free(struct dpll_device *dpll, struct dpll_pin *pin)
+{
+	struct dpll_pin *pos;
+	unsigned long index;
+	bool pin_found;
+
+	xa_for_each(&dpll->pins, index, pos) {
+		if (pos == pin)
+			pin_found = true;
+	}
+
+	if (!pin_found)
+		return;
+
+	if (pin->ref_count)
+		return;
+
+	xa_destroy(&pin->muxed_pins);
+	kfree(pin);
+}
+EXPORT_SYMBOL_GPL(dpll_pin_free);
+
+void dpll_muxed_pin_free(struct dpll_pin *parent_pin, struct dpll_pin *pin)
+{
+	struct dpll_pin *pos;
+	unsigned long index;
+	bool pin_found;
+
+	xa_for_each(&parent_pin->muxed_pins, index, pos) {
+		if (pos == pin)
+			pin_found = true;
+	}
+
+	if (!pin_found)
+		return;
+
+	if (pin->ref_count)
+		return;
+
+	xa_destroy(&pin->muxed_pins);
+	kfree(pin);
+}
+EXPORT_SYMBOL_GPL(dpll_muxed_pin_free);
+
+int dpll_muxed_pin_register(struct dpll_pin *parent_pin, struct dpll_pin *pin)
+{
+	int ret;
+
+	ret = pin_register(&parent_pin->muxed_pins, pin);
+
+	if (!ret) {
+		mutex_lock(&pin->lock);
+		pin->ref_count++;
+		mutex_unlock(&pin->lock);
+		dpll_notify_muxed_pin_register(parent_pin, pin->id);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(dpll_muxed_pin_register);
+
+int dpll_muxed_pin_deregister(struct dpll_pin *parent_pin, struct dpll_pin *pin)
+{
+	int ret = 0;
+
+	if (xa_empty(&parent_pin->muxed_pins))
+		return -ENOENT;
+
+	mutex_lock(&parent_pin->lock);
+	ret = pin_deregister(&parent_pin->muxed_pins, pin);
+	mutex_unlock(&parent_pin->lock);
+
+	if (!ret) {
+		mutex_lock(&pin->lock);
+		pin->ref_count--;
+		mutex_unlock(&pin->lock);
+		dpll_notify_muxed_pin_deregister(parent_pin, pin->id);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(dpll_muxed_pin_deregister);
+
+struct dpll_pin *dpll_pin_get_by_name(struct dpll_device *dpll,
+				      const char *name)
+{
+	struct dpll_pin *pos, *pin = NULL;
+	unsigned long index;
+
+	mutex_lock(&dpll->lock);
+	xa_for_each(&dpll->pins, index, pos) {
+		if (!strncmp(pos->name, name, PIN_NAME_LENGTH)) {
+			pin = pos;
+			break;
+		}
+	}
+	mutex_unlock(&dpll->lock);
+
+	return pin;
+}
+EXPORT_SYMBOL_GPL(dpll_pin_get_by_name);
+
+struct dpll_pin *dpll_pin_get_by_id(struct dpll_device *dpll, int id)
+{
+	struct dpll_pin *pos, *pin = NULL;
+	unsigned long index;
+
+	xa_for_each(&dpll->pins, index, pos) {
+		if (pos->id == id) {
+			pin = pos;
+			break;
+		}
+	}
+
+	return pin;
+}
+EXPORT_SYMBOL_GPL(dpll_pin_get_by_id);
 
 static int __init dpll_init(void)
 {

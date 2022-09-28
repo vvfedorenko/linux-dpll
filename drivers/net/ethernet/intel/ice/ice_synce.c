@@ -659,7 +659,7 @@ static int ice_synce_register_pins(struct ice_pf *pf, struct dpll_device *dpll,
 {
 	struct dpll_pin_ops *ops;
 	enum dpll_pin_type type;
-	int ret, i, alloc_size;
+	int ret, i;
 
 	if (inputs) {
 		type = DPLL_PIN_TYPE_SOURCE;
@@ -670,23 +670,11 @@ static int ice_synce_register_pins(struct ice_pf *pf, struct dpll_device *dpll,
 		ops = &ice_synce_output_ops;
 	}
 
-	alloc_size = sizeof(dpll_pin) * count;
-	pins->pin = kmalloc(alloc_size, GFP_KERNEL);
-
 	for (i = 0; i < count; i++) {
-		pins[i].pin.ops = ops;
-		pins[i].pin.id = id;
-		pins[i].pin.type = type;
-		pins[i].pin.priv = priv;
-		if (inputs)
-			pins[i].pin.name = "source";
-		else
-			pins[i].pin.name = "output";
-
-		ret = dpll_pin_register(dpll, pins[i].pin);
+		dpll_init_pin(&pins->pin, type, ops, pf, NULL, i);
+		dpll_pin_register(dpll, pins->pin);
 		if (ret) {
 			ice_synce_release_pins(dpll, pins, i + 1);
-			return ret;
 		}
 	}
 
@@ -795,6 +783,7 @@ static int ice_synce_update_dpll_state(struct ice_pf *pf,
 				&se->current_source, &se->ref_state,
 				&se->eec_mode, &se->phase_offset,
 				&se->dpll_state);
+
 	if (ret)
 		dev_err(ice_pf_to_dev(pf), "update dpll state failed, ret=%d %s\n",
 			ret, ice_aq_str(pf->hw.adminq.sq_last_status));
@@ -945,4 +934,3 @@ void ice_synce_release(struct ice_pf *pf)
 	mutex_unlock(&se->lock);
 	mutex_destroy(&se->lock);
 }
-
