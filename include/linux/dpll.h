@@ -6,38 +6,256 @@
 #ifndef __DPLL_H__
 #define __DPLL_H__
 
-struct dpll_device;
+#include <uapi/linux/dpll.h>
+#include <linux/dpll_attr.h>
+#include <linux/device.h>
 
+struct dpll_device;
+struct dpll_pin;
+
+#define DPLL_COOKIE_LEN		10
+#define PIN_IDX_INVALID		((u32)ULONG_MAX)
 struct dpll_device_ops {
-	int (*get_status)(struct dpll_device *dpll);
-	int (*get_temp)(struct dpll_device *dpll);
-	int (*get_lock_status)(struct dpll_device *dpll);
-	int (*get_source_select_mode)(struct dpll_device *dpll);
-	int (*get_source_select_mode_supported)(struct dpll_device *dpll, int type);
-	int (*get_source_type)(struct dpll_device *dpll, int id);
-	int (*get_source_supported)(struct dpll_device *dpll, int id, int type);
-	int (*get_source_prio)(struct dpll_device *dpll, int id);
-	int (*get_output_type)(struct dpll_device *dpll, int id);
-	int (*get_output_supported)(struct dpll_device *dpll, int id, int type);
-	int (*set_source_type)(struct dpll_device *dpll, int id, int val);
-	int (*set_output_type)(struct dpll_device *dpll, int id, int val);
-	int (*set_source_select_mode)(struct dpll_device *dpll, int mode);
-	int (*set_source_prio)(struct dpll_device *dpll, int id, int prio);
-	const char *(*get_source_name)(struct dpll_device *dpll, int id);
-	const char *(*get_output_name)(struct dpll_device *dpll, int id);
+	int (*get)(struct dpll_device *dpll, struct dpll_attr *attr);
+	int (*set)(struct dpll_device *dpll, const struct dpll_attr *attr);
 };
 
-struct dpll_device *dpll_device_alloc(struct dpll_device_ops *ops, const char *name,
-				      int sources_count, int outputs_count, void *priv);
+struct dpll_pin_ops {
+	int (*get)(struct dpll_device *dpll, struct dpll_pin *pin,
+		   struct dpll_pin_attr *attr);
+	int (*set)(struct dpll_device *dpll, struct dpll_pin *pin,
+		   const struct dpll_pin_attr *attr);
+	int (*select)(struct dpll_device *dpll, struct dpll_pin *pin);
+};
+
+enum dpll_type {
+	DPLL_TYPE_UNSPEC,
+	DPLL_TYPE_PPS,
+	DPLL_TYPE_EEC,
+
+	__DPLL_TYPE_MAX
+};
+#define DPLL_TYPE_MAX	(__DPLL_TYPE_MAX - 1)
+
+/**
+ * dpll_device_alloc - allocate memory for a new dpll_device object
+ * @ops: pointer to dpll operations structure
+ * @type: type of a dpll being allocated
+ * @cookie: a system unique number for a device
+ * @dev_driver_idx: index of dpll device on parent device
+ * @priv: private data of a registerer
+ * @parent: device structure of a module registering dpll device
+ *
+ * Allocate memory for a new dpll and initialize it with its type, name,
+ * callbacks and private data pointer.
+ *
+ * Name is generated based on: cookie, type and dev_driver_idx.
+ * Finding allocated and registered dpll device is also possible with
+ * the: cookie, type and dev_driver_idx. This way dpll device can be
+ * shared by multiple instances of a device driver.
+ *
+ * Returns:
+ * * pointer to initialized dpll - success
+ * * NULL - memory allocation fail
+ */
+struct dpll_device
+*dpll_device_alloc(struct dpll_device_ops *ops, enum dpll_type type,
+		   const u8 cookie[DPLL_COOKIE_LEN], u8 dev_driver_idx,
+		   void *priv, struct device *parent);
+
+/**
+ * dpll_device_register - registers allocated dpll
+ * @dpll: pointer to dpll
+ *
+ * Register the dpll on the dpll subsystem, make it available for netlink
+ * API users.
+ */
 void dpll_device_register(struct dpll_device *dpll);
+
+/**
+ * dpll_device_unregister - unregister registered dpll
+ * @dpll: pointer to dpll
+ *
+ * Unregister the dpll from the subsystem, make it unavailable for netlink
+ * API users.
+ */
 void dpll_device_unregister(struct dpll_device *dpll);
+
+/**
+ * dpll_device_free - free dpll memory
+ * @dpll: pointer to dpll
+ *
+ * Free memory allocated with ``dpll_device_alloc(..)``
+ */
 void dpll_device_free(struct dpll_device *dpll);
+
+/**
+ * dpll_priv - get private data
+ * @dpll: pointer to dpll
+ *
+ * Obtain private data pointer passed to dpll subsystem when allocating
+ * device with ``dpll_device_alloc(..)``
+ */
 void *dpll_priv(struct dpll_device *dpll);
 
-int dpll_notify_status_locked(int dpll_id);
-int dpll_notify_status_unlocked(int dpll_id);
-int dpll_notify_source_change(int dpll_id, int source_id, int source_type);
-int dpll_notify_output_change(int dpll_id, int output_id, int output_type);
-int dpll_notify_source_select_mode_change(int dpll_id, int source_select_mode);
-int dpll_notify_source_prio_change(int dpll_id, int source_id, int prio);
+/**
+ * dpll_pin_priv - get private data
+ * @dpll: pointer to dpll
+ *
+ * Obtain private pin data pointer passed to dpll subsystem when pin
+ * was registered with dpll.
+ */
+void *dpll_pin_priv(struct dpll_device *dpll, struct dpll_pin *pin);
+
+/**
+ * dpll_pin_idx - get pin idx
+ * @dpll: pointer to dpll
+ * @pin: pointer to a pin
+ *
+ * Obtain pin index of given pin on given dpll.
+ *
+ * Return: PIN_IDX_INVALID - if failed to find pin, otherwise pin index
+ */
+u32 dpll_pin_idx(struct dpll_device *dpll, struct dpll_pin *pin);
+
+
+/**
+ * dpll_shared_pin_register - share a pin between dpll devices
+ * @dpll_pin_owner: a dpll already registered with a pin
+ * @dpll: a dpll being registered with a pin
+ * @pin_idx: index of a pin on dpll device (@dpll_pin_owner)
+ *	     that is being registered on new dpll (@dpll)
+ * @ops: struct with pin ops callbacks
+ * @priv: private data pointer passed when calling callback ops
+ *
+ * Register a pin already registered with different dpll device.
+ * Allow to share a single pin within multiple dpll instances.
+ *
+ * Returns:
+ * * 0 - success
+ * * negative - failure
+ */
+int
+dpll_shared_pin_register(struct dpll_device *dpll_pin_owner,
+			 struct dpll_device *dpll, u32 pin_idx,
+			 struct dpll_pin_ops *ops, void *priv);
+
+/**
+ * dpll_pin_alloc - allocate memory for a new dpll_pin object
+ * @description: pointer to string description of a pin with max length
+ * equal to PIN_DESC_LEN
+ * @desc_len: number of chars in description
+ *
+ * Allocate memory for a new pin and initialize its resources.
+ *
+ * Returns:
+ * * pointer to initialized pin - success
+ * * NULL - memory allocation fail
+ */
+struct dpll_pin *dpll_pin_alloc(const char *description, size_t desc_len);
+
+
+/**
+ * dpll_pin_register - register pin with a dpll device
+ * @dpll: pointer to dpll object to register pin with
+ * @pin: pointer to allocated pin object being registered with dpll
+ * @ops: struct with pin ops callbacks
+ * @priv: private data pointer passed when calling callback ops
+ *
+ * Register previously allocated pin object with a dpll device.
+ *
+ * Return:
+ * * 0 - if pin was registered with a parent pin,
+ * * -ENOMEM - failed to allocate memory,
+ * * -EEXIST - pin already registered with this dpll,
+ * * -EBUSY - couldn't allocate id for a pin.
+ */
+int dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
+		      struct dpll_pin_ops *ops, void *priv);
+
+/**
+ * dpll_pin_deregister - deregister pin from a dpll device
+ * @dpll: pointer to dpll object to deregister pin from
+ * @pin: pointer to allocated pin object being deregistered from dpll
+ *
+ * Deregister previously registered pin object from a dpll device.
+ *
+ * Return:
+ * * 0 - pin was successfully deregistered from this dpll device,
+ * * -ENXIO - given pin was not registered with this dpll device,
+ * * -EINVAL - pin pointer is not valid.
+ */
+int dpll_pin_deregister(struct dpll_device *dpll, struct dpll_pin *pin);
+
+/**
+ * dpll_pin_free - free memory allocated for a pin
+ * @pin: pointer to allocated pin object being freed
+ *
+ * Shared pins must be deregistered from all dpll devices before freeing them,
+ * otherwise the memory won't be freed.
+ */
+void dpll_pin_free(struct dpll_pin *pin);
+
+/**
+ * dpll_muxed_pin_register - register a pin to a muxed-type pin
+ * @parent_pin: pointer to object to register pin with
+ * @pin: pointer to allocated pin object being deregistered from dpll
+ * @ops: struct with pin ops callbacks
+ * @priv: private data pointer passed when calling callback ops*
+ *
+ * In case of multiplexed pins, allows registring them under a single
+ * parent pin.
+ *
+ * Return:
+ * * 0 - if pin was registered with a parent pin,
+ * * -ENOMEM - failed to allocate memory,
+ * * -EEXIST - pin already registered with this parent pin,
+ * * -EBUSY - couldn't assign id for a pin.
+ */
+int dpll_muxed_pin_register(struct dpll_device *dpll,
+			    struct dpll_pin *parent_pin, struct dpll_pin *pin,
+			    struct dpll_pin_ops *ops, void *priv);
+/**
+ * dpll_device_get_by_cookie - find a dpll by its cookie
+ * @cookie: cookie of dpll to search for, as given by driver on
+ *	    ``dpll_device_alloc``
+ * @type: type of dpll, as given by driver on ``dpll_device_alloc``
+ * @idx: index of dpll, as given by driver on ``dpll_device_alloc``
+ *
+ * Allows multiple driver instances using one physical DPLL to find
+ * and share already registered DPLL device.
+ *
+ * Return: pointer if device was found, NULL otherwise.
+ */
+struct dpll_device *dpll_device_get_by_cookie(u8 cookie[DPLL_COOKIE_LEN],
+					      enum dpll_type type, u8 idx);
+
+/**
+ * dpll_pin_get_by_description - find a pin by its description
+ * @dpll: dpll device pointer
+ * @description: string description of pin
+ *
+ * Allows multiple driver instances using one physical DPLL to find
+ * and share pin already registered with existing dpll device.
+ *
+ * Return: pointer if pin was found, NULL otherwise.
+ */
+struct dpll_pin *dpll_pin_get_by_description(struct dpll_device *dpll,
+					     const char *description);
+
+/**
+ * dpll_pin_get_by_idx - find a pin by its index
+ * @dpll: dpll device pointer
+ * @idx: index of pin
+ *
+ * Allows multiple driver instances using one physical DPLL to find
+ * and share pin already registered with existing dpll device.
+ *
+ * Return: pointer if pin was found, NULL otherwise.
+ */
+struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, int idx);
+
+int dpll_notify_device_change(struct dpll_device *dpll,
+			      enum dpll_event_change event,
+			      struct dpll_pin *pin);
 #endif

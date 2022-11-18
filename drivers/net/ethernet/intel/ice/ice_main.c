@@ -4873,7 +4873,10 @@ ice_probe(struct pci_dev *pdev, const struct pci_device_id __always_unused *ent)
 		ice_ptp_init(pf);
 
 	if (ice_is_feature_supported(pf, ICE_F_CGU))
-		ice_synce_init(pf);
+		ice_dpll_init(pf);
+
+	if (ice_is_feature_supported(pf, ICE_F_PHY_RCLK))
+		ice_dpll_rclk_init(pf);
 
 	if (ice_is_feature_supported(pf, ICE_F_GNSS))
 		ice_gnss_init(pf);
@@ -5054,8 +5057,10 @@ static void ice_remove(struct pci_dev *pdev)
 		ice_ptp_release(pf);
 	if (ice_is_feature_supported(pf, ICE_F_GNSS))
 		ice_gnss_exit(pf);
+	if (ice_is_feature_supported(pf, ICE_F_PHY_RCLK))
+		ice_dpll_rclk_release(pf);
 	if (ice_is_feature_supported(pf, ICE_F_CGU))
-		ice_synce_release(pf);
+		ice_dpll_release(pf);
 	if (!ice_is_safe_mode(pf))
 		ice_remove_arfs(pf);
 	ice_setup_mc_magic_wake(pf);

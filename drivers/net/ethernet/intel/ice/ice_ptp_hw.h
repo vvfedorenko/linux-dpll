@@ -110,6 +110,22 @@ struct ice_cgu_pll_params_e822 {
 	u32 post_pll_div;
 };
 
+#define E810C_QSFP_C827_0_HANDLE	2
+#define E810C_QSFP_C827_1_HANDLE	3
+enum ice_e810_c827_idx {
+	C827_0,
+	C827_1
+};
+
+enum ice_phy_rclk_pins {
+	ICE_RCLKA_PIN = 0,		/* SCL pin */
+	ICE_RCLKB_PIN,			/* SDA pin */
+};
+
+#define ICE_E810_RCLK_PINS_NUM		(ICE_RCLKB_PIN + 1)
+#define ICE_E822_RCLK_PINS_NUM		(ICE_RCLKA_PIN + 1)
+#define E810T_CGU_INPUT_C827(_phy, _pin) ((_phy) * ICE_E810_RCLK_PINS_NUM + \
+					  (_pin) + ZL_REF1P)
 enum ice_cgu_state {
 	ICE_CGU_STATE_UNKNOWN = -1,
 	ICE_CGU_STATE_INVALID,		/* state is not valid */
@@ -128,15 +144,6 @@ enum ice_cgu_state {
 struct ice_cgu_state_desc {
 	char name[MAX_CGU_STATE_NAME_LEN];
 	enum ice_cgu_state state;
-};
-
-#define MAX_CGU_PIN_NAME_LEN		16
-#define MAX_CGU_PIN_TYPES_SUPPORTED	2
-struct ice_cgu_pin_desc {
-	char name[MAX_CGU_PIN_NAME_LEN];
-	u8 index;
-	u8 num_types_supported;
-	u32 types_supported;
 };
 
 enum ice_zl_cgu_in_pins {
@@ -185,106 +192,127 @@ enum ice_si_cgu_out_pins {
 	NUM_SI_CGU_OUTPUT_PINS
 };
 
+#define MAX_CGU_PIN_NAME_LEN		16
+#define ICE_SIG_TYPE_MASK_1PPS_10MHZ	(BIT(DPLL_PIN_SIGNAL_TYPE_1_PPS) | \
+					 BIT(DPLL_PIN_SIGNAL_TYPE_10_MHZ))
+struct ice_cgu_pin_desc {
+	char name[MAX_CGU_PIN_NAME_LEN];
+	u8 index;
+	enum dpll_pin_type type;
+	unsigned long sig_type_mask;
+};
+
 static const struct ice_cgu_pin_desc ice_e810t_sfp_cgu_inputs[] = {
-	/* name,	  idx,	    num, types_supported */
-	{ "CVL-SDP22",	  ZL_REF0P, 1, BIT(DPLL_TYPE_INT_OSCILLATOR) },
-	{ "CVL-SDP20",	  ZL_REF0N, 1, BIT(DPLL_TYPE_INT_OSCILLATOR) },
-	{ "C827_0-RCLKA", ZL_REF1P, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "C827_0-RCLKB", ZL_REF1N, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "NONE",	  ZL_REF2P, 0, 0 },
-	{ "NONE",	  ZL_REF2N, 0, 0 },
-	{ "SMA1",	  ZL_REF3P, 2, BIT(DPLL_TYPE_EXT_1PPS) |
-				       BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "SMA2/U.FL2",	  ZL_REF3N, 2, BIT(DPLL_TYPE_EXT_1PPS) |
-				       BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "GNSS-1PPS",	  ZL_REF4P, 1, BIT(DPLL_TYPE_GNSS) },
-	{ "OCXO",	  ZL_REF4N, 1, BIT(DPLL_TYPE_INT_OSCILLATOR) },
+	{ "CVL-SDP22",	  ZL_REF0P, DPLL_PIN_TYPE_INT_OSCILLATOR,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "CVL-SDP20",	  ZL_REF0N, DPLL_PIN_TYPE_INT_OSCILLATOR,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "C827_0-RCLKA", ZL_REF1P, DPLL_PIN_TYPE_MUX,    0 },
+	{ "C827_0-RCLKB", ZL_REF1N, DPLL_PIN_TYPE_MUX,    0 },
+	{ "SMA1",	  ZL_REF3P, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "SMA2/U.FL2",	  ZL_REF3N, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "GNSS-1PPS",	  ZL_REF4P, DPLL_PIN_TYPE_GNSS,
+		BIT(DPLL_PIN_SIGNAL_TYPE_1_PPS) },
+	{ "OCXO",	  ZL_REF4N, DPLL_PIN_TYPE_INT_OSCILLATOR, 0 },
 };
 
 static const struct ice_cgu_pin_desc ice_e810t_qsfp_cgu_inputs[] = {
-	/* name,	  idx,	    num, types_supported */
-	{ "CVL-SDP22",	  ZL_REF0P, 1, BIT(DPLL_TYPE_INT_OSCILLATOR) },
-	{ "CVL-SDP20",	  ZL_REF0N, 1, BIT(DPLL_TYPE_INT_OSCILLATOR) },
-	{ "C827_0-RCLKA", ZL_REF1P, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "C827_0-RCLKB", ZL_REF1N, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "C827_1-RCLKA", ZL_REF2P, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "C827_1-RCLKB", ZL_REF2N, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "SMA1",	  ZL_REF3P, 2, BIT(DPLL_TYPE_EXT_1PPS) |
-				       BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "SMA2/U.FL2",	  ZL_REF3N, 2, BIT(DPLL_TYPE_EXT_1PPS) |
-				       BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "GNSS-1PPS",	  ZL_REF4P, 1, BIT(DPLL_TYPE_GNSS) },
-	{ "OCXO",	  ZL_REF4N, 1, BIT(DPLL_TYPE_INT_OSCILLATOR) },
+	{ "CVL-SDP22",	  ZL_REF0P, DPLL_PIN_TYPE_INT_OSCILLATOR,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "CVL-SDP20",	  ZL_REF0N, DPLL_PIN_TYPE_INT_OSCILLATOR,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "C827_0-RCLKA", ZL_REF1P, DPLL_PIN_TYPE_MUX, 0 },
+	{ "C827_0-RCLKB", ZL_REF1N, DPLL_PIN_TYPE_MUX, 0 },
+	{ "C827_1-RCLKA", ZL_REF2P, DPLL_PIN_TYPE_MUX, 0 },
+	{ "C827_1-RCLKB", ZL_REF2N, DPLL_PIN_TYPE_MUX, 0 },
+	{ "SMA1",	  ZL_REF3P, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "SMA2/U.FL2",	  ZL_REF3N, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "GNSS-1PPS",	  ZL_REF4P, DPLL_PIN_TYPE_GNSS,
+		BIT(DPLL_PIN_SIGNAL_TYPE_1_PPS) },
+	{ "OCXO",	  ZL_REF4N, DPLL_PIN_TYPE_INT_OSCILLATOR, 0 },
 };
 
 static const struct ice_cgu_pin_desc ice_e810t_sfp_cgu_outputs[] = {
-	/* name,	    idx,     num, type_supported */
-	{ "REF-SMA1",	    ZL_OUT0, 2, BIT(DPLL_TYPE_EXT_1PPS) |
-					BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "REF-SMA2/U.FL2", ZL_OUT1, 2, BIT(DPLL_TYPE_EXT_1PPS) |
-					BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "PHY-CLK",	    ZL_OUT2, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "MAC-CLK",	    ZL_OUT3, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "CVL-SDP21",	    ZL_OUT4, 1, BIT(DPLL_TYPE_EXT_1PPS) },
-	{ "CVL-SDP23",	    ZL_OUT5, 1, BIT(DPLL_TYPE_EXT_1PPS) },
+	{ "REF-SMA1",	    ZL_OUT0, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "REF-SMA2/U.FL2", ZL_OUT1, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "PHY-CLK",	    ZL_OUT2, DPLL_PIN_TYPE_SYNCE_ETH_PORT, 0 },
+	{ "MAC-CLK",	    ZL_OUT3, DPLL_PIN_TYPE_SYNCE_ETH_PORT, 0 },
+	{ "CVL-SDP21",	    ZL_OUT4, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "CVL-SDP23",	    ZL_OUT5, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
 };
 
 static const struct ice_cgu_pin_desc ice_e810t_qsfp_cgu_outputs[] = {
-	/* name,	    idx,     num, type_supported */
-	{ "REF-SMA1",	    ZL_OUT0, 2, BIT(DPLL_TYPE_EXT_1PPS) |
-					BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "REF-SMA2/U.FL2", ZL_OUT1, 2, BIT(DPLL_TYPE_EXT_1PPS) |
-					BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "PHY-CLK",	    ZL_OUT2, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "PHY2-CLK",	    ZL_OUT3, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "MAC-CLK",	    ZL_OUT4, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "CVL-SDP21",	    ZL_OUT5, 1, BIT(DPLL_TYPE_EXT_1PPS) },
-	{ "CVL-SDP23",	    ZL_OUT6, 1, BIT(DPLL_TYPE_EXT_1PPS) },
+	{ "REF-SMA1",	    ZL_OUT0, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "REF-SMA2/U.FL2", ZL_OUT1, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "PHY-CLK",	    ZL_OUT2, DPLL_PIN_TYPE_SYNCE_ETH_PORT, 0 },
+	{ "PHY2-CLK",	    ZL_OUT3, DPLL_PIN_TYPE_SYNCE_ETH_PORT, 0 },
+	{ "MAC-CLK",	    ZL_OUT4, DPLL_PIN_TYPE_SYNCE_ETH_PORT, 0 },
+	{ "CVL-SDP21",	    ZL_OUT5, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "CVL-SDP23",	    ZL_OUT6, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
 };
 
 static const struct ice_cgu_pin_desc ice_e823_si_cgu_inputs[] = {
-	/* name,	  idx,	    num, types_supported */
-	{ "NONE",	  SI_REF0P, 0, 0 },
-	{ "NONE",	  SI_REF0N, 0, 0 },
-	{ "SYNCE0_DP",	  SI_REF1P, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "SYNCE0_DN",	  SI_REF1N, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "EXT_CLK_SYNC", SI_REF2P, 2, BIT(DPLL_TYPE_EXT_1PPS) |
-				       BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "NONE",	  SI_REF2N, 0, 0 },
-	{ "EXT_PPS_OUT",  SI_REF3,  1, BIT(DPLL_TYPE_EXT_1PPS) },
-	{ "INT_PPS_OUT",  SI_REF4,  1, BIT(DPLL_TYPE_EXT_1PPS) },
+	{ "NONE",	  SI_REF0P, DPLL_PIN_TYPE_UNSPEC, 0 },
+	{ "NONE",	  SI_REF0N, DPLL_PIN_TYPE_UNSPEC, 0 },
+	{ "SYNCE0_DP",	  SI_REF1P, DPLL_PIN_TYPE_MUX, 0 },
+	{ "SYNCE0_DN",	  SI_REF1N, DPLL_PIN_TYPE_MUX, 0 },
+	{ "EXT_CLK_SYNC", SI_REF2P, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "NONE",	  SI_REF2N, DPLL_PIN_TYPE_UNSPEC, 0 },
+	{ "EXT_PPS_OUT",  SI_REF3,  DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "INT_PPS_OUT",  SI_REF4,  DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
 };
 
 static const struct ice_cgu_pin_desc ice_e823_si_cgu_outputs[] = {
-	/* name,	    idx,     num, types_supported */
-	{ "1588-TIME_SYNC", SI_OUT0, 1, BIT(DPLL_TYPE_EXT_1PPS) },
-	{ "PHY-CLK",	    SI_OUT1, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "10MHZ-SMA2",	    SI_OUT2, 1, BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "PPS-SMA1",	    SI_OUT3, 1, BIT(DPLL_TYPE_EXT_1PPS) },
+	{ "1588-TIME_SYNC", SI_OUT0, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "PHY-CLK",	    SI_OUT1, DPLL_PIN_TYPE_SYNCE_ETH_PORT, 0 },
+	{ "10MHZ-SMA2",	    SI_OUT2, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "PPS-SMA1",	    SI_OUT3, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
 };
 
 static const struct ice_cgu_pin_desc ice_e823_zl_cgu_inputs[] = {
-	/* name,	  idx,	    num, types_supported */
-	{ "NONE",	  ZL_REF0P, 0, 0 },
-	{ "INT_PPS_OUT",  ZL_REF0N, 1, BIT(DPLL_TYPE_EXT_1PPS) },
-	{ "SYNCE0_DP",	  ZL_REF1P, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "SYNCE0_DN",	  ZL_REF1N, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "NONE",	  ZL_REF2P, 0, 0 },
-	{ "NONE",	  ZL_REF2N, 0, 0 },
-	{ "EXT_CLK_SYNC", ZL_REF3P, 1, BIT(DPLL_TYPE_EXT_1PPS) },
-	{ "NONE",	  ZL_REF3N, 0, 0 },
-	{ "EXT_PPS_OUT",  ZL_REF4P, 1, BIT(DPLL_TYPE_EXT_1PPS) },
-	{ "OCXO",	  ZL_REF4N, 1, BIT(DPLL_TYPE_INT_OSCILLATOR) },
+	{ "NONE",	  ZL_REF0P, DPLL_PIN_TYPE_UNSPEC, 0 },
+	{ "INT_PPS_OUT",  ZL_REF0N, DPLL_PIN_TYPE_EXT,
+		BIT(DPLL_PIN_SIGNAL_TYPE_1_PPS) },
+	{ "SYNCE0_DP",	  ZL_REF1P, DPLL_PIN_TYPE_MUX, 0 },
+	{ "SYNCE0_DN",	  ZL_REF1N, DPLL_PIN_TYPE_MUX, 0 },
+	{ "NONE",	  ZL_REF2P, DPLL_PIN_TYPE_UNSPEC, 0 },
+	{ "NONE",	  ZL_REF2N, DPLL_PIN_TYPE_UNSPEC, 0 },
+	{ "EXT_CLK_SYNC", ZL_REF3P, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "NONE",	  ZL_REF3N, DPLL_PIN_TYPE_UNSPEC, 0 },
+	{ "EXT_PPS_OUT",  ZL_REF4P, DPLL_PIN_TYPE_EXT,
+		BIT(DPLL_PIN_SIGNAL_TYPE_1_PPS) },
+	{ "OCXO",	  ZL_REF4N, DPLL_PIN_TYPE_INT_OSCILLATOR },
 };
 
 static const struct ice_cgu_pin_desc ice_e823_zl_cgu_outputs[] = {
-	/* name,	   idx,	    num, types_supported */
-	{ "PPS-SMA1",	   ZL_OUT0, 1, BIT(DPLL_TYPE_EXT_1PPS) },
-	{ "10MHZ-SMA2",	   ZL_OUT1, 1, BIT(DPLL_TYPE_EXT_10MHZ) },
-	{ "PHY-CLK",	   ZL_OUT2, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "1588-TIME_REF", ZL_OUT3, 1, BIT(DPLL_TYPE_SYNCE_ETH_PORT) },
-	{ "CPK-TIME_SYNC", ZL_OUT4, 1, BIT(DPLL_TYPE_EXT_1PPS) },
-	{ "NONE",	   ZL_OUT5, 0, 0 },
+	{ "PPS-SMA1",	   ZL_OUT0, DPLL_PIN_TYPE_EXT,
+		BIT(DPLL_PIN_SIGNAL_TYPE_1_PPS) },
+	{ "10MHZ-SMA2",	   ZL_OUT1, DPLL_PIN_TYPE_EXT,
+		BIT(DPLL_PIN_SIGNAL_TYPE_10_MHZ) },
+	{ "PHY-CLK",	   ZL_OUT2, DPLL_PIN_TYPE_SYNCE_ETH_PORT, 0 },
+	{ "1588-TIME_REF", ZL_OUT3, DPLL_PIN_TYPE_SYNCE_ETH_PORT, 0 },
+	{ "CPK-TIME_SYNC", ZL_OUT4, DPLL_PIN_TYPE_EXT,
+		ICE_SIG_TYPE_MASK_1PPS_10MHZ },
+	{ "NONE",	   ZL_OUT5, DPLL_PIN_TYPE_UNSPEC, 0 },
 };
 
 extern const struct
@@ -371,15 +399,19 @@ int ice_read_sma_ctrl_e810t(struct ice_hw *hw, u8 *data);
 int ice_write_sma_ctrl_e810t(struct ice_hw *hw, u8 data);
 int ice_read_pca9575_reg_e810t(struct ice_hw *hw, u8 offset, u8 *data);
 bool ice_is_pca9575_present(struct ice_hw *hw);
+bool ice_is_phy_rclk_present(struct ice_hw *hw);
 bool ice_is_clock_mux_present_e810t(struct ice_hw *hw);
+int ice_get_pf_c827_idx(struct ice_hw *hw, u8 *idx);
 bool ice_is_cgu_present(struct ice_hw *hw);
-u8 ice_cgu_get_pin_num_types_supported(struct ice_hw *hw, u8 pin, bool input);
-u32 ice_cgu_get_pin_types_supported(struct ice_hw *hw, u8 pin, bool input);
+enum dpll_pin_type ice_cgu_get_pin_type(struct ice_hw *hw, u8 pin, bool input);
+unsigned long
+ice_cgu_get_pin_sig_type_mask(struct ice_hw *hw, u8 pin, bool input);
 const char *ice_cgu_get_pin_name(struct ice_hw *hw, u8 pin, bool input);
 int ice_get_cgu_state(struct ice_hw *hw, u8 dpll_idx,
 		      enum ice_cgu_state last_dpll_state, u8 *pin,
 		      u8 *ref_state, u8 *eec_mode, s64 *phase_offset,
 		      enum ice_cgu_state *dpll_state);
+int ice_get_cgu_rclk_pin_info(struct ice_hw *hw, u8 *base_idx, u8 *pin_num);
 
 #define PFTSYN_SEM_BYTES	4
 

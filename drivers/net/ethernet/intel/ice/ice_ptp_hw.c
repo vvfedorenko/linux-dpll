@@ -3263,10 +3263,33 @@ ice_get_pca9575_handle(struct ice_hw *hw, u16 *pca9575_handle)
 }
 
 /**
+ * ice_is_phy_rclk_present
+ * @hw: pointer to the hw struct
+ *
+ * Check if the PHY Recovered Clock device is present in the netlist
+ * Return:
+ * * true - device found in netlist
+ * * false - device not found
+ */
+bool ice_is_phy_rclk_present(struct ice_hw *hw)
+{
+	if (ice_find_netlist_node(hw, ICE_AQC_LINK_TOPO_NODE_TYPE_CLK_CTRL,
+				  ICE_ACQ_GET_LINK_TOPO_NODE_NR_C827, NULL) &&
+	    ice_find_netlist_node(hw, ICE_AQC_LINK_TOPO_NODE_TYPE_CLK_CTRL,
+				  ICE_ACQ_GET_LINK_TOPO_NODE_NR_E822_PHY, NULL))
+		return false;
+
+	return true;
+}
+
+/**
  * ice_is_clock_mux_present_e810t
  * @hw: pointer to the hw struct
  *
  * Check if the Clock Multiplexer device is present in the netlist
+ * Return:
+ * * true - device found in netlist
+ * * false - device not found
  */
 bool ice_is_clock_mux_present_e810t(struct ice_hw *hw)
 {
@@ -3276,6 +3299,52 @@ bool ice_is_clock_mux_present_e810t(struct ice_hw *hw)
 		return false;
 
 	return true;
+}
+
+/**
+ * ice_get_pf_c827_idx - find and return the C827 index for the current pf
+ * @hw: pointer to the hw struct
+ * @idx: index of the found C827 PHY
+ * Return:
+ * * 0 - success
+ * * negative - failure
+ */
+int ice_get_pf_c827_idx(struct ice_hw *hw, u8 *idx)
+{
+	struct ice_aqc_get_link_topo cmd;
+	u8 node_part_number;
+	u16 node_handle;
+	int status;
+	u8 ctx;
+
+	if (hw->mac_type != ICE_MAC_E810)
+		return -ENODEV;
+
+	if (hw->device_id != ICE_DEV_ID_E810C_QSFP) {
+		*idx = C827_0;
+		return 0;
+	}
+
+	memset(&cmd, 0, sizeof(cmd));
+
+	ctx = ICE_AQC_LINK_TOPO_NODE_TYPE_PHY << ICE_AQC_LINK_TOPO_NODE_TYPE_S;
+	ctx |= ICE_AQC_LINK_TOPO_NODE_CTX_PORT << ICE_AQC_LINK_TOPO_NODE_CTX_S;
+	cmd.addr.topo_params.node_type_ctx = ctx;
+	cmd.addr.topo_params.index = 0;
+
+	status = ice_aq_get_netlist_node(hw, &cmd, &node_part_number,
+					 &node_handle);
+	if (status || node_part_number != ICE_ACQ_GET_LINK_TOPO_NODE_NR_C827)
+		return -ENOENT;
+
+	if (node_handle == E810C_QSFP_C827_0_HANDLE)
+		*idx = C827_0;
+	else if (node_handle == E810C_QSFP_C827_1_HANDLE)
+		*idx = C827_1;
+	else
+		return -EIO;
+
+	return 0;
 }
 
 /**
@@ -3445,6 +3514,7 @@ bool ice_is_cgu_present(struct ice_hw *hw)
  * ice_cgu_get_pin_desc_e823
  * @hw: pointer to the hw struct
  * @input: if request is done against input or output pin
+ * @size: number of inputs/outputs
  *
  * Return: pointer to pin description array associated to given hw.
  */
@@ -3531,15 +3601,14 @@ ice_cgu_get_pin_desc(struct ice_hw *hw, bool input, int *size)
 }
 
 /**
- * ice_cgu_get_pin_num_types_supported
+ * ice_cgu_get_pin_type
  * @hw: pointer to the hw struct
  * @pin: pin index
  * @input: if request is done against input or output pin
  *
- * Return: number of pin-types supported by a given pin on a given hw.
- *
+ * Return: type of a pin.
  */
-u8 ice_cgu_get_pin_num_types_supported(struct ice_hw *hw, u8 pin, bool input)
+enum dpll_pin_type ice_cgu_get_pin_type(struct ice_hw *hw, u8 pin, bool input)
 {
 	const struct ice_cgu_pin_desc *t;
 	int t_size;
@@ -3552,18 +3621,19 @@ u8 ice_cgu_get_pin_num_types_supported(struct ice_hw *hw, u8 pin, bool input)
 	if (pin >= t_size)
 		return 0;
 
-	return t[pin].num_types_supported;
+	return t[pin].type;
 }
 
 /**
- * ice_cgu_get_pin_types_supported
+ * ice_cgu_get_pin_sig_type_mask
  * @hw: pointer to the hw struct
  * @pin: pin index
  * @input: if request is done against input or output pin
  *
- * Return: bitmask of supported pin-types.
+ * Return: signal type bit mask of a pin.
  */
-u32 ice_cgu_get_pin_types_supported(struct ice_hw *hw, u8 pin, bool input)
+unsigned long
+ice_cgu_get_pin_sig_type_mask(struct ice_hw *hw, u8 pin, bool input)
 {
 	const struct ice_cgu_pin_desc *t;
 	int t_size;
@@ -3576,7 +3646,7 @@ u32 ice_cgu_get_pin_types_supported(struct ice_hw *hw, u8 pin, bool input)
 	if (pin >= t_size)
 		return 0;
 
-	return t[pin].types_supported;
+	return t[pin].sig_type_mask;
 }
 
 /**
@@ -3609,13 +3679,15 @@ const char *ice_cgu_get_pin_name(struct ice_hw *hw, u8 pin, bool input)
  * ice_get_cgu_state - get the state of the DPLL
  * @hw: pointer to the hw struct
  * @dpll_idx: Index of internal DPLL unit
- * @pin: pointer to a buffer for returning currently active pin
- * @phase_offset: pointer to a buffer for returning phase offset
  * @last_dpll_state: last known state of DPLL
+ * @pin: pointer to a buffer for returning currently active pin
+ * @ref_state: reference clock state
+ * @phase_offset: pointer to a buffer for returning phase offset
+ * @dpll_state: state of the DPLL (output)
  *
  * This function will read the state of the DPLL(dpll_idx). Non-null
- * 'pin' and 'phase_offset' parameters are used to retrieve currently
- * active pin and phase_offset respectively.
+ * 'pin', 'ref_state', 'eec_mode' and 'phase_offset' parameters are used to
+ * retrieve currently active pin, state, mode and phase_offset respectively.
  *
  * Return: state of the DPLL
  */
@@ -3675,3 +3747,61 @@ int ice_get_cgu_state(struct ice_hw *hw, u8 dpll_idx,
 	return status;
 }
 
+/**
+ * ice_get_cgu_rclk_pin_info - get info on available recovered clock pins
+ * @hw: pointer to the hw struct
+ * @base_idx: returns index of first recovered clock pin on device
+ * @pin_num: returns number of recovered clock pins available on device
+ *
+ * Based on hw provide caller info about recovery clock pins available on the
+ * board.
+ *
+ * Return:
+ * * 0 - success, information is valid
+ * * negative - failure, information is not valid
+ */
+int ice_get_cgu_rclk_pin_info(struct ice_hw *hw, u8 *base_idx, u8 *pin_num)
+{
+	int ret;
+
+	switch (hw->device_id) {
+	case ICE_DEV_ID_E810C_SFP:
+	case ICE_DEV_ID_E810C_QSFP:
+		u8 phy_idx;
+
+		ret = ice_get_pf_c827_idx(hw, &phy_idx);
+		if (ret)
+			return ret;
+		*base_idx = E810T_CGU_INPUT_C827(phy_idx, ICE_RCLKA_PIN);
+		*pin_num = ICE_E810_RCLK_PINS_NUM;
+		ret = 0;
+		break;
+	case ICE_DEV_ID_E823L_10G_BASE_T:
+	case ICE_DEV_ID_E823L_1GBE:
+	case ICE_DEV_ID_E823L_BACKPLANE:
+	case ICE_DEV_ID_E823L_QSFP:
+	case ICE_DEV_ID_E823L_SFP:
+	case ICE_DEV_ID_E823C_10G_BASE_T:
+	case ICE_DEV_ID_E823C_BACKPLANE:
+	case ICE_DEV_ID_E823C_QSFP:
+	case ICE_DEV_ID_E823C_SFP:
+	case ICE_DEV_ID_E823C_SGMII:
+		*pin_num = ICE_E822_RCLK_PINS_NUM;
+		ret = 0;
+		if (hw->cgu_part_number ==
+		    ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032)
+			*base_idx = ZL_REF1P;
+		else if (hw->cgu_part_number ==
+			 ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384)
+			*base_idx = SI_REF1P;
+		else
+			ret = -ENODEV;
+
+		break;
+	default:
+		ret = -ENODEV;
+		break;
+	}
+
+	return ret;
+}
