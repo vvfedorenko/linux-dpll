@@ -4431,6 +4431,8 @@ void ice_init_feature_support(struct ice_pf *pf)
 	case ICE_DEV_ID_E810_XXV_SFP:
 		ice_set_feature_support(pf, ICE_F_DSCP);
 		ice_set_feature_support(pf, ICE_F_PTP_EXTTS);
+		if (ice_is_phy_rclk_present(&pf->hw))
+			ice_set_feature_support(pf, ICE_F_PHY_RCLK);
 		/* If we don't own the timer - don't enable other caps */
 		if (!pf->hw.func_caps.ts_func_info.src_tmr_owned)
 			break;
