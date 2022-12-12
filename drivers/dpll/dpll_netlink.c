@@ -21,7 +21,6 @@ static const struct nla_policy dpll_cmd_device_get_policy[] = {
 	[DPLLA_NAME]		= { .type = NLA_STRING,
 				    .len = DPLL_NAME_LEN },
 	[DPLLA_DUMP_FILTER]	= { .type = NLA_U32 },
-	[DPLLA_NETIFINDEX]	= { .type = NLA_U32 },
 };
 
 static const struct nla_policy dpll_cmd_device_set_policy[] = {
