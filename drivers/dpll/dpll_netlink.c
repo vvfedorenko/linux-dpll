@@ -116,18 +116,6 @@ static int dpll_msg_add_source_pin(struct sk_buff *msg, struct dpll_attr *attr)
 	return 0;
 }
 
-static int dpll_msg_add_netifindex(struct sk_buff *msg, struct dpll_attr *attr)
-{
-	unsigned int netifindex; // TODO: Should be u32?
-
-	if (dpll_attr_netifindex_get(attr, &netifindex))
-		return 0;
-	if (nla_put_u32(msg, DPLLA_NETIFINDEX, netifindex))
-		return -EMSGSIZE;
-
-	return 0;
-}
-
 static int dpll_msg_add_lock_status(struct sk_buff *msg, struct dpll_attr *attr)
 {
 	enum dpll_lock_status s = dpll_attr_lock_status_get(attr);
@@ -446,8 +434,6 @@ __dpll_cmd_dump_status(struct sk_buff *msg, struct dpll_device *dpll)
 	if (dpll_msg_add_mode(msg, attr))
 		return -EMSGSIZE;
 	if (dpll_msg_add_modes_supported(msg, attr))
-		return -EMSGSIZE;
-	if (dpll_msg_add_netifindex(msg, attr))
 		return -EMSGSIZE;
 
 	return 0;

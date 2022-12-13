@@ -16,7 +16,6 @@ struct dpll_attr {
 	u32 source_pin_idx;
 	enum dpll_mode mode;
 	unsigned long mode_supported_mask;
-	unsigned int netifindex;
 };
 
 static const int MAX_BITS = BITS_PER_TYPE(unsigned long);
@@ -201,30 +200,6 @@ bool dpll_attr_mode_supported(const struct dpll_attr *attr,
 	return test_bit(mode, &attr->mode_supported_mask);
 }
 EXPORT_SYMBOL_GPL(dpll_attr_mode_supported);
-
-int dpll_attr_netifindex_set(struct dpll_attr *attr, unsigned int netifindex)
-{
-	if (!attr)
-		return -EFAULT;
-
-	attr->netifindex = netifindex;
-	set_bit(DPLLA_NETIFINDEX, &attr->valid_mask);
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(dpll_attr_netifindex_set);
-
-int dpll_attr_netifindex_get(const struct dpll_attr *attr,
-			     unsigned int *netifindex)
-{
-	if (!dpll_attr_valid(DPLLA_NETIFINDEX, attr))
-		return -EINVAL;
-
-	*netifindex = attr->netifindex;
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(dpll_attr_netifindex_get);
 
 static bool dpll_attr_changed(const enum dplla attr_id,
 			      struct dpll_attr *new,

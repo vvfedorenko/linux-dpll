@@ -368,10 +368,6 @@ static int ice_dpll_dev_get(struct dpll_device *dpll, struct dpll_attr *attr)
 	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pf:%p\n", __func__, dpll, pf);
 
 	dpll_attr_copy(attr, d->attr);
-	/* set netifindex here again despite setting it in ice_dpll_init_attrs,
-	 * because this valid value might not be ready at first
-	 */
-	dpll_attr_netifindex_set(attr, pf->vsi[0]->netdev->ifindex);
 	dpll_attr_lock_status_set(attr, ice_dpll_status[d->dpll_state]);
 	dpll_attr_source_idx_set(attr, (u32)d->source_idx);
 	mutex_unlock(&pf->dplls.lock);
@@ -964,7 +960,6 @@ static int ice_dpll_init_attrs(struct ice_pf *pf, struct ice_dpll *dpll)
 	if (!dpll->attr)
 		return -ENOMEM;
 
-	dpll_attr_netifindex_set(dpll->attr, pf->vsi[0]->netdev->ifindex);
 	dpll_attr_mode_set(dpll->attr, DPLL_MODE_AUTOMATIC);
 	dpll_attr_mode_supported_set(dpll->attr, DPLL_MODE_AUTOMATIC);
 

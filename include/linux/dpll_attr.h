@@ -149,25 +149,6 @@ bool dpll_attr_mode_supported(const struct dpll_attr *attr,
 			      enum dpll_mode mode);
 
 /**
- * dpll_attr_netifindex_set - set the netifindex in the attributes
- * @attr: structure with dpll attributes
- * @netifindex: parameter to be set in attributes
- *
- * Return: 0 if succeeds, error code otherwise.
- */
-int dpll_attr_netifindex_set(struct dpll_attr *attr, unsigned int netifindex);
-
-/**
- * dpll_attr_netifindex_get - get the netifindex from the attributes
- * @attr: structure with dpll attributes
- * @netifindex: retrieved parameter
- *
- * Return: 0 if succeeds, error code otherwise.
- */
-int dpll_attr_netifindex_get(const struct dpll_attr *attr,
-			     unsigned int *netifindex);
-
-/**
  * dpll_attr_delta - calculate the difference between two dpll attribute sets
  * @delta: structure with delta of dpll attributes
  * @new: structure with new dpll attributes
