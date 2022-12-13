@@ -359,7 +359,7 @@ int dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
 	}
 	mutex_unlock(&dpll->lock);
 	if (!ret)
-		dpll_notify_device_change(dpll, DPLL_CHANGE_PIN_ADD, pin);
+		dpll_pin_notify(dpll, pin, DPLL_CHANGE_PIN_ADD);
 
 	return ret;
 }
@@ -400,7 +400,7 @@ int dpll_pin_deregister(struct dpll_device *dpll, struct dpll_pin *pin)
 		pin_ref_dpll_del(pin, dpll);
 	mutex_unlock(&dpll->lock);
 	if (!ret)
-		dpll_notify_device_change(dpll, DPLL_CHANGE_PIN_DEL, pin);
+		dpll_pin_notify(dpll, pin, DPLL_CHANGE_PIN_DEL);
 
 	return ret;
 }
@@ -433,7 +433,7 @@ int dpll_muxed_pin_register(struct dpll_device *dpll,
 		pin->parent_pin = parent_pin;
 	mutex_unlock(&dpll->lock);
 	if (!ret)
-		dpll_notify_device_change(dpll, DPLL_CHANGE_PIN_ADD, pin);
+		dpll_pin_notify(dpll, pin, DPLL_CHANGE_PIN_ADD);
 
 	return ret;
 }
@@ -511,23 +511,23 @@ dpll_notify_pin_change_attr(struct dpll_device *dpll, struct dpll_pin *pin,
 
 	if (dpll_pin_attr_valid(DPLLA_PIN_TYPE, attr)) {
 		change = DPLL_CHANGE_PIN_TYPE;
-		ret = dpll_notify_device_change(dpll, change, pin);
+		ret = dpll_pin_notify(dpll, pin, change);
 	}
 	if (!ret && dpll_pin_attr_valid(DPLLA_PIN_SIGNAL_TYPE, attr)) {
 		change = DPLL_CHANGE_PIN_SIGNAL_TYPE;
-		ret = dpll_notify_device_change(dpll, change, pin);
+		ret = dpll_pin_notify(dpll, pin, change);
 	}
 	if (!ret && dpll_pin_attr_valid(DPLLA_PIN_CUSTOM_FREQ, attr)) {
 		change = DPLL_CHANGE_PIN_CUSTOM_FREQ;
-		ret = dpll_notify_device_change(dpll, change, pin);
+		ret = dpll_pin_notify(dpll, pin, change);
 	}
 	if (!ret && dpll_pin_attr_valid(DPLLA_PIN_STATE, attr)) {
 		change = DPLL_CHANGE_PIN_STATE;
-		ret = dpll_notify_device_change(dpll, change, pin);
+		ret = dpll_pin_notify(dpll, pin, change);
 	}
 	if (!ret && dpll_pin_attr_valid(DPLLA_PIN_PRIO, attr)) {
 		change = DPLL_CHANGE_PIN_PRIO;
-		ret = dpll_notify_device_change(dpll, change, pin);
+		ret = dpll_pin_notify(dpll, pin, change);
 	}
 
 	return ret;
@@ -539,10 +539,10 @@ static int dpll_notify_device_change_attr(struct dpll_device *dpll,
 	int ret = 0;
 
 	if (dpll_attr_valid(DPLLA_MODE, attr))
-		ret = dpll_notify_device_change(dpll, DPLL_CHANGE_MODE, NULL);
+		ret = dpll_device_notify(dpll, DPLL_CHANGE_MODE);
 	if (!ret && dpll_attr_valid(DPLLA_SOURCE_PIN_IDX, attr))
-		ret = dpll_notify_device_change(dpll, DPLL_CHANGE_SOURCE_PIN,
-						NULL);
+		ret = dpll_device_notify(dpll, DPLL_CHANGE_SOURCE_PIN);
+
 	return ret;
 }
 

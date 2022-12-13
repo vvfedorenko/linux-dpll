@@ -1055,12 +1055,11 @@ static void ice_dpll_notify_changes(struct ice_dpll *d)
 {
 	if (d->prev_dpll_state != d->dpll_state) {
 		d->prev_dpll_state = d->dpll_state;
-		dpll_notify_device_change(d->dpll, DPLL_CHANGE_LOCK_STATUS, 0);
+		dpll_device_notify(d->dpll, DPLL_CHANGE_LOCK_STATUS);
 	}
 	if (d->prev_source_idx != d->source_idx) {
 		d->prev_source_idx = d->source_idx;
-		dpll_notify_device_change(d->dpll,
-					  DPLL_CHANGE_SOURCE_PIN, 0);
+		dpll_device_notify(d->dpll, DPLL_CHANGE_SOURCE_PIN);
 	}
 }
 

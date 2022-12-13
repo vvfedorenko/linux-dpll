@@ -255,7 +255,32 @@ struct dpll_pin *dpll_pin_get_by_description(struct dpll_device *dpll,
  */
 struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, int idx);
 
-int dpll_notify_device_change(struct dpll_device *dpll,
-			      enum dpll_event_change event,
-			      struct dpll_pin *pin);
+/**
+ * dpll_device_notify - notify on dpll device change
+ * @dpll: dpll device pointer
+ * @event: type of change
+ *
+ * Broadcast event to the netlink multicast registered listeners.
+ *
+ * Return:
+ * * 0 - success
+ * * negative - error
+ */
+int dpll_device_notify(struct dpll_device *dpll, enum dpll_event_change event);
+
+/**
+ * dpll_pin_notify - notify on dpll pin change
+ * @dpll: dpll device pointer
+ * @pin: dpll pin pointer
+ * @event: type of change
+ *
+ * Broadcast event to the netlink multicast registered listeners.
+ *
+ * Return:
+ * * 0 - success
+ * * negative - error
+ */
+int dpll_pin_notify(struct dpll_device *dpll, struct dpll_pin *pin,
+		    enum dpll_event_change event);
+
 #endif

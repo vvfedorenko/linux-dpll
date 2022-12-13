@@ -41,19 +41,9 @@ static const struct nla_policy dpll_cmd_pin_set_policy[] = {
 	[DPLLA_PIN_PRIO]	= { .type = NLA_U32 },
 };
 
-struct dpll_param {
-	struct netlink_callback *cb;
-	struct sk_buff *msg;
-	struct dpll_device *dpll;
-	struct dpll_pin *pin;
-	enum dpll_event_change change_type;
-};
-
 struct dpll_dump_ctx {
 	int dump_filter;
 };
-
-typedef int (*cb_t)(struct dpll_param *);
 
 static struct genl_family dpll_gnl_family;
 
@@ -842,34 +832,36 @@ static struct genl_family dpll_family __ro_after_init = {
 	.parallel_ops   = true,
 };
 
-static int dpll_event_device_id(struct dpll_param *p)
+static int dpll_event_device_id(struct sk_buff *msg, struct dpll_device *dpll)
 {
-	int ret = dpll_msg_add_id(p->msg, dpll_id(p->dpll));
+	int ret = dpll_msg_add_id(msg, dpll_id(dpll));
 
 	if (ret)
 		return ret;
-	ret = dpll_msg_add_name(p->msg, dpll_dev_name(p->dpll));
+	ret = dpll_msg_add_name(msg, dpll_dev_name(dpll));
 
 	return ret;
 }
 
-static int dpll_event_device_change(struct dpll_param *p)
+static int dpll_event_device_change(struct sk_buff *msg,
+				    struct dpll_device *dpll,
+				    struct dpll_pin *pin,
+				    enum dpll_event_change event)
 {
-	int ret = dpll_msg_add_id(p->msg, dpll_id(p->dpll));
+	int ret = dpll_msg_add_id(msg, dpll_id(dpll));
 
 	if (ret)
 		return ret;
-	ret = dpll_msg_add_event_change_type(p->msg, p->change_type);
+	ret = dpll_msg_add_event_change_type(msg, event);
 	if (ret)
 		return ret;
-	switch (p->change_type)	{
+	switch (event)	{
 	case DPLL_CHANGE_PIN_ADD:
-	case DPLL_CHANGE_PIN_DEL:
 	case DPLL_CHANGE_PIN_TYPE:
 	case DPLL_CHANGE_PIN_SIGNAL_TYPE:
 	case DPLL_CHANGE_PIN_STATE:
 	case DPLL_CHANGE_PIN_PRIO:
-		ret = dpll_msg_add_pin_idx(p->msg, dpll_pin_idx(p->dpll, p->pin));
+		ret = dpll_msg_add_pin_idx(msg, dpll_pin_idx(dpll, pin));
 		break;
 	default:
 		break;
@@ -878,16 +870,11 @@ static int dpll_event_device_change(struct dpll_param *p)
 	return ret;
 }
 
-static const cb_t event_cb[] = {
-	[DPLL_EVENT_DEVICE_CREATE]	= dpll_event_device_id,
-	[DPLL_EVENT_DEVICE_DELETE]	= dpll_event_device_id,
-	[DPLL_EVENT_DEVICE_CHANGE]	= dpll_event_device_change,
-};
-
 /*
  * Generic netlink DPLL event encoding
  */
-static int dpll_send_event(enum dpll_event event, struct dpll_param *p)
+static int dpll_send_event_create(enum dpll_event event,
+				  struct dpll_device *dpll)
 {
 	struct sk_buff *msg;
 	int ret = -EMSGSIZE;
@@ -896,18 +883,50 @@ static int dpll_send_event(enum dpll_event event, struct dpll_param *p)
 	msg = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!msg)
 		return -ENOMEM;
-	p->msg = msg;
 
 	hdr = genlmsg_put(msg, 0, 0, &dpll_family, 0, event);
 	if (!hdr)
 		goto out_free_msg;
 
-	ret = event_cb[event](p);
+	ret = dpll_event_device_id(msg, dpll);
 	if (ret)
 		goto out_cancel_msg;
-
 	genlmsg_end(msg, hdr);
+	genlmsg_multicast(&dpll_family, msg, 0, 0, GFP_KERNEL);
 
+	return 0;
+
+out_cancel_msg:
+	genlmsg_cancel(msg, hdr);
+out_free_msg:
+	nlmsg_free(msg);
+
+	return ret;
+}
+
+/*
+ * Generic netlink DPLL event encoding
+ */
+static int dpll_send_event_change(struct dpll_device *dpll,
+				  struct dpll_pin *pin,
+				  enum dpll_event_change event)
+{
+	struct sk_buff *msg;
+	int ret = -EMSGSIZE;
+	void *hdr;
+
+	msg = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
+	if (!msg)
+		return -ENOMEM;
+
+	hdr = genlmsg_put(msg, 0, 0, &dpll_family, 0, DPLL_EVENT_DEVICE_CHANGE);
+	if (!hdr)
+		goto out_free_msg;
+
+	ret = dpll_event_device_change(msg, dpll, pin, event);
+	if (ret)
+		goto out_cancel_msg;
+	genlmsg_end(msg, hdr);
 	genlmsg_multicast(&dpll_family, msg, 0, 0, GFP_KERNEL);
 
 	return 0;
@@ -922,29 +941,26 @@ out_free_msg:
 
 int dpll_notify_device_create(struct dpll_device *dpll)
 {
-	struct dpll_param p = { .dpll = dpll };
-
-	return dpll_send_event(DPLL_EVENT_DEVICE_CREATE, &p);
+	return dpll_send_event_create(DPLL_EVENT_DEVICE_CREATE, dpll);
 }
 
 int dpll_notify_device_delete(struct dpll_device *dpll)
 {
-	struct dpll_param p = { .dpll = dpll };
-
-	return dpll_send_event(DPLL_EVENT_DEVICE_DELETE, &p);
+	return dpll_send_event_create(DPLL_EVENT_DEVICE_DELETE, dpll);
 }
 
-int dpll_notify_device_change(struct dpll_device *dpll,
-			      enum dpll_event_change event,
-			      struct dpll_pin *pin)
+int dpll_device_notify(struct dpll_device *dpll, enum dpll_event_change event)
 {
-	struct dpll_param p = { .dpll = dpll,
-				.change_type = event,
-				.pin = pin };
-
-	return dpll_send_event(DPLL_EVENT_DEVICE_CHANGE, &p);
+	return dpll_send_event_change(dpll, NULL, event);
 }
-EXPORT_SYMBOL_GPL(dpll_notify_device_change);
+EXPORT_SYMBOL_GPL(dpll_device_notify);
+
+int dpll_pin_notify(struct dpll_device *dpll, struct dpll_pin *pin,
+		    enum dpll_event_change event)
+{
+	return dpll_send_event_change(dpll, pin, event);
+}
+EXPORT_SYMBOL_GPL(dpll_pin_notify);
 
 int __init dpll_netlink_init(void)
 {
