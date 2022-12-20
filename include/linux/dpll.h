@@ -12,7 +12,6 @@
 struct dpll_device;
 struct dpll_pin;
 
-#define DPLL_COOKIE_LEN		10
 #define PIN_IDX_INVALID		((u32)ULONG_MAX)
 
 struct dpll_device_ops {
@@ -79,7 +78,7 @@ enum dpll_type {
  * dpll_device_alloc - allocate memory for a new dpll_device object
  * @ops: pointer to dpll operations structure
  * @type: type of a dpll being allocated
- * @cookie: a system unique number for a device
+ * @clock_id: a system unique number for a device
  * @dev_driver_idx: index of dpll device on parent device
  * @priv: private data of a registerer
  * @parent: device structure of a module registering dpll device
@@ -87,9 +86,9 @@ enum dpll_type {
  * Allocate memory for a new dpll and initialize it with its type, name,
  * callbacks and private data pointer.
  *
- * Name is generated based on: cookie, type and dev_driver_idx.
+ * Name is generated based on: parent driver, type and dev_driver_idx.
  * Finding allocated and registered dpll device is also possible with
- * the: cookie, type and dev_driver_idx. This way dpll device can be
+ * the: clock_id, type and dev_driver_idx. This way dpll device can be
  * shared by multiple instances of a device driver.
  *
  * Returns:
@@ -98,7 +97,7 @@ enum dpll_type {
  */
 struct dpll_device
 *dpll_device_alloc(struct dpll_device_ops *ops, enum dpll_type type,
-		   const u8 cookie[DPLL_COOKIE_LEN], u8 dev_driver_idx,
+		   const u64 clock_id, u8 dev_driver_idx,
 		   void *priv, struct device *parent);
 
 /**
@@ -256,9 +255,8 @@ int dpll_muxed_pin_register(struct dpll_device *dpll,
 			    struct dpll_pin *parent_pin, struct dpll_pin *pin,
 			    struct dpll_pin_ops *ops, void *priv);
 /**
- * dpll_device_get_by_cookie - find a dpll by its cookie
- * @cookie: cookie of dpll to search for, as given by driver on
- *	    ``dpll_device_alloc``
+ * dpll_device_get_by_clock_id - find a dpll by its clock_id, type and index
+ * @clock_id: clock_id of dpll, as given by driver on ``dpll_device_alloc``
  * @type: type of dpll, as given by driver on ``dpll_device_alloc``
  * @idx: index of dpll, as given by driver on ``dpll_device_alloc``
  *
@@ -267,8 +265,8 @@ int dpll_muxed_pin_register(struct dpll_device *dpll,
  *
  * Return: pointer if device was found, NULL otherwise.
  */
-struct dpll_device *dpll_device_get_by_cookie(u8 cookie[DPLL_COOKIE_LEN],
-					      enum dpll_type type, u8 idx);
+struct dpll_device *dpll_device_get_by_clock_id(u64 clock_id,
+						enum dpll_type type, u8 idx);
 
 /**
  * dpll_pin_get_by_description - find a pin by its description

@@ -1575,20 +1575,16 @@ release_info:
 }
 
 /**
- * ice_generate_cookie - generates unique cookie for registering dpll.
+ * ice_generate_clock_id - generates unique clock_id for registering dpll.
  * @pf: board private structure
- * @cookie: array holds generated cookie
- * @cookie_size: number of elements in array
+ * @clock_id: holds generated clock_id
  *
- * Generates unique (per board) cookie for allocation and search of dpll
+ * Generates unique (per board) clock_id for allocation and search of dpll
  * devices in Linux dpll subsystem.
  */
-static void ice_generate_cookie(struct ice_pf *pf, u8 *cookie, int cookie_size)
+static void ice_generate_clock_id(struct ice_pf *pf, u64 *clock_id)
 {
-	u64 dsn = pci_get_dsn(pf->pdev);
-
-	memset(cookie, 0, sizeof(*cookie) * cookie_size);
-	memcpy(cookie, &dsn, sizeof(dsn));
+	*clock_id = pci_get_dsn(pf->pdev);
 }
 
 /**
@@ -1606,13 +1602,13 @@ static int ice_dpll_init_dpll(struct ice_pf *pf)
 	struct device *dev = ice_pf_to_dev(pf);
 	struct ice_dpll *de = &pf->dplls.eec;
 	struct ice_dpll *dp = &pf->dplls.pps;
-	u8 cookie_dpll[DPLL_COOKIE_LEN];
+	u64 clock_id = 0;
 	int ret = 0;
 
-	ice_generate_cookie(pf, cookie_dpll, sizeof(cookie_dpll));
+	ice_generate_clock_id(pf, &clock_id);
 
 	de->dpll = dpll_device_alloc(&ice_dpll_ops, DPLL_TYPE_EEC,
-				     cookie_dpll, 0, pf, dev);
+				     clock_id, 0, pf, dev);
 	if (!de->dpll) {
 		dev_err(ice_pf_to_dev(pf), "dpll_device_alloc failed (eec)\n");
 		return -ENOMEM;
@@ -1620,7 +1616,7 @@ static int ice_dpll_init_dpll(struct ice_pf *pf)
 	dpll_device_register(de->dpll);
 
 	dp->dpll = dpll_device_alloc(&ice_dpll_ops, DPLL_TYPE_PPS,
-				     cookie_dpll, 0, pf, dev);
+				     clock_id, 0, pf, dev);
 	if (!dp->dpll) {
 		dev_err(ice_pf_to_dev(pf), "dpll_device_alloc failed (pps)\n");
 		return -ENOMEM;
@@ -1982,7 +1978,7 @@ release:
 }
 
 /**
- * ice_dpll_rclk_find_dplls - find the device-wide DPLLs by cookie
+ * ice_dpll_rclk_find_dplls - find the device-wide DPLLs by clock_id
  * @pf: board private structure
  *
  * Return:
@@ -1991,15 +1987,15 @@ release:
  */
 static int ice_dpll_rclk_find_dplls(struct ice_pf *pf)
 {
-	u8 cookie_dpll[DPLL_COOKIE_LEN];
+	u64 clock_id = 0;
 
-	ice_generate_cookie(pf, cookie_dpll, sizeof(cookie_dpll));
-	pf->dplls.eec.dpll = dpll_device_get_by_cookie(cookie_dpll,
-						       DPLL_TYPE_EEC, 0);
+	ice_generate_clock_id(pf, &clock_id);
+	pf->dplls.eec.dpll = dpll_device_get_by_clock_id(clock_id,
+							 DPLL_TYPE_EEC, 0);
 	if (!pf->dplls.eec.dpll)
 		return -EFAULT;
-	pf->dplls.pps.dpll = dpll_device_get_by_cookie(cookie_dpll,
-						       DPLL_TYPE_PPS, 0);
+	pf->dplls.pps.dpll = dpll_device_get_by_clock_id(clock_id,
+							 DPLL_TYPE_PPS, 0);
 	if (!pf->dplls.pps.dpll)
 		return -EFAULT;
 

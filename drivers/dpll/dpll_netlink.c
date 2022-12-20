@@ -113,6 +113,16 @@ dpll_msg_add_modes_supported(struct sk_buff *msg,
 	return ret;
 }
 
+static int dpll_msg_add_clock_id(struct sk_buff *msg,
+				 const struct dpll_device *dpll)
+{
+	if (nla_put_64bit(msg, DPLLA_CLOCK_ID, sizeof(dpll->clock_id),
+			  &dpll->clock_id, 0))
+		return -EMSGSIZE;
+
+	return 0;
+}
+
 static int
 dpll_msg_add_source_pin(struct sk_buff *msg, struct dpll_device *dpll)
 {
@@ -433,6 +443,9 @@ __dpll_cmd_dump_status(struct sk_buff *msg, struct dpll_device *dpll)
 	if (ret)
 		return ret;
 	ret = dpll_msg_add_modes_supported(msg, dpll);
+	if (ret)
+		return ret;
+	ret = dpll_msg_add_clock_id(msg, dpll);
 
 	return ret;
 }

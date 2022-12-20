@@ -77,15 +77,15 @@ struct dpll_device *dpll_device_get_by_name(const char *name)
 	return ret;
 }
 
-struct dpll_device *dpll_device_get_by_cookie(u8 cookie[DPLL_COOKIE_LEN],
-					      enum dpll_type type, u8 idx)
+struct dpll_device *dpll_device_get_by_clock_id(u64 clock_id,
+						enum dpll_type type, u8 idx)
 {
 	struct dpll_device *dpll, *ret = NULL;
 	unsigned long index;
 
 	mutex_lock(&dpll_device_xa_lock);
 	xa_for_each_marked(&dpll_device_xa, index, dpll, DPLL_REGISTERED) {
-		if (!memcmp(dpll->cookie, cookie, DPLL_COOKIE_LEN)) {
+		if (dpll->clock_id == clock_id) {
 			if (dpll->type == type) {
 				if (dpll->dev_driver_idx == idx) {
 					ret = dpll;
@@ -98,7 +98,7 @@ struct dpll_device *dpll_device_get_by_cookie(u8 cookie[DPLL_COOKIE_LEN],
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(dpll_device_get_by_cookie);
+EXPORT_SYMBOL_GPL(dpll_device_get_by_clock_id);
 
 static void dpll_device_release(struct device *dev)
 {
@@ -131,7 +131,7 @@ static const char *dpll_type_str(enum dpll_type type)
 
 struct dpll_device
 *dpll_device_alloc(struct dpll_device_ops *ops, enum dpll_type type,
-		   const u8 cookie[DPLL_COOKIE_LEN], u8 idx,
+		   const u64 clock_id, u8 idx,
 		   void *priv, struct device *parent)
 {
 	struct dpll_device *dpll;
@@ -147,7 +147,7 @@ struct dpll_device
 	dpll->parent = parent;
 	dpll->type = type;
 	dpll->dev_driver_idx = idx;
-	memcpy(dpll->cookie, cookie, sizeof(dpll->cookie));
+	dpll->clock_id = clock_id;
 
 	mutex_lock(&dpll_device_xa_lock);
 	ret = xa_alloc(&dpll_device_xa, &dpll->id, dpll,

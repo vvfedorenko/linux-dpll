@@ -23,7 +23,7 @@
  * @type:	type of a dpll
  * @priv:	pointer to private information of owner
  * @pins:	list of pointers to pins registered with this dpll
- * @cookie:	unique identifier (cookie) of a dpll
+ * @clock_id:	unique identifier (clock_id) of a dpll
  * @dev_driver_idx: provided by driver for
  */
 struct dpll_device {
@@ -35,7 +35,7 @@ struct dpll_device {
 	enum dpll_type type;
 	void *priv;
 	struct xarray pins;
-	u8 cookie[DPLL_COOKIE_LEN];
+	u64 clock_id;
 	u8 dev_driver_idx;
 };
 

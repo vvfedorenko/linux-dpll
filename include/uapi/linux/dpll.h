@@ -25,6 +25,7 @@
  *	(unsigned int)
  * @DPLLA_LOCK_STATUS - dpll's lock status (enum dpll_lock_status)
  * @DPLLA_TEMP - dpll's temperature (signed int - Celsius degrees)
+ * @DPLLA_CLOCK_ID - Unique Clock Identifier of dpll (u64)
  * @DPLLA_DUMP_FILTER - filter bitmask (int, sum of DPLL_DUMP_FILTER_* defines)
  * @DPLLA_PIN - nested attribute, each contains single pin attributes
  * @DPLLA_PIN_IDX - index of a pin on dpll (unsigned int)
@@ -55,6 +56,7 @@ enum dplla {
 	DPLLA_SOURCE_PIN_IDX,
 	DPLLA_LOCK_STATUS,
 	DPLLA_TEMP,
+	DPLLA_CLOCK_ID,
 	DPLLA_DUMP_FILTER,
 	DPLLA_PIN,
 	DPLLA_PIN_IDX,
