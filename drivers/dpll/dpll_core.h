@@ -134,24 +134,6 @@ void dpll_lock(struct dpll_device *dpll);
 void dpll_unlock(struct dpll_device *dpll);
 
 /**
- * dpll_set_attr - handler for dpll subsystem: dpll set attributes
- * @dpll: registered dpll pointer
- * @attr: dpll attributes
- *
- * Return: 0 if succeeds, error code otherwise.
- */
-int dpll_set_attr(struct dpll_device *dpll, const struct dpll_attr *attr);
-
-/**
- * dpll_get_attr - handler for dpll subsystem: dpll get attributes
- * @dpll: registered dpll pointer
- * @attr: dpll attributes
- *
- * Return: 0 if succeeds, error code otherwise.
- */
-int dpll_get_attr(struct dpll_device *dpll, struct dpll_attr *attr);
-
-/**
  * dpll_pin_idx - return dpll id
  * @dpll: registered dpll pointer
  * @pin: registered pin pointer

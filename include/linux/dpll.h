@@ -7,7 +7,6 @@
 #define __DPLL_H__
 
 #include <uapi/linux/dpll.h>
-#include <linux/dpll_attr.h>
 #include <linux/device.h>
 
 struct dpll_device;
