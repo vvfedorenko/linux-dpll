@@ -8,7 +8,12 @@
 #include <uapi/linux/dpll.h>
 
 #define CGU_STATE_ACQ_ERR_THRESHOLD	50
+#define ICE_DPLL_FREQ_1_HZ		1
+#define ICE_DPLL_FREQ_10_MHZ		10000000
 
+/**
+ * dpll_lock_status - map ice cgu states into dpll's subsystem lock status
+ */
 static const enum dpll_lock_status
 ice_dpll_status[__DPLL_LOCK_STATUS_MAX] = {
 	[ICE_CGU_STATE_INVALID] = DPLL_LOCK_STATUS_UNSPEC,
@@ -19,89 +24,102 @@ ice_dpll_status[__DPLL_LOCK_STATUS_MAX] = {
 };
 
 /**
- * ice_dpll_pin_attr_to_freq - get freq from pin attr struct
- * @new: pointer to pin attr with new signal type info
- * @old: pointer to pin attr with old signal type supported info
- *
- * Decide frequency of pin's signal type from pin attr struct.
+ * ice_dpll_pin_type - enumerate ince pin types
+ */
+enum ice_dpll_pin_type {
+	ICE_DPLL_PIN_INVALID = 0,
+	ICE_DPLL_PIN_TYPE_SOURCE,
+	ICE_DPLL_PIN_TYPE_OUTPUT,
+	ICE_DPLL_PIN_TYPE_RCLK_SOURCE,
+};
+
+/**
+ * pin_type_name - string names of ice pin types
+ */
+static const char * const pin_type_name[] = {
+	[ICE_DPLL_PIN_TYPE_SOURCE] = "source",
+	[ICE_DPLL_PIN_TYPE_OUTPUT] = "output",
+	[ICE_DPLL_PIN_TYPE_RCLK_SOURCE] = "rclk-source",
+};
+
+/**
+ * ice_dpll_pin_signal_type_to_freq - translate pin_signal_type to freq value
+ * @sig_type: signal type to find frequency
+ * @freq: on success - frequency of a signal type
  *
  * Return:
- * * 0 - frequency not found in attr
- * * positive - valid frequency
+ * * 0 - frequency valid
  * * negative - error
  */
-int ice_dpll_pin_attr_to_freq(const struct dpll_pin_attr *new,
-			      const struct dpll_pin_attr *old)
+static inline int
+ice_dpll_pin_signal_type_to_freq(const enum dpll_pin_signal_type sig_type,
+				 u32 *freq)
 {
-	enum dpll_pin_signal_type sig_t;
-
-	if (!dpll_pin_attr_valid(DPLLA_PIN_SIGNAL_TYPE, new))
-		return 0;
-	sig_t = dpll_pin_attr_signal_type_get(new);
-	if (sig_t == DPLL_PIN_SIGNAL_TYPE_UNSPEC)
+	if (sig_type == DPLL_PIN_SIGNAL_TYPE_UNSPEC)
 		return -EINVAL;
-	if (!dpll_pin_attr_signal_type_supported(old, sig_t))
-		return -EINVAL;
-	if (sig_t == DPLL_PIN_SIGNAL_TYPE_1_PPS)
-		return 1;
-	else if (sig_t == DPLL_PIN_SIGNAL_TYPE_10_MHZ)
-		return 10000000;
+	else if (sig_type == DPLL_PIN_SIGNAL_TYPE_1_PPS)
+		*freq = ICE_DPLL_FREQ_1_HZ;
+	else if (sig_type == DPLL_PIN_SIGNAL_TYPE_10_MHZ)
+		*freq = ICE_DPLL_FREQ_10_MHZ;
 	else
 		return -EINVAL;
+
+	return 0;
 }
 
 /**
- * ice_dpll_pin_freq_to_signal_type
+ * ice_dpll_pin_freq_to_signal_type - translate pin freq to signal type
  * @freq: frequency to translate
- *
- * Pin's frequency translated to a pin signal type.
  *
  * Return: signal type of a pin based on frequency.
  */
 static inline enum dpll_pin_signal_type
 ice_dpll_pin_freq_to_signal_type(u32 freq)
 {
-	if (freq == 1)
+	if (freq == ICE_DPLL_FREQ_1_HZ)
 		return DPLL_PIN_SIGNAL_TYPE_1_PPS;
-	else if (freq == 10000000)
+	else if (freq == ICE_DPLL_FREQ_10_MHZ)
 		return DPLL_PIN_SIGNAL_TYPE_10_MHZ;
 	else
 		return DPLL_PIN_SIGNAL_TYPE_CUSTOM_FREQ;
 }
 
 /**
- * ice_dpll_pin_signal_type_set - set pin's signal type
+ * ice_dpll_pin_signal_type_set - set pin's signal type in hardware
  * @pf: Board private structure
  * @pin: pointer to a pin
- * @input: if input or output pin
- * @attr: structure with pin attributes
+ * @pin_type: type of pin being configured
+ * @sig_type: signal type to be set
  *
- * Translates pin signal type to frequency and sets it on a pin.
+ * Translate pin signal type to frequency and set it on a pin.
  *
  * Return:
  * * 0 - OK or no change required
  * * negative - error
  */
 static int
-ice_dpll_pin_signal_type_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
-			     bool input, const struct dpll_pin_attr *attr)
+__ice_dpll_pin_signal_type_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
+			       const enum ice_dpll_pin_type pin_type,
+			       const enum dpll_pin_signal_type sig_type)
 {
 	u8 flags;
 	u32 freq;
 	int ret;
 
-	freq = ice_dpll_pin_attr_to_freq(attr, pin->attr);
-	if (freq <= 0)
-		return freq;
+	ret = ice_dpll_pin_signal_type_to_freq(sig_type, &freq);
+	if (ret)
+		return ret;
 
-	if (input) {
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
 		flags = ICE_AQC_SET_CGU_IN_CFG_FLG1_UPDATE_FREQ;
 		ret = ice_aq_set_input_pin_cfg(&pf->hw, pin->idx, flags,
 					       pin->flags, freq, 0);
-	} else {
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
 		flags = pin->flags | ICE_AQC_SET_CGU_OUT_CFG_UPDATE_FREQ;
 		ret = ice_aq_set_output_pin_cfg(&pf->hw, pin->idx, flags,
 						0, freq, 0);
+	} else {
+		ret = -EINVAL;
 	}
 
 	if (ret) {
@@ -110,10 +128,8 @@ ice_dpll_pin_signal_type_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
 			ret, ice_aq_str(pf->hw.adminq.sq_last_status),
 			freq, pin->idx);
 	} else {
-		enum dpll_pin_signal_type sig_t =
-			ice_dpll_pin_freq_to_signal_type(freq);
-
-		dpll_pin_attr_signal_type_set(pin->attr, sig_t);
+		pin->signal_type = sig_type;
+		pin->freq = freq;
 	}
 
 	return ret;
@@ -123,7 +139,7 @@ ice_dpll_pin_signal_type_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
  * ice_dpll_pin_enable - enable a pin on dplls
  * @hw: board private hw structure
  * @pin: pointer to a pin
- * @input: if input or output pin
+ * @pin_type: type of pin being enabled
  *
  * Enable a pin on both dplls. Store current state in pin->flags.
  *
@@ -132,23 +148,27 @@ ice_dpll_pin_signal_type_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
  * * negative - error
  */
 static int
-ice_dpll_pin_enable(struct ice_hw *hw, struct ice_dpll_pin *pin, bool input)
+ice_dpll_pin_enable(struct ice_hw *hw, struct ice_dpll_pin *pin,
+		    const enum ice_dpll_pin_type pin_type)
 {
 	u8 flags = pin->flags;
 	int ret;
 
-	if (input) {
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
 		flags |= ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN;
 		ret = ice_aq_set_input_pin_cfg(hw, pin->idx, 0, flags, 0, 0);
-	} else {
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
 		flags |= ICE_AQC_SET_CGU_OUT_CFG_OUT_EN;
 		ret = ice_aq_set_output_pin_cfg(hw, pin->idx, flags, 0, 0, 0);
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_RCLK_SOURCE) {
+		flags |= ICE_DPLL_RCLK_SOURCE_FLAG_EN;
+		ret = 0;
 	}
 	if (ret)
 		dev_dbg(ice_pf_to_dev((struct ice_pf *)(hw->back)),
 			"err:%d %s failed to enable %s pin:%u\n",
 			ret, ice_aq_str(hw->adminq.sq_last_status),
-			input ? "input" : "output", pin->idx);
+			pin_type_name[pin_type], pin->idx);
 	else
 		pin->flags = flags;
 
@@ -159,7 +179,7 @@ ice_dpll_pin_enable(struct ice_hw *hw, struct ice_dpll_pin *pin, bool input)
  * ice_dpll_pin_disable - disable a pin on dplls
  * @hw: board private hw structure
  * @pin: pointer to a pin
- * @input: if input or output pin
+ * @pin_type: type of pin being disabled
  *
  * Disable a pin on both dplls. Store current state in pin->flags.
  *
@@ -168,25 +188,80 @@ ice_dpll_pin_enable(struct ice_hw *hw, struct ice_dpll_pin *pin, bool input)
  * * negative - error
  */
 static int
-ice_dpll_pin_disable(struct ice_hw *hw, struct ice_dpll_pin *pin, bool input)
+ice_dpll_pin_disable(struct ice_hw *hw, struct ice_dpll_pin *pin,
+		     enum ice_dpll_pin_type pin_type)
 {
 	u8 flags = pin->flags;
 	int ret;
 
-	if (input) {
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
 		flags &= ~(ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN);
 		ret = ice_aq_set_input_pin_cfg(hw, pin->idx, 0, flags, 0, 0);
-	} else {
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
 		flags &= ~(ICE_AQC_SET_CGU_OUT_CFG_OUT_EN);
 		ret = ice_aq_set_output_pin_cfg(hw, pin->idx, flags, 0, 0, 0);
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_RCLK_SOURCE) {
+		flags &= ~(ICE_DPLL_RCLK_SOURCE_FLAG_EN);
+		ret = ice_aq_set_phy_rec_clk_out(hw, pin->idx, false,
+						 &pin->freq);
 	}
+
 	if (ret)
 		dev_dbg(ice_pf_to_dev((struct ice_pf *)(hw->back)),
 			"err:%d %s failed to disable %s pin:%u\n",
 			ret, ice_aq_str(hw->adminq.sq_last_status),
-			input ? "input" : "output", pin->idx);
+			pin_type_name[pin_type], pin->idx);
 	else
 		pin->flags = flags;
+
+	return ret;
+}
+
+/**
+ * ice_dpll_pin_update - update pin's state
+ * @hw: private board struct
+ * @pin: structure with pin attributes to be updated
+ * @pin_type: type of pin being updated
+ *
+ * Determine pin current state, frequency and signal type. Then update struct
+ * holding the pin info.
+ *
+ * Return:
+ * * 0 - OK
+ * * negative - error
+ */
+int
+ice_dpll_pin_update(struct ice_hw *hw, struct ice_dpll_pin *pin,
+		    const enum ice_dpll_pin_type pin_type)
+{
+	int ret;
+
+	pin->state_mask = 0;
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+		ret = ice_aq_get_input_pin_cfg(hw, pin->idx, NULL, NULL, NULL,
+					       &pin->flags, &pin->freq, NULL);
+		set_bit(DPLL_PIN_STATE_SOURCE, &pin->state_mask);
+		if (ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN & pin->flags)
+			set_bit(DPLL_PIN_STATE_CONNECTED, &pin->state_mask);
+		else
+			set_bit(DPLL_PIN_STATE_DISCONNECTED, &pin->state_mask);
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		ret = ice_aq_get_output_pin_cfg(hw, pin->idx, &pin->flags,
+						NULL, &pin->freq, NULL);
+		set_bit(DPLL_PIN_STATE_OUTPUT, &pin->state_mask);
+		if (ICE_AQC_SET_CGU_OUT_CFG_OUT_EN & pin->flags)
+			set_bit(DPLL_PIN_STATE_CONNECTED, &pin->state_mask);
+		else
+			set_bit(DPLL_PIN_STATE_DISCONNECTED, &pin->state_mask);
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_RCLK_SOURCE) {
+		set_bit(DPLL_PIN_STATE_SOURCE, &pin->state_mask);
+		if (ICE_DPLL_RCLK_SOURCE_FLAG_EN & pin->flags)
+			set_bit(DPLL_PIN_STATE_CONNECTED, &pin->state_mask);
+		else
+			set_bit(DPLL_PIN_STATE_DISCONNECTED, &pin->state_mask);
+		ret = 0;
+	}
+	pin->signal_type = ice_dpll_pin_freq_to_signal_type(pin->freq);
 
 	return ret;
 }
@@ -195,8 +270,8 @@ ice_dpll_pin_disable(struct ice_hw *hw, struct ice_dpll_pin *pin, bool input)
  * ice_dpll_pin_state_set - set pin's state
  * @pf: Board private structure
  * @pin: pointer to a pin
- * @input: if input or output pin
- * @attr: structure with pin attributes
+ * @pin_type: type of modified pin
+ * @state: requested state
  *
  * Determine requested pin state set it on a pin.
  *
@@ -205,55 +280,29 @@ ice_dpll_pin_disable(struct ice_hw *hw, struct ice_dpll_pin *pin, bool input)
  * * negative - error
  */
 static int
-ice_dpll_pin_state_set(struct ice_pf *pf, struct ice_dpll_pin *pin, bool input,
-		       const struct dpll_pin_attr *attr)
+ice_dpll_pin_state_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
+		       const enum ice_dpll_pin_type pin_type,
+		       const enum dpll_pin_state state)
 {
 	int ret;
 
-	if (!dpll_pin_attr_valid(DPLLA_PIN_STATE, attr))
+	if (!test_bit(state, &pin->state_supported_mask))
+		return -EINVAL;
+
+	if (test_bit(state, &pin->state_mask))
 		return 0;
-	if (dpll_pin_attr_state_enabled(attr,
-					DPLL_PIN_STATE_CONNECTED))
-		ret = ice_dpll_pin_enable(&pf->hw, pin, input);
-	else if (dpll_pin_attr_state_enabled(attr,
-					     DPLL_PIN_STATE_DISCONNECTED))
-		ret = ice_dpll_pin_disable(&pf->hw, pin, input);
+
+	if (state == DPLL_PIN_STATE_CONNECTED)
+		ret = ice_dpll_pin_enable(&pf->hw, pin, pin_type);
+	else if (state == DPLL_PIN_STATE_DISCONNECTED)
+		ret = ice_dpll_pin_disable(&pf->hw, pin, pin_type);
 	else
 		ret = -EINVAL;
 
+	if (!ret)
+		ret = ice_dpll_pin_update(&pf->hw, pin, pin_type);
+
 	return ret;
-}
-
-/**
- * ice_dpll_pin_attr_state_update - update pin attr struct with new pin state
- * @attr: structure with pin attributes to be updated
- * @input: if input or output pin
- * @flags: current pin flags from firmware
- *
- * Determine pin state and update pin attr struct.
- *
- * Return:
- * * 0 - OK
- * * negative - error
- */
-int
-ice_dpll_pin_attr_state_update(struct dpll_pin_attr *attr, bool input, u8 flags)
-{
-	enum dpll_pin_state s;
-
-	if (input) {
-		if (ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN & flags)
-			s = DPLL_PIN_STATE_CONNECTED;
-		else
-			s = DPLL_PIN_STATE_DISCONNECTED;
-	} else {
-		if (ICE_AQC_SET_CGU_OUT_CFG_OUT_EN & flags)
-			s = DPLL_PIN_STATE_CONNECTED;
-		else
-			s = DPLL_PIN_STATE_DISCONNECTED;
-	}
-
-	return dpll_pin_attr_state_set(attr, s);
 }
 
 /**
@@ -266,7 +315,7 @@ ice_dpll_pin_attr_state_update(struct dpll_pin_attr *attr, bool input, u8 flags)
  * * NULL if not found
  */
 static struct ice_dpll
-*ice_find_dpll(struct ice_pf *pf, struct dpll_device *dpll)
+*ice_find_dpll(struct ice_pf *pf, const struct dpll_device *dpll)
 {
 	if (!pf || !dpll)
 		return NULL;
@@ -278,25 +327,42 @@ static struct ice_dpll
 /**
  * ice_find_pin - find ice_dpll_pin on a pf
  * @pf: private board structure
- * @pin: kernel's dpll_pin pointer to be searched
- * @pins: list of pins to iterate over
- * @count: number of items in the pins list
+ * @pin: kernel's dpll_pin pointer to be searched for
+ * @pin_type: type of pins to be searched for
+ *
+ * Find and return internal ice pin info pointer holding data of given dpll subsystem
+ * pin pointer.
  *
  * Return:
- * * pointer if ice_dpll_pin with given device dpll_pin pointer is found
- * * NULL if not found
+ * * valid 'struct ice_dpll_pin'-type pointer - if given 'pin' pointer was
+ * found in pf internal pin data.
+ * * NULL - if pin was not found.
  */
 static struct ice_dpll_pin
-*ice_find_pin(struct ice_pf *pf, struct dpll_pin *pin,
-	      struct ice_dpll_pin *pins, u32 count)
+*ice_find_pin(struct ice_pf *pf, const struct dpll_pin *pin,
+	      enum ice_dpll_pin_type pin_type)
 
 {
-	int i;
+	struct ice_dpll_pin *pins;
+	int pin_num, i;
 
-	if (!pins || !pin || !pf)
+	if (!pin || !pf)
 		return NULL;
 
-	for (i = 0; i < count; i++)
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+		pins = pf->dplls.inputs;
+		pin_num = pf->dplls.num_inputs;
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		pins = pf->dplls.outputs;
+		pin_num = pf->dplls.num_outputs;
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_RCLK_SOURCE) {
+		pins = pf->dplls.rclk;
+		pin_num = pf->dplls.num_rclk;
+	} else {
+		return NULL;
+	}
+
+	for (i = 0; i < pin_num; i++)
 		if (pin == pins[i].pin)
 			return &pins[i];
 
@@ -304,33 +370,24 @@ static struct ice_dpll_pin
 }
 
 /**
- * ice_dpll_source_prio_set - set source priority value
+ * ice_dpll_hw_source_prio_set - set source priority value in hardware
  * @pf: board private structure
- * @dpll: registered dpll pointer
- * @pin: dpll pin object
- * @attr: structure with pin attributes to be updated
+ * @dpll: ice dpll pointer
+ * @pin: ice pin pointer
+ * @prio: priority value being set on a dpll
  *
- * dpll subsystem callback.
+ * Internal wrapper for setting the priority in the hardware.
  *
  * Return:
  * * 0 - success
  * * negative - failure
  */
 static int
-ice_dpll_source_prio_set(struct ice_pf *pf, struct ice_dpll *dpll,
-			 struct ice_dpll_pin *pin,
-			 const struct dpll_pin_attr *attr)
+ice_dpll_hw_source_prio_set(struct ice_pf *pf, struct ice_dpll *dpll,
+			    struct ice_dpll_pin *pin, const u32 prio)
 {
-	u32 prio;
 	int ret;
 
-	if (!dpll_pin_attr_valid(DPLLA_PIN_PRIO, attr))
-		return 0;
-	ret = dpll_pin_attr_prio_get(attr, &prio);
-	if (ret)
-		return ret;
-	if (prio > ICE_DPLL_PRIO_MAX)
-		return -EINVAL;
 	ret = ice_aq_set_cgu_ref_prio(&pf->hw, dpll->dpll_idx, pin->idx,
 				      (u8)prio);
 	if (ret)
@@ -345,17 +402,18 @@ ice_dpll_source_prio_set(struct ice_pf *pf, struct ice_dpll *dpll,
 }
 
 /**
- * ice_dpll_dev_get - get dpll parameters
+ * ice_dpll_lock_status_get - get dpll lock status callback
  * @dpll: registered dpll pointer
- * @attr: structure with dpll attributes to be updated
+ * @status: on success holds dpll's lock status
  *
- * dpll subsystem callback.
+ * Dpll subsystem callback, provides dpll's lock status.
  *
  * Return:
  * * 0 - success
  * * negative - failure
  */
-static int ice_dpll_dev_get(struct dpll_device *dpll, struct dpll_attr *attr)
+static int ice_dpll_lock_status_get(const struct dpll_device *dpll,
+				    enum dpll_lock_status *status)
 {
 	struct ice_pf *pf = dpll_priv(dpll);
 	struct ice_dpll *d;
@@ -363,104 +421,295 @@ static int ice_dpll_dev_get(struct dpll_device *dpll, struct dpll_attr *attr)
 	d = ice_find_dpll(pf, dpll);
 	if (!d)
 		return -EFAULT;
-
-	mutex_lock(&pf->dplls.lock);
 	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pf:%p\n", __func__, dpll, pf);
-
-	dpll_attr_copy(attr, d->attr);
-	dpll_attr_lock_status_set(attr, ice_dpll_status[d->dpll_state]);
-	dpll_attr_source_idx_set(attr, (u32)d->source_idx);
+	mutex_lock(&pf->dplls.lock);
+	*status = ice_dpll_status[d->dpll_state];
 	mutex_unlock(&pf->dplls.lock);
 
 	return 0;
 }
 
 /**
- * ice_dpll_dev_set - get dpll parameters
+ * ice_dpll_source_idx_get - get dpll's source index
  * @dpll: registered dpll pointer
- * @attr: structure with dpll attributes to be updated
+ * @pin_idx: on success holds currently selected source pin index
  *
- * dpll subsystem callback.
+ * Dpll subsystem callback. Provides index of a source dpll is trying to lock
+ * with.
  *
  * Return:
  * * 0 - success
  * * negative - failure
  */
-static int ice_dpll_dev_set(struct dpll_device *dpll, const struct dpll_attr *attr)
+static int ice_dpll_source_idx_get(const struct dpll_device *dpll, u32 *pin_idx)
 {
 	struct ice_pf *pf = dpll_priv(dpll);
-
-	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pf:%p\n", __func__, dpll, pf);
-
-	return 0;
-}
-
-/**
- * ice_dpll_output_get - get dpll output pin parameters
- * @dpll: registered dpll pointer
- * @pin: pointer to a pin
- * @attr: structure with pin attributes to be updated
- *
- * dpll subsystem callback.
- *
- * Return:
- * * 0 - success
- * * negative - failure
- */
-static int ice_dpll_output_get(struct dpll_device *dpll, struct dpll_pin *pin,
-			       struct dpll_pin_attr *attr)
-{
-	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
-	struct ice_dpll_pin *p;
+	struct ice_dpll *d;
 	int ret = 0;
 
 	mutex_lock(&pf->dplls.lock);
-	p = ice_find_pin(pf, pin, pf->dplls.outputs, pf->dplls.num_outputs);
-	if (!p) {
+	d = ice_find_dpll(pf, dpll);
+	if (!d) {
 		ret = -EFAULT;
 		goto unlock;
-	} else {
-		ret = dpll_pin_attr_copy(attr, p->attr);
 	}
-	if (ret)
-		goto unlock;
-	ret = ice_dpll_pin_attr_state_update(attr, false, p->flags);
+	*pin_idx = (u32)d->source_idx;
 unlock:
 	mutex_unlock(&pf->dplls.lock);
-	dev_dbg(ice_pf_to_dev(pf),
-		"%s: dpll:%p, pin:%p, pf:%p, p:%p, p->pin:%p, ret:%d\n",
-		__func__, dpll, pin, pf, p, p->pin, ret);
+	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pf:%p d:%p, idx:%u\n",
+		__func__, dpll, pf, d, *pin_idx);
 
 	return ret;
 }
 
 /**
- * ice_dpll_output_set - set dpll output pin parameters
+ * ice_dpll_mode_get - get dpll's working mode
  * @dpll: registered dpll pointer
- * @pin: pointer to a pin
- * @attr: structure with pin attributes to be updated
+ * @mode: on success holds current working mode of dpll
  *
- * dpll subsystem callback.
+ * Dpll subsystem callback. Provides working mode of dpll.
  *
  * Return:
  * * 0 - success
  * * negative - failure
  */
-static int ice_dpll_output_set(struct dpll_device *dpll, struct dpll_pin *pin,
-			       const struct dpll_pin_attr *attr)
+static int ice_dpll_mode_get(const struct dpll_device *dpll,
+			     enum dpll_mode *mode)
+{
+	struct ice_pf *pf = dpll_priv(dpll);
+	struct ice_dpll *d;
+	int ret = 0;
+
+	mutex_lock(&pf->dplls.lock);
+	d = ice_find_dpll(pf, dpll);
+	if (!d)
+		ret = -EFAULT;
+	else
+		*mode = DPLL_MODE_AUTOMATIC;
+	mutex_unlock(&pf->dplls.lock);
+
+	return ret;
+}
+
+/**
+ * ice_dpll_mode_get - check if dpll's working mode is supported
+ * @dpll: registered dpll pointer
+ * @mode: mode to be checked for support
+ *
+ * Dpll subsystem callback. Provides information if working mode is supported
+ * by dpll.
+ *
+ * Return:
+ * * true - mode is supported
+ * * false - mode is not supported
+ */
+static bool ice_dpll_mode_supported(const struct dpll_device *dpll,
+				    const enum dpll_mode mode)
+{
+	struct ice_pf *pf = dpll_priv(dpll);
+	struct ice_dpll *d;
+	bool ret = true;
+
+	mutex_lock(&pf->dplls.lock);
+	d = ice_find_dpll(pf, dpll);
+	if (!d)
+		ret = false;
+	else
+		if (mode != DPLL_MODE_AUTOMATIC)
+			ret = false;
+	mutex_unlock(&pf->dplls.lock);
+
+	return ret;
+}
+
+/**
+ * ice_dpll_pin_signal_type_supported - if pin signal type is supported
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @sig_type: signal type being checked for support
+ * @pin_type: type of a pin being checked
+ *
+ * Check is signal type is supported on given pin/dpll pair.
+ *
+ * Return:
+ * * true - supported
+ * * false - not supported
+ */
+static bool
+ice_dpll_pin_signal_type_supported(const struct dpll_device *dpll,
+				   const struct dpll_pin *pin,
+				   const enum dpll_pin_signal_type sig_type,
+				   const enum ice_dpll_pin_type pin_type)
+{
+	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
+	struct ice_dpll_pin *p;
+	bool supported = false;
+
+	mutex_lock(&pf->dplls.lock);
+	p = ice_find_pin(pf, pin, pin_type);
+	if (p) {
+		if (test_bit(sig_type, &p->signal_type_mask))
+			supported = true;
+	}
+	mutex_unlock(&pf->dplls.lock);
+
+	return supported;
+}
+
+/**
+ * ice_dpll_rclk_signal_type_supported - if rclk source signal type is supported
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @sig_type: signal type being checked for support
+ *
+ * Dpll subsystem callback. Check is signal type is supported on given pin/dpll
+ * pair.
+ *
+ * Return:
+ * * true - supported
+ * * false - not supported
+ */
+static bool
+ice_dpll_rclk_signal_type_supported(const struct dpll_device *dpll,
+				    const struct dpll_pin *pin,
+				    const enum dpll_pin_signal_type sig_type)
+{
+	const enum ice_dpll_pin_type t = ICE_DPLL_PIN_TYPE_RCLK_SOURCE;
+
+	return ice_dpll_pin_signal_type_supported(dpll, pin, sig_type, t);
+}
+
+/**
+ * ice_dpll_source_signal_type_supported - if source signal type is supported
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @sig_type: signal type being checked for support
+ *
+ * Dpll subsystem callback. Check is signal type is supported on given pin/dpll
+ * pair.
+ *
+ * Return:
+ * * true - supported
+ * * false - not supported
+ */
+static bool
+ice_dpll_source_signal_type_supported(const struct dpll_device *dpll,
+				      const struct dpll_pin *pin,
+				      const enum dpll_pin_signal_type sig_type)
+{
+	return ice_dpll_pin_signal_type_supported(dpll, pin, sig_type,
+						  ICE_DPLL_PIN_TYPE_SOURCE);
+}
+
+/**
+ * ice_dpll_output_signal_type_supported - if output pin signal type is supported
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @sig_type: signal type being checked
+ *
+ * Dpll subsystem callback. Check if signal type is supported on given pin/dpll
+ * pair.
+ *
+ * Return:
+ * * true - supported
+ * * false - not supported
+ */
+static bool
+ice_dpll_output_signal_type_supported(const struct dpll_device *dpll,
+				      const struct dpll_pin *pin,
+				      const enum dpll_pin_signal_type sig_type)
+{
+	return ice_dpll_pin_signal_type_supported(dpll, pin, sig_type,
+						  ICE_DPLL_PIN_TYPE_OUTPUT);
+}
+
+/**
+ * ice_dpll_pin_signal_type_get - get dpll's pin signal type
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @sig_type: on success - current signal type used on the pin
+ * @pin_type: type of a pin being checked
+ *
+ * Find a pin and assign sig_type with its current signal type value.
+ *
+ * Return:
+ * * 0 - success
+ * * negative - failure
+ */
+static int ice_dpll_pin_signal_type_get(const struct dpll_device *dpll,
+					const struct dpll_pin *pin,
+					enum dpll_pin_signal_type *sig_type,
+					const enum ice_dpll_pin_type pin_type)
+{
+	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
+	struct ice_dpll_pin *p;
+	int ret = -ENODEV;
+
+	mutex_lock(&pf->dplls.lock);
+	p = ice_find_pin(pf, pin, pin_type);
+	if (p) {
+		*sig_type = p->signal_type;
+		ret = 0;
+	}
+	mutex_unlock(&pf->dplls.lock);
+	dev_dbg(ice_pf_to_dev(pf),
+		"%s: dpll:%p, pin:%p, pf:%p, p:%p, p->pin:%p\n",
+		__func__, dpll, pin, pf, p, p ? p->pin : NULL);
+
+	return ret;
+}
+
+/**
+ * ice_dpll_output_signal_type_get - get dpll's output pin signal type
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @sig_type: on success - current signal type value used on the pin
+ *
+ * Dpll subsystem callback. Find current signal type of given pin.
+ *
+ * Return:
+ * * 0 - success
+ * * negative - failure
+ */
+static int ice_dpll_output_signal_type_get(const struct dpll_device *dpll,
+					   const struct dpll_pin *pin,
+					   enum dpll_pin_signal_type *sig_type)
+{
+	return ice_dpll_pin_signal_type_get(dpll, pin, sig_type,
+					    ICE_DPLL_PIN_TYPE_OUTPUT);
+}
+
+/**
+ * ice_dpll_pin_signal_type_set - set dpll pin signal type
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @sig_type: signal type to be set
+ * @pin_type: type of a pin being configured
+ *
+ * Handler for signal type modification on pins. Set signal type value for
+ * a given pin.
+ *
+ * Return:
+ * * 0 - success
+ * * negative - failure
+ */
+static int ice_dpll_pin_signal_type_set(const struct dpll_device *dpll,
+					const struct dpll_pin *pin,
+					const enum dpll_pin_signal_type sig_type,
+					const enum ice_dpll_pin_type pin_type)
 {
 	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
 	struct ice_dpll_pin *p;
 	int ret = -EFAULT;
 
 	mutex_lock(&pf->dplls.lock);
-	p = ice_find_pin(pf, pin, pf->dplls.outputs, pf->dplls.num_outputs);
+	p = ice_find_pin(pf, pin, pin_type);
 	if (!p)
 		goto unlock;
-	ret = ice_dpll_pin_signal_type_set(pf, p, false, attr);
-	if (ret)
-		goto unlock;
-	ret = ice_dpll_pin_state_set(pf, p, false, attr);
+	if (test_bit(sig_type, &p->signal_type_mask))
+		ret = __ice_dpll_pin_signal_type_set(pf, p, pin_type, sig_type);
+	else
+		ret = -EINVAL;
 unlock:
 	mutex_unlock(&pf->dplls.lock);
 	dev_dbg(ice_pf_to_dev(pf),
@@ -471,84 +720,194 @@ unlock:
 }
 
 /**
- * ice_dpll_source_get - get dpll input pin parameters
+ * ice_dpll_output_signal_type_set - set dpll output pin signal type
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @attr: structure with pin attributes to be updated
+ * @sig_type: signal type to be set
  *
- * dpll subsystem callback.
+ * Dpll subsystem callback. Wraps signal type modification handler.
  *
  * Return:
  * * 0 - success
  * * negative - failure
  */
-static int ice_dpll_source_get(struct dpll_device *dpll, struct dpll_pin *pin,
-			       struct dpll_pin_attr *attr)
+static int
+ice_dpll_output_signal_type_set(const struct dpll_device *dpll,
+				const struct dpll_pin *pin,
+				const enum dpll_pin_signal_type sig_type)
+{
+	return ice_dpll_pin_signal_type_set(dpll, pin, sig_type,
+					    ICE_DPLL_PIN_TYPE_OUTPUT);
+}
+
+/**
+ * ice_dpll_pin_state_enable - enables a pin state
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be set
+ * @pin_type: type of pin being modified
+ *
+ * Handler for enabling the pin state.
+ *
+ * Return:
+ * * 0 - successfully enabled state
+ * * negative - failed to enable state
+ */
+static int ice_dpll_pin_state_enable(const struct dpll_device *dpll,
+				     const struct dpll_pin *pin,
+				     const enum dpll_pin_state state,
+				     const enum ice_dpll_pin_type pin_type)
 {
 	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
-	struct ice_dpll *d = NULL;
 	struct ice_dpll_pin *p;
 	int ret = -EFAULT;
 
 	mutex_lock(&pf->dplls.lock);
-	p = ice_find_pin(pf, pin, pf->dplls.inputs, pf->dplls.num_inputs);
-	if (!p)
-		goto unlock;
-	ret = dpll_pin_attr_copy(attr, p->attr);
-	if (ret)
-		goto unlock;
-	d = ice_find_dpll(pf, dpll);
-	if (!d) {
-		ret = -EFAULT;
-		goto unlock;
-	}
-	ret = dpll_pin_attr_prio_set(attr, (u32)d->input_prio[p->idx]);
-	if (ret)
-		goto unlock;
-	ret = ice_dpll_pin_attr_state_update(attr, true, p->flags);
-unlock:
+	p = ice_find_pin(pf, pin, pin_type);
+	if (p)
+		ret = ice_dpll_pin_state_set(pf, p, pin_type, state);
 	mutex_unlock(&pf->dplls.lock);
 	dev_dbg(ice_pf_to_dev(pf),
-		"%s: dpll:%p, pin:%p, pf:%p, p:%p, p->pin:%p, d:%p, ret:%d\n",
-		__func__, dpll, pin, pf, p, p ? p->pin : NULL, d, ret);
+		"%s: dpll:%p, pin:%p, pf:%p, p:%p, p->pin:%p, ret:%d\n",
+		__func__, dpll, pin, pf, p, p ? p->pin : NULL, ret);
 
 	return ret;
 }
 
 /**
- * ice_dpll_source_set - set dpll input pin parameters
+ * ice_dpll_rclk_state_enable - enable rclk-source pin state
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @attr: structure with pin attributes to be updated
+ * @state: state to be set
  *
- * dpll subsystem callback.
+ * Dpll subsystem callback. Enables given state on recovered clock source type
+ * pin.
+ *
+ * Return:
+ * * 0 - successfully enabled state
+ * * negative - failed to enable state
+ */
+static int ice_dpll_rclk_state_enable(const struct dpll_device *dpll,
+				      const struct dpll_pin *pin,
+				      const enum dpll_pin_state state)
+{
+	return ice_dpll_pin_state_enable(dpll, pin, state,
+					 ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
+}
+
+/**
+ * ice_dpll_output_state_enable - enable output pin state
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be set
+ *
+ * Dpll subsystem callback. Enables given state on output type pin.
+ *
+ * Return:
+ * * 0 - successfully enabled state
+ * * negative - failed to enable state
+ */
+static int ice_dpll_output_state_enable(const struct dpll_device *dpll,
+					const struct dpll_pin *pin,
+					const enum dpll_pin_state state)
+{
+	return ice_dpll_pin_state_enable(dpll, pin, state,
+					 ICE_DPLL_PIN_TYPE_OUTPUT);
+}
+
+/**
+ * ice_dpll_source_state_enable - enable source pin state
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be set
+ *
+ * Dpll subsystem callback. Enables given state on source type pin.
+ *
+ * Return:
+ * * 0 - successfully enabled state
+ * * negative - failed to enable state
+ */
+static int ice_dpll_source_state_enable(const struct dpll_device *dpll,
+					const struct dpll_pin *pin,
+					const enum dpll_pin_state state)
+{
+	return ice_dpll_pin_state_enable(dpll, pin, state,
+					 ICE_DPLL_PIN_TYPE_SOURCE);
+}
+
+/**
+ * ice_dpll_source_signal_type_get - get source pin signal type
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @type: on success - source pin signal type
+ *
+ * Dpll subsystem callback. Get source pin signal type value.
  *
  * Return:
  * * 0 - success
  * * negative - failure
  */
-static int ice_dpll_source_set(struct dpll_device *dpll, struct dpll_pin *pin,
-			       const struct dpll_pin_attr *attr)
+static int ice_dpll_source_signal_type_get(const struct dpll_device *dpll,
+					   const struct dpll_pin *pin,
+					   enum dpll_pin_signal_type *sig_type)
+{
+	return ice_dpll_pin_signal_type_get(dpll, pin, sig_type,
+					    ICE_DPLL_PIN_TYPE_SOURCE);
+}
+
+/**
+ * ice_dpll_source_signal_type_set - set dpll output pin signal type
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @sig_type: signal type to be set
+ *
+ * dpll subsystem callback. Set source pin signal type value.
+ *
+ * Return:
+ * * 0 - success
+ * * negative - failure
+ */
+static int
+ice_dpll_source_signal_type_set(const struct dpll_device *dpll,
+				const struct dpll_pin *pin,
+				const enum dpll_pin_signal_type sig_type)
+{
+	return ice_dpll_pin_signal_type_set(dpll, pin, sig_type,
+					    ICE_DPLL_PIN_TYPE_SOURCE);
+}
+
+/**
+ * ice_dpll_source_prio_get - get dpll's source prio
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @prio: on success - returns source priority on dpll
+ *
+ * Dpll subsystem callback. Handler for getting priority of a source pin.
+ *
+ * Return:
+ * * 0 - success
+ * * negative - failure
+ */
+static int ice_dpll_source_prio_get(const struct dpll_device *dpll,
+				    const struct dpll_pin *pin, u32 *prio)
 {
 	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
 	struct ice_dpll *d = NULL;
 	struct ice_dpll_pin *p;
-	int ret = -EFAULT;
+	int ret = -EINVAL;
+
+	if (*prio > ICE_DPLL_PRIO_MAX)
+		return ret;
 
 	mutex_lock(&pf->dplls.lock);
-	p = ice_find_pin(pf, pin, pf->dplls.inputs, pf->dplls.num_inputs);
+	p = ice_find_pin(pf, pin, ICE_DPLL_PIN_TYPE_SOURCE);
 	if (!p)
 		goto unlock;
 	d = ice_find_dpll(pf, dpll);
 	if (!d)
 		goto unlock;
-	ret = ice_dpll_source_prio_set(pf, d, p, attr);
-	if (ret)
-		goto unlock;
-	ret = ice_dpll_pin_signal_type_set(pf, p, true, attr);
-	if (ret)
-		goto unlock;
-	ret = ice_dpll_pin_state_set(pf, p, true, attr);
+	*prio = d->input_prio[p->idx];
+	ret = 0;
 unlock:
 	mutex_unlock(&pf->dplls.lock);
 	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pin:%p, pf:%p ret:%d\n",
@@ -558,52 +917,310 @@ unlock:
 }
 
 /**
- * ice_dpll_rclk_get - get dpll recovered clock pin parameters
+ * ice_dpll_source_prio_set - set dpll source prio
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @attr: structure with pin attributes to be updated
+ * @prio: source priority to be set on dpll
  *
- * dpll subsystem callback.
+ * Dpll subsystem callback. Handler for setting priority of a source pin.
  *
  * Return:
  * * 0 - success
  * * negative - failure
  */
-static int ice_dpll_rclk_get(struct dpll_device *dpll, struct dpll_pin *pin,
-			     struct dpll_pin_attr *attr)
+static int ice_dpll_source_prio_set(const struct dpll_device *dpll,
+				    const struct dpll_pin *pin, const u32 prio)
 {
 	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
+	struct ice_dpll *d = NULL;
 	struct ice_dpll_pin *p;
-	int ret;
+	int ret = -EINVAL;
+
+	if (prio > ICE_DPLL_PRIO_MAX)
+		return ret;
 
 	mutex_lock(&pf->dplls.lock);
-	p = ice_find_pin(pf, pin, pf->dplls.rclk, pf->dplls.num_rclk);
-	if (!p) {
-		ret = -EFAULT;
+	p = ice_find_pin(pf, pin, ICE_DPLL_PIN_TYPE_SOURCE);
+	if (!p)
 		goto unlock;
-	}
-	ret = dpll_pin_attr_copy(attr, p->attr);
+	d = ice_find_dpll(pf, dpll);
+	if (!d)
+		goto unlock;
+	ret = ice_dpll_hw_source_prio_set(pf, d, p, prio);
 unlock:
 	mutex_unlock(&pf->dplls.lock);
-	dev_dbg(ice_pf_to_dev(pf),
-		"%s: dpll:%p, pin:%p, pf:%p, p:%p, p->pin:%p, ret:%d\n",
-		__func__, dpll, pin, pf, p, p->pin, ret);
+	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pin:%p, pf:%p ret:%d\n",
+		__func__, dpll, pin, pf, ret);
 
 	return ret;
 }
 
 /**
- * ice_dpll_rclk_select - callback for select dpll recovered pin
+ * ice_dpll_pin_state_active -  check if given pin's state is active
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
+ * @state: state to be checked
+ * @pin_type: type of a pin to be checked
  *
- * dpll subsystem callback.
+ * Handler for checking if given state is active on a pin.
+ *
+ * Return:
+ * * true - state is active
+ * * false - state is not active
+ */
+static bool ice_dpll_pin_state_active(const struct dpll_device *dpll,
+				      const struct dpll_pin *pin,
+				      const enum dpll_pin_state state,
+				      const enum ice_dpll_pin_type pin_type)
+{
+	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
+	struct ice_dpll_pin *p;
+	bool ret = false;
+
+	mutex_lock(&pf->dplls.lock);
+	p = ice_find_pin(pf, pin, pin_type);
+	if (!p)
+		goto unlock;
+	if (test_bit(state, &p->state_mask))
+		ret = true;
+unlock:
+	mutex_unlock(&pf->dplls.lock);
+
+	return ret;
+}
+
+/**
+ * ice_dpll_rclk_state_active - check if rclk source pin's state is active
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be checked
+ *
+ * DPLL subsystem callback, Wraps handler for checking if given state is active
+ * on a recovered clock pin.
+ *
+ * Return:
+ * * true - state is active
+ * * false - state is not active
+ */
+static bool ice_dpll_rclk_state_active(const struct dpll_device *dpll,
+				       const struct dpll_pin *pin,
+				       const enum dpll_pin_state state)
+{
+	return ice_dpll_pin_state_active(dpll, pin, state,
+					 ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
+}
+
+/**
+ * ice_dpll_output_state_active - check if output pin's state is active
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be checked
+ *
+ * DPLL subsystem callback, Wraps handler for checking if given state is active
+ * on an output pin.
+ *
+ * Return:
+ * * true - state is active
+ * * false - state is not active
+ */
+static bool ice_dpll_output_state_active(const struct dpll_device *dpll,
+					 const struct dpll_pin *pin,
+					 const enum dpll_pin_state state)
+{
+	return ice_dpll_pin_state_active(dpll, pin, state, ICE_DPLL_PIN_TYPE_OUTPUT);
+}
+
+/**
+ * ice_dpll_source_state_active - check if source pin's state is active
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be checked
+ *
+ * DPLL subsystem callback, Wraps handler for checking if given state is active
+ * on a source pin.
+ *
+ * Return:
+ * * true - state is active
+ * * false - state is not active
+ */
+static bool ice_dpll_source_state_active(const struct dpll_device *dpll,
+					 const struct dpll_pin *pin,
+					 const enum dpll_pin_state state)
+{
+	return ice_dpll_pin_state_active(dpll, pin, state, ICE_DPLL_PIN_TYPE_SOURCE);
+}
+
+/**
+ * ice_dpll_pin_state_supported - check if pin's state is supported
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be checked
+ * @pin_type: type of a pin being checked
+ *
+ * Handler for checking if given state is supported on a pin.
+ *
+ * Return:
+ * * true - state is active
+ * * false - state is not active
+ */
+static bool ice_dpll_pin_state_supported(const struct dpll_device *dpll,
+					 const struct dpll_pin *pin,
+					 const enum dpll_pin_state state,
+					 const enum ice_dpll_pin_type pin_type)
+{
+	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
+	struct ice_dpll_pin *p;
+	bool ret = false;
+
+	mutex_lock(&pf->dplls.lock);
+	p = ice_find_pin(pf, pin, pin_type);
+
+	if (!p)
+		goto unlock;
+	if (test_bit(state, &p->state_supported_mask))
+		ret = true;
+unlock:
+	mutex_unlock(&pf->dplls.lock);
+
+	return ret;
+}
+
+/**
+ * ice_dpll_rclk_state_supported - check if rclk pin's state is supported
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be checked
+ *
+ * DPLL subsystem callback, Wraps handler for checking if given state is
+ * supported on a clock recovery pin.
+ *
+ * Return:
+ * * true - state is active
+ * * false - state is not active
+ */
+static bool ice_dpll_rclk_state_supported(const struct dpll_device *dpll,
+					  const struct dpll_pin *pin,
+					  const enum dpll_pin_state state)
+{
+	return ice_dpll_pin_state_supported(dpll, pin, state,
+					    ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
+}
+
+/**
+ * ice_dpll_output_state_supported - check if output pin's state is supported
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be checked
+ *
+ * DPLL subsystem callback, Wraps handler for checking if given state is
+ * supported on an output pin.
+ *
+ * Return:
+ * * true - state is active
+ * * false - state is not active
+ */
+static bool ice_dpll_output_state_supported(const struct dpll_device *dpll,
+					    const struct dpll_pin *pin,
+					    const enum dpll_pin_state state)
+{
+	return ice_dpll_pin_state_supported(dpll, pin, state,
+					    ICE_DPLL_PIN_TYPE_OUTPUT);
+}
+
+/**
+ * ice_dpll_source_state_supported - check if source pin's state is supported
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @state: state to be checked
+ *
+ * DPLL subsystem callback, Wraps handler for checking if given state is
+ * supported on a source pin.
+ *
+ * Return:
+ * * true - state is active
+ * * false - state is not active
+ */
+static bool ice_dpll_source_state_supported(const struct dpll_device *dpll,
+					    const struct dpll_pin *pin,
+					    const enum dpll_pin_state state)
+{
+	return ice_dpll_pin_state_supported(dpll, pin, state,
+					    ICE_DPLL_PIN_TYPE_SOURCE);
+}
+
+/**
+ * ice_dpll_rclk_pin_sig_type_get - get signal type of rclk pin
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @sig_type: on success - holds a signal type of a pin
+ *
+ * DPLL subsystem callback, provides signal type of clock recovery pin.
+ *
+ * Return:
+ * * 0 - success, sig_type value is valid
+ * * negative - error
+ */
+static int ice_dpll_rclk_pin_sig_type_get(const struct dpll_device *dpll,
+					  const struct dpll_pin *pin,
+					  enum dpll_pin_signal_type *sig_type)
+{
+	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
+	struct ice_dpll_pin *p;
+	int ret = 0;
+
+	mutex_lock(&pf->dplls.lock);
+	p = ice_find_pin(pf, pin, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
+	if (!p) {
+		ret = -EFAULT;
+		goto unlock;
+	}
+	*sig_type = p->signal_type;
+unlock:
+	mutex_unlock(&pf->dplls.lock);
+	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pin:%p, pf:%p sig_type:%d ret:%d\n",
+		__func__, dpll, pin, pf, *sig_type, ret);
+
+	return ret;
+}
+
+/**
+ * ice_dpll_rclk_pin_net_if_index_get - get OS interface index callback
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ * @net_if_idx: on success - holds OS interface index
+ *
+ * dpll subsystem callback, obtains OS interface index and pass to the caller.
  *
  * Return:
  * * 0 - success
  * * negative - failure
  */
-static int ice_dpll_rclk_select(struct dpll_device *dpll, struct dpll_pin *pin)
+static int ice_dpll_rclk_pin_net_if_index_get(const struct dpll_device *dpll,
+					      const struct dpll_pin *pin,
+					      int *net_if_idx)
+{
+	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
+
+	if (!pf->vsi[0] || pf->vsi[0]->netdev)
+		return -EAGAIN;
+	*net_if_idx = pf->vsi[0]->netdev->ifindex;
+
+	return 0;
+}
+
+/**
+ * ice_dpll_rclk_pin_select - select a recovered clock pin as a valid source
+ * @dpll: registered dpll pointer
+ * @pin: pointer to a pin
+ *
+ * dpll subsystem callback, selects a pin for clock recovery,
+ *
+ * Return:
+ * * 0 - success
+ * * negative - failure
+ */
+static int ice_dpll_rclk_pin_select(const struct dpll_device *dpll,
+				    const struct dpll_pin *pin)
 {
 	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
 	struct ice_dpll_pin *p;
@@ -611,12 +1228,16 @@ static int ice_dpll_rclk_select(struct dpll_device *dpll, struct dpll_pin *pin)
 	int ret;
 
 	mutex_lock(&pf->dplls.lock);
-	p = ice_find_pin(pf, pin, pf->dplls.rclk, pf->dplls.num_rclk);
+	p = ice_find_pin(pf, pin, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
 	if (!p) {
 		ret = -EFAULT;
 		goto unlock;
 	}
-	ret = ice_aq_set_phy_rec_clk_out(&pf->hw, p->rclk_idx, true, &freq);
+	if (!(p->flags & ICE_DPLL_RCLK_SOURCE_FLAG_EN)) {
+		ret = -EPERM;
+		goto unlock;
+	}
+	ret = ice_aq_set_phy_rec_clk_out(&pf->hw, p->idx, true, &freq);
 unlock:
 	mutex_unlock(&pf->dplls.lock);
 	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pin:%p, pf:%p ret:%d\n",
@@ -626,30 +1247,47 @@ unlock:
 }
 
 static struct dpll_pin_ops ice_dpll_rclk_ops = {
-	.get = ice_dpll_rclk_get,
-	.select = ice_dpll_rclk_select,
+	.state_enable = ice_dpll_rclk_state_enable,
+	.state_active = ice_dpll_rclk_state_active,
+	.state_supported = ice_dpll_rclk_state_supported,
+	.signal_type_get = ice_dpll_rclk_pin_sig_type_get,
+	.signal_type_supported = ice_dpll_rclk_signal_type_supported,
+	.net_if_idx_get = ice_dpll_rclk_pin_net_if_index_get,
+	.select = ice_dpll_rclk_pin_select,
 };
 
 static struct dpll_pin_ops ice_dpll_source_ops = {
-	.get = ice_dpll_source_get,
-	.set = ice_dpll_source_set,
+	.signal_type_get = ice_dpll_source_signal_type_get,
+	.signal_type_set = ice_dpll_source_signal_type_set,
+	.signal_type_supported = ice_dpll_source_signal_type_supported,
+	.state_active = ice_dpll_source_state_active,
+	.state_enable = ice_dpll_source_state_enable,
+	.state_supported = ice_dpll_source_state_supported,
+	.prio_get = ice_dpll_source_prio_get,
+	.prio_set = ice_dpll_source_prio_set,
 };
 
 static struct dpll_pin_ops ice_dpll_output_ops = {
-	.get = ice_dpll_output_get,
-	.set = ice_dpll_output_set,
+	.signal_type_get = ice_dpll_output_signal_type_get,
+	.signal_type_set = ice_dpll_output_signal_type_set,
+	.signal_type_supported = ice_dpll_output_signal_type_supported,
+	.state_active = ice_dpll_output_state_active,
+	.state_enable = ice_dpll_output_state_enable,
+	.state_supported = ice_dpll_output_state_supported,
 };
 
 static struct dpll_device_ops ice_dpll_ops = {
-	.get = ice_dpll_dev_get,
-	.set = ice_dpll_dev_set,
+	.lock_status_get = ice_dpll_lock_status_get,
+	.source_pin_idx_get = ice_dpll_source_idx_get,
+	.mode_get = ice_dpll_mode_get,
+	.mode_supported = ice_dpll_mode_supported,
 };
 
 /**
- * ice_dpll_release_info
+ * ice_dpll_release_info - release memory allocated for pins
  * @pf: board private structure
  *
- * Release memory allocated by ice_dpll_init_info.
+ * Release memory allocated for pins by ice_dpll_init_info function.
  */
 static void ice_dpll_release_info(struct ice_pf *pf)
 {
@@ -664,96 +1302,75 @@ static void ice_dpll_release_info(struct ice_pf *pf)
 }
 
 /**
- * ice_dpll_init_pins
- * @hw: Board private structure
- * @input: input or output pins
- * @num_pins: number of pins to be initialized
- * @pins: pointer to the pins array
- * @de: index of EEC dpll
- * @dp: index of PPS dpll
+ * ice_dpll_init_pins - initializes source or output pins information
+ * @pf: Board private structure
+ * @pin_type: type of pins being initialized
  *
- * Init info about input or output pins, cache them in pins struct.
+ * Init information about input or output pins, cache them in pins struct.
  */
-static int ice_dpll_init_pins(struct ice_hw *hw, bool input, int num_pins,
-			      struct ice_dpll_pin *pins, struct ice_dpll *de,
-			      struct ice_dpll *dp)
+static int ice_dpll_init_pins(struct ice_pf *pf,
+			      const enum ice_dpll_pin_type pin_type)
 {
-	int ret = -EINVAL;
-	u8 i;
+	struct ice_dpll *de = &pf->dplls.eec, *dp = &pf->dplls.pps;
+	int ret = -EINVAL, num_pins, i;
+	struct ice_hw *hw = &pf->hw;
+	struct ice_dpll_pin *pins;
+	bool input;
+
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+		input = true;
+		pins = pf->dplls.inputs;
+		num_pins = pf->dplls.num_inputs;
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		input = false;
+		pins = pf->dplls.outputs;
+		num_pins = pf->dplls.num_outputs;
+	} else {
+		return -EINVAL;
+	}
 
 	for (i = 0; i < num_pins; i++) {
-		enum dpll_pin_type t = ice_cgu_get_pin_type(hw, i, input);
-		enum dpll_pin_signal_type st;
-		unsigned long sig_type_mask;
-		enum dpll_pin_state s;
-		u32 freq;
-
-		pins[i].attr = dpll_pin_attr_alloc();
-		if (!pins[i].attr)
-			return -ENOMEM;
-
+		pins[i].idx = i;
 		pins[i].name = ice_cgu_get_pin_name(hw, i, input);
-		dpll_pin_attr_type_set(pins[i].attr, t);
-		dpll_pin_attr_type_supported_set(pins[i].attr, t);
-		s = DPLL_PIN_STATE_CONNECTED;
-		dpll_pin_attr_state_supported_set(pins[i].attr, s);
-		s = DPLL_PIN_STATE_DISCONNECTED;
-		dpll_pin_attr_state_supported_set(pins[i].attr, s);
+		pins[i].type = ice_cgu_get_pin_type(hw, i, input);
+		set_bit(DPLL_PIN_STATE_CONNECTED,
+			&pins[i].state_supported_mask);
+		set_bit(DPLL_PIN_STATE_DISCONNECTED,
+			&pins[i].state_supported_mask);
 		if (input) {
 			ret = ice_aq_get_cgu_ref_prio(hw, de->dpll_idx, i,
 						      &de->input_prio[i]);
 			if (ret)
 				return ret;
-
 			ret = ice_aq_get_cgu_ref_prio(hw, dp->dpll_idx, i,
 						      &dp->input_prio[i]);
 			if (ret)
 				return ret;
-
-			ret = ice_aq_get_input_pin_cfg(hw, i, NULL, NULL,
-						       NULL, &pins[i].flags,
-						       &freq, NULL);
-			if (ret)
-				return ret;
-			s = DPLL_PIN_STATE_SOURCE;
+			set_bit(DPLL_PIN_STATE_SOURCE,
+				&pins[i].state_supported_mask);
 		} else {
-			ret = ice_aq_get_output_pin_cfg(hw, i, &pins[i].flags,
-							NULL, &freq, NULL);
-			if (ret)
-				return ret;
-			s = DPLL_PIN_STATE_OUTPUT;
+			set_bit(DPLL_PIN_STATE_OUTPUT,
+				&pins[i].state_supported_mask);
 		}
-		dpll_pin_attr_state_supported_set(pins[i].attr, s);
-		dpll_pin_attr_state_set(pins[i].attr, s);
-		st = ice_dpll_pin_freq_to_signal_type(freq);
-		dpll_pin_attr_signal_type_set(pins[i].attr, st);
-		if (st == DPLL_PIN_SIGNAL_TYPE_CUSTOM_FREQ)
-			dpll_pin_attr_custom_freq_set(pins[i].attr, freq);
-		sig_type_mask = ice_cgu_get_pin_sig_type_mask(hw, i, input);
-		if (test_bit(DPLL_PIN_SIGNAL_TYPE_1_PPS, &sig_type_mask)) {
-			st = DPLL_PIN_SIGNAL_TYPE_1_PPS;
-			dpll_pin_attr_signal_type_supported_set(pins[i].attr,
-								st);
-		}
-		if (test_bit(DPLL_PIN_SIGNAL_TYPE_10_MHZ, &sig_type_mask)) {
-			st = DPLL_PIN_SIGNAL_TYPE_10_MHZ;
-			dpll_pin_attr_signal_type_supported_set(pins[i].attr,
-								st);
-		}
-		pins[i].idx = i;
+		pins[i].signal_type_mask =
+				ice_cgu_get_pin_sig_type_mask(hw, i, input);
+		ret = ice_dpll_pin_update(hw, &pins[i], pin_type);
+		if (ret)
+			return ret;
 	}
 
 	return ret;
 }
 
 /**
- * ice_dpll_release_pins
+ * ice_dpll_release_pins - release pin's from dplls registered in subsystem
  * @dpll_eec: dpll_eec dpll pointer
  * @dpll_pps: dpll_pps dpll pointer
  * @pins: pointer to pins array
  * @count: number of pins
  *
- * Release dpll pins from dpll subsystem.
+ * Deregister and free pins of a given array of pins from dpll devices registered
+ * in dpll subsystem.
  *
  * Return:
  * * 0 - success
@@ -781,9 +1398,7 @@ ice_dpll_release_pins(struct dpll_device *dpll_eec,
 					err++;
 			}
 			dpll_pin_free(p->pin);
-			dpll_pin_attr_free(p->attr);
 			p->pin = NULL;
-			p->attr = NULL;
 		}
 	}
 
@@ -791,14 +1406,12 @@ ice_dpll_release_pins(struct dpll_device *dpll_eec,
 }
 
 /**
- * ice_dpll_register_pins
+ * ice_dpll_register_pins - register pins with a dpll
  * @pf: board private structure
  * @dpll: registered dpll pointer
- * @pins: pointer to the pins array
- * @count: number of pins
- * @input: pins type
+ * @pin_type: type of pins being registered
  *
- * Register pins within a ice DPLL in dpll subsystem.
+ * Register source or output pins within given DPLL in a Linux dpll subsystem.
  *
  * Return:
  * * 0 - success
@@ -806,21 +1419,30 @@ ice_dpll_release_pins(struct dpll_device *dpll_eec,
  */
 static int
 ice_dpll_register_pins(struct ice_pf *pf, struct dpll_device *dpll,
-		       struct ice_dpll_pin *pins, int count, bool input)
+		       const enum ice_dpll_pin_type pin_type)
 {
+	struct ice_dpll_pin *pins;
 	struct dpll_pin_ops *ops;
-	int ret, i = 0;
+	int ret, i, count;
 
-	if (input)
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
 		ops = &ice_dpll_source_ops;
-	else
+		pins = pf->dplls.inputs;
+		count = pf->dplls.num_inputs;
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
 		ops = &ice_dpll_output_ops;
+		pins = pf->dplls.outputs;
+		count = pf->dplls.num_outputs;
+	} else {
+		return -EINVAL;
+	}
 
 	for (i = 0; i < count; i++) {
 		pins[i].pin = dpll_pin_alloc(pins[i].name,
 					     strnlen(pins[i].name,
-						     PIN_DESC_LEN));
-		if (!pins[i].pin)
+						     PIN_DESC_LEN),
+					     pins[i].type);
+		if (IS_ERR_OR_NULL(pins[i].pin))
 			return -ENOMEM;
 
 		ret = dpll_pin_register(dpll, pins[i].pin, ops, pf);
@@ -832,15 +1454,13 @@ ice_dpll_register_pins(struct ice_pf *pf, struct dpll_device *dpll,
 }
 
 /**
- * ice_dpll_register_shared_pins
+ * ice_dpll_register_shared_pins - register shared pins in DPLL subsystem
  * @pf: board private structure
  * @dpll_o: registered dpll pointer (owner)
  * @dpll: registered dpll pointer
- * @pins: pointer to the pins array
- * @count: number of pins
- * @input: pins type
+ * @type: type of pins being registered
  *
- * Register pins within a ice DPLL in dpll subsystem.
+ * Register pins from given owner dpll within given dpll in Linux dpll subsystem.
  *
  * Return:
  * * 0 - success
@@ -849,15 +1469,23 @@ ice_dpll_register_pins(struct ice_pf *pf, struct dpll_device *dpll,
 static int
 ice_dpll_register_shared_pins(struct ice_pf *pf, struct dpll_device *dpll_o,
 			      struct dpll_device *dpll,
-			      struct ice_dpll_pin *pins, int count, bool input)
+			      const enum ice_dpll_pin_type pin_type)
 {
+	struct ice_dpll_pin *pins;
 	struct dpll_pin_ops *ops;
-	int ret, i;
+	int ret, i, count;
 
-	if (input)
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
 		ops = &ice_dpll_source_ops;
-	else
+		pins = pf->dplls.inputs;
+		count = pf->dplls.num_inputs;
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
 		ops = &ice_dpll_output_ops;
+		pins = pf->dplls.outputs;
+		count = pf->dplls.num_outputs;
+	} else {
+		return -EINVAL;
+	}
 
 	for (i = 0; i < count; i++) {
 		u32 pin_idx;
@@ -875,14 +1503,14 @@ ice_dpll_register_shared_pins(struct ice_pf *pf, struct dpll_device *dpll_o,
 }
 
 /**
- * ice_dpll_init_info
+ * ice_dpll_init_info - prepare pf's dpll information structure
  * @pf: board private structure
  *
  * Acquire (from HW) and set basic dpll information (on pf->dplls struct).
  *
  * Return:
  *  0 - success
- *  negative - AQ error
+ *  negative - error
  */
 static int ice_dpll_init_info(struct ice_pf *pf)
 {
@@ -910,15 +1538,15 @@ static int ice_dpll_init_info(struct ice_pf *pf)
 		return -ENOMEM;
 
 	alloc_size = sizeof(*de->input_prio) * d->num_inputs;
-	de->input_prio =  kzalloc(alloc_size, GFP_KERNEL);
+	de->input_prio = kzalloc(alloc_size, GFP_KERNEL);
 	if (!de->input_prio)
 		return -ENOMEM;
 
-	dp->input_prio =  kzalloc(alloc_size, GFP_KERNEL);
+	dp->input_prio = kzalloc(alloc_size, GFP_KERNEL);
 	if (!dp->input_prio)
 		return -ENOMEM;
 
-	ret = ice_dpll_init_pins(hw, true, d->num_inputs, d->inputs, de, dp);
+	ret = ice_dpll_init_pins(pf, ICE_DPLL_PIN_TYPE_SOURCE);
 	if (ret)
 		goto release_info;
 
@@ -928,7 +1556,7 @@ static int ice_dpll_init_info(struct ice_pf *pf)
 	if (!d->outputs)
 		goto release_info;
 
-	ret = ice_dpll_init_pins(hw, false, d->num_outputs, d->outputs, de, dp);
+	ret = ice_dpll_init_pins(pf, ICE_DPLL_PIN_TYPE_OUTPUT);
 	if (ret)
 		goto release_info;
 
@@ -946,7 +1574,16 @@ release_info:
 	return ret;
 }
 
-static void ice_gen_cookie(struct ice_pf *pf, u8 *cookie, int cookie_size)
+/**
+ * ice_generate_cookie - generates unique cookie for registering dpll.
+ * @pf: board private structure
+ * @cookie: array holds generated cookie
+ * @cookie_size: number of elements in array
+ *
+ * Generates unique (per board) cookie for allocation and search of dpll
+ * devices in Linux dpll subsystem.
+ */
+static void ice_generate_cookie(struct ice_pf *pf, u8 *cookie, int cookie_size)
 {
 	u64 dsn = pci_get_dsn(pf->pdev);
 
@@ -954,26 +1591,15 @@ static void ice_gen_cookie(struct ice_pf *pf, u8 *cookie, int cookie_size)
 	memcpy(cookie, &dsn, sizeof(dsn));
 }
 
-static int ice_dpll_init_attrs(struct ice_pf *pf, struct ice_dpll *dpll)
-{
-	dpll->attr = dpll_attr_alloc();
-	if (!dpll->attr)
-		return -ENOMEM;
-
-	dpll_attr_mode_set(dpll->attr, DPLL_MODE_AUTOMATIC);
-	dpll_attr_mode_supported_set(dpll->attr, DPLL_MODE_AUTOMATIC);
-
-	return 0;
-}
-
 /**
  * ice_dpll_init_dpll
  * @pf: board private structure
  *
  * Allocate and register dpll in dpll subsystem.
+ *
  * Return:
  * * 0 - success
- * * -ENOMEM - allocation fails
+ * * negative - allocation fails
  */
 static int ice_dpll_init_dpll(struct ice_pf *pf)
 {
@@ -983,7 +1609,7 @@ static int ice_dpll_init_dpll(struct ice_pf *pf)
 	u8 cookie_dpll[DPLL_COOKIE_LEN];
 	int ret = 0;
 
-	ice_gen_cookie(pf, cookie_dpll, sizeof(cookie_dpll));
+	ice_generate_cookie(pf, cookie_dpll, sizeof(cookie_dpll));
 
 	de->dpll = dpll_device_alloc(&ice_dpll_ops, DPLL_TYPE_EEC,
 				     cookie_dpll, 0, pf, dev);
@@ -992,9 +1618,6 @@ static int ice_dpll_init_dpll(struct ice_pf *pf)
 		return -ENOMEM;
 	}
 	dpll_device_register(de->dpll);
-	ret = ice_dpll_init_attrs(pf, de);
-	if (ret)
-		return ret;
 
 	dp->dpll = dpll_device_alloc(&ice_dpll_ops, DPLL_TYPE_PPS,
 				     cookie_dpll, 0, pf, dev);
@@ -1003,7 +1626,6 @@ static int ice_dpll_init_dpll(struct ice_pf *pf)
 		return -ENOMEM;
 	}
 	dpll_device_register(dp->dpll);
-	ret = ice_dpll_init_attrs(pf, dp);
 
 	return ret;
 }
@@ -1143,9 +1765,6 @@ static void __ice_dpll_release(struct ice_pf *pf)
 	struct ice_dpll *dp = &d->pps;
 	int ret;
 
-	dpll_attr_free(de->attr);
-	dpll_attr_free(dp->attr);
-
 	ret = ice_dpll_release_pins(de->dpll, dp->dpll, d->inputs,
 				    d->num_inputs);
 	if (ret)
@@ -1181,9 +1800,10 @@ static void __ice_dpll_release(struct ice_pf *pf)
  * ice_dpll_init - Initialize DPLLs support
  * @pf: board private structure
  *
- * Set up the device as owner of DPLLs feature.
- * Register in dpll subsystem, and allow userpsace to obtain state of PLL
- * and handle its configuration requests.
+ * Set up the device as owner of DPLLs registering them and pins connected
+ * within Linux dpll subsystem. Allow userpsace to obtain state of DPLL
+ * and handling of DPLL configuration requests.
+ *
  * Return:
  * * 0 - success
  * * negative - init failure
@@ -1201,20 +1821,18 @@ int ice_dpll_init(struct ice_pf *pf)
 	err = ice_dpll_init_dpll(pf);
 	if (err)
 		goto release;
-	err = ice_dpll_register_pins(pf, d->eec.dpll, d->inputs,
-				     d->num_inputs, true);
+	err = ice_dpll_register_pins(pf, d->eec.dpll, ICE_DPLL_PIN_TYPE_SOURCE);
 	if (err)
 		goto release;
-	err = ice_dpll_register_pins(pf, d->eec.dpll, d->outputs,
-				     d->num_outputs, false);
-	if (err)
-		goto release;
-	err = ice_dpll_register_shared_pins(pf, d->eec.dpll, d->pps.dpll,
-					    d->inputs, d->num_inputs, true);
+	err = ice_dpll_register_pins(pf, d->eec.dpll, ICE_DPLL_PIN_TYPE_OUTPUT);
 	if (err)
 		goto release;
 	err = ice_dpll_register_shared_pins(pf, d->eec.dpll, d->pps.dpll,
-					    d->outputs, d->num_outputs, false);
+					    ICE_DPLL_PIN_TYPE_SOURCE);
+	if (err)
+		goto release;
+	err = ice_dpll_register_shared_pins(pf, d->eec.dpll, d->pps.dpll,
+					    ICE_DPLL_PIN_TYPE_OUTPUT);
 	if (err)
 		goto release;
 	set_bit(ICE_FLAG_DPLL, pf->flags);
@@ -1256,38 +1874,22 @@ void ice_dpll_release(struct ice_pf *pf)
 }
 
 /**
- * ice_dpll_rclk_pin_init_attr - init the pin attributes for recovered clock
+ * ice_dpll_rclk_pin_init - init the pin info for recovered clock
  * @attr: structure with pin attributes
  *
  * Return:
  * * 0 - success
  * * negative - init failure
  */
-int ice_dpll_rclk_pin_init_attr(struct dpll_pin_attr *a)
+void ice_dpll_rclk_pin_init(struct ice_dpll_pin *p)
 {
-	int ret;
-
-	ret = dpll_pin_attr_type_set(a, DPLL_PIN_TYPE_SYNCE_ETH_PORT);
-	if (ret)
-		return ret;
-	ret = dpll_pin_attr_type_supported_set(a, DPLL_PIN_TYPE_SYNCE_ETH_PORT);
-	if (ret)
-		return ret;
-	ret = dpll_pin_attr_state_supported_set(a, DPLL_PIN_STATE_CONNECTED);
-	if (ret)
-		return ret;
-	ret = dpll_pin_attr_state_supported_set(a, DPLL_PIN_STATE_DISCONNECTED);
-	if (ret)
-		return ret;
-	ret = dpll_pin_attr_state_supported_set(a, DPLL_PIN_STATE_SOURCE);
-	if (ret)
-		return ret;
-	ret = dpll_pin_attr_state_set(a, DPLL_PIN_STATE_SOURCE);
-	if (ret)
-		return ret;
-	ret = dpll_pin_attr_signal_type_set(a,
-					    DPLL_PIN_SIGNAL_TYPE_CUSTOM_FREQ);
-	return ret;
+	p->flags = ICE_DPLL_RCLK_SOURCE_FLAG_EN;
+	p->type = DPLL_PIN_TYPE_SYNCE_ETH_PORT;
+	set_bit(DPLL_PIN_SIGNAL_TYPE_CUSTOM_FREQ, &p->signal_type_mask);
+	set_bit(DPLL_PIN_STATE_CONNECTED,	  &p->state_supported_mask);
+	set_bit(DPLL_PIN_STATE_DISCONNECTED,	  &p->state_supported_mask);
+	set_bit(DPLL_PIN_STATE_SOURCE,		  &p->state_supported_mask);
+	ice_dpll_pin_update(0, p, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
 }
 
 /**
@@ -1306,7 +1908,6 @@ void __ice_dpll_rclk_release(struct ice_pf *pf)
 			ret = dpll_pin_deregister(pf->dplls.eec.dpll,
 						  pf->dplls.rclk[0].pin);
 		dpll_pin_free(pf->dplls.rclk->pin);
-		dpll_pin_attr_free(pf->dplls.rclk->attr);
 		kfree(pf->dplls.rclk);
 	}
 	dev_dbg(ice_pf_to_dev(pf), "PHY RCLK release ret:%d\n", ret);
@@ -1315,7 +1916,7 @@ void __ice_dpll_rclk_release(struct ice_pf *pf)
 /**
  * ice_dpll_rclk_pins_init - init the pin for recovered clock
  * @pf: board private structure
- * @pin: pointer to a parent pin
+ * @first_parent: pointer to a first parent pin
  *
  * Return:
  * * 0 - success
@@ -1338,16 +1939,11 @@ int ice_dpll_rclk_pins_init(struct ice_pf *pf, struct ice_dpll_pin *first_parent
 		p = &pf->dplls.rclk[i];
 		if (!p)
 			goto release;
-		p->attr = dpll_pin_attr_alloc();
-		if (!p->attr)
-			goto release;
-		ret = ice_dpll_rclk_pin_init_attr(p->attr);
-		if (ret)
-			goto release;
+		ice_dpll_rclk_pin_init(p);
 		parent = first_parent + i;
 		if (!parent)
 			goto release;
-		p->rclk_idx = i;
+		p->idx = i;
 		name = kcalloc(PIN_DESC_LEN, sizeof(*p->name), GFP_KERNEL);
 		if (!name)
 			goto release;
@@ -1355,8 +1951,10 @@ int ice_dpll_rclk_pins_init(struct ice_pf *pf, struct ice_dpll_pin *first_parent
 			 parent->name, pf->hw.pf_id);
 		p->name = name;
 		p->pin = dpll_pin_alloc(p->name,
-					strnlen(p->name, PIN_DESC_LEN));
-		if (!p->pin)
+					strnlen(p->name, PIN_DESC_LEN),
+					p->type);
+
+		if (IS_ERR_OR_NULL(p->pin))
 			goto release;
 		ret = dpll_muxed_pin_register(pf->dplls.eec.dpll, parent->pin,
 					      p->pin, &ice_dpll_rclk_ops, pf);
@@ -1377,8 +1975,8 @@ int ice_dpll_rclk_pins_init(struct ice_pf *pf, struct ice_dpll_pin *first_parent
 	return ret;
 release:
 	dev_dbg(ice_pf_to_dev(pf),
-		"%s releasing - p: %p, parent:%p, name:%s, p->attr:%p, ret:%d\n",
-		__func__, p, parent, name, p->attr, ret);
+		"%s releasing - p: %p, parent:%p, p->pin:%p name:%s, ret:%d\n",
+		__func__, p, parent, p->pin, name, ret);
 	__ice_dpll_rclk_release(pf);
 	return -ENOMEM;
 }
@@ -1395,7 +1993,7 @@ static int ice_dpll_rclk_find_dplls(struct ice_pf *pf)
 {
 	u8 cookie_dpll[DPLL_COOKIE_LEN];
 
-	ice_gen_cookie(pf, cookie_dpll, sizeof(cookie_dpll));
+	ice_generate_cookie(pf, cookie_dpll, sizeof(cookie_dpll));
 	pf->dplls.eec.dpll = dpll_device_get_by_cookie(cookie_dpll,
 						       DPLL_TYPE_EEC, 0);
 	if (!pf->dplls.eec.dpll)
@@ -1479,17 +2077,20 @@ int ice_dpll_rclk_init(struct ice_pf *pf)
 		dev_dbg(ice_pf_to_dev(pf), "ecc:%p, pps:%p\n",
 			pf->dplls.eec.dpll, pf->dplls.pps.dpll);
 		if (ret)
-			return ret;
+			goto unlock;
 		ret = ice_dpll_rclk_parent_pins_init(pf, base_rclk_idx);
 		if (ret)
-			return ret;
+			goto unlock;
 		first_parent = &pf->dplls.inputs[0];
 	} else {
 		first_parent = &pf->dplls.inputs[base_rclk_idx];
 	}
-	if (!first_parent)
-		return -EFAULT;
+	if (!first_parent) {
+		ret = -EFAULT;
+		goto unlock;
+	}
 	ret = ice_dpll_rclk_pins_init(pf, first_parent);
+unlock:
 	mutex_unlock(&pf->dplls.lock);
 	dev_dbg(ice_pf_to_dev(pf), "PHY RCLK init ret=%d\n", ret);
 
@@ -1524,10 +2125,6 @@ void ice_dpll_rclk_release(struct ice_pf *pf)
 					    pf->dplls.rclk[i].pin);
 			dpll_pin_free(pf->dplls.rclk[i].pin);
 			pf->dplls.rclk[i].pin = NULL;
-		}
-		if (pf->dplls.rclk[i].attr) {
-			dpll_pin_attr_free(pf->dplls.rclk[i].attr);
-			pf->dplls.rclk[i].attr = NULL;
 		}
 		kfree(pf->dplls.rclk[i].name);
 		pf->dplls.rclk[i].name = NULL;

@@ -31,7 +31,6 @@
  * @DPLLA_PIN_DESCRIPTION - human-readable pin description provided by driver
  *	(char array of PIN_DESC_LEN size)
  * @DPLLA_PIN_TYPE - current type of a pin (enum dpll_pin_type)
- * @DPLLA_PIN_TYPE_SUPPORTED - pin types supported (enum dpll_pin_type)
  * @DPLLA_PIN_SIGNAL_TYPE - current type of a signal
  *	(enum dpll_pin_signal_type)
  * @DPLLA_PIN_SIGNAL_TYPE_SUPPORTED - pin signal types supported
@@ -61,7 +60,6 @@ enum dplla {
 	DPLLA_PIN_IDX,
 	DPLLA_PIN_DESCRIPTION,
 	DPLLA_PIN_TYPE,
-	DPLLA_PIN_TYPE_SUPPORTED,
 	DPLLA_PIN_SIGNAL_TYPE,
 	DPLLA_PIN_SIGNAL_TYPE_SUPPORTED,
 	DPLLA_PIN_CUSTOM_FREQ,

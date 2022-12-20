@@ -77,63 +77,85 @@ static int __dpll_msg_add_mode(struct sk_buff *msg, enum dplla msg_type,
 	return 0;
 }
 
-static int dpll_msg_add_mode(struct sk_buff *msg, const struct dpll_attr *attr)
+static int
+dpll_msg_add_mode(struct sk_buff *msg, const struct dpll_device *dpll)
 {
-	enum dpll_mode m = dpll_attr_mode_get(attr);
+	enum dpll_mode m;
+	int ret;
 
-	if (m == DPLL_MODE_UNSPEC)
+	if (!dpll->ops->mode_get)
 		return 0;
+	ret = dpll->ops->mode_get(dpll, &m);
+	if (ret)
+		return ret;
 
 	return __dpll_msg_add_mode(msg, DPLLA_MODE, m);
 }
 
-static int dpll_msg_add_modes_supported(struct sk_buff *msg,
-					const struct dpll_attr *attr)
+static int
+dpll_msg_add_modes_supported(struct sk_buff *msg,
+			     const struct dpll_device *dpll)
 {
 	enum dpll_mode i;
-	int  ret = 0;
+	int ret = 0;
+
+	if (!dpll->ops->mode_supported)
+		return ret;
 
 	for (i = DPLL_MODE_UNSPEC + 1; i <= DPLL_MODE_MAX; i++) {
-		if (dpll_attr_mode_supported(attr, i)) {
+		if (dpll->ops->mode_supported(dpll, i)) {
 			ret = __dpll_msg_add_mode(msg, DPLLA_MODE_SUPPORTED, i);
 			if (ret)
-				return -EMSGSIZE;
+				return ret;
 		}
 	}
 
 	return ret;
 }
 
-static int dpll_msg_add_source_pin(struct sk_buff *msg, struct dpll_attr *attr)
+static int
+dpll_msg_add_source_pin(struct sk_buff *msg, struct dpll_device *dpll)
 {
 	u32 source_idx;
+	int ret;
 
-	if (dpll_attr_source_idx_get(attr, &source_idx))
+	if (!dpll->ops->source_pin_idx_get)
 		return 0;
+	ret = dpll->ops->source_pin_idx_get(dpll, &source_idx);
+	if (ret)
+		return ret;
 	if (nla_put_u32(msg, DPLLA_SOURCE_PIN_IDX, source_idx))
 		return -EMSGSIZE;
 
 	return 0;
 }
 
-static int dpll_msg_add_lock_status(struct sk_buff *msg, struct dpll_attr *attr)
+static int dpll_msg_add_lock_status(struct sk_buff *msg, struct dpll_device *dpll)
 {
-	enum dpll_lock_status s = dpll_attr_lock_status_get(attr);
+	enum dpll_lock_status s;
+	int ret;
 
-	if (s == DPLL_LOCK_STATUS_UNSPEC)
+	if (!dpll->ops->lock_status_get)
 		return 0;
+	ret = dpll->ops->lock_status_get(dpll, &s);
+	if (ret)
+		return ret;
 	if (nla_put_s32(msg, DPLLA_LOCK_STATUS, s))
 		return -EMSGSIZE;
 
 	return 0;
 }
 
-static int dpll_msg_add_temp(struct sk_buff *msg, struct dpll_attr *attr)
+static int dpll_msg_add_temp(struct sk_buff *msg, struct dpll_device *dpll)
 {
 	s32 temp;
+	int ret;
 
-	if (dpll_attr_temp_get(attr, &temp))
+	if (!dpll->ops->temp_get)
 		return 0;
+	ret = dpll->ops->temp_get(dpll, &temp);
+	if (ret)
+		return ret;
 	if (nla_put_u32(msg, DPLLA_TEMP, temp))
 		return -EMSGSIZE;
 
@@ -165,41 +187,17 @@ static int dpll_msg_add_pin_parent_idx(struct sk_buff *msg, u32 parent_idx)
 	return 0;
 }
 
-static int __dpll_msg_add_pin_type(struct sk_buff *msg, enum dplla attr,
-				   enum dpll_pin_type type)
-{
-	if (nla_put_s32(msg, attr, type))
-		return -EMSGSIZE;
-
-	return 0;
-}
-
 static int
-dpll_msg_add_pin_type(struct sk_buff *msg, const struct dpll_pin_attr *attr)
+dpll_msg_add_pin_type(struct sk_buff *msg, const struct dpll_device *dpll,
+		      const struct dpll_pin *pin)
 {
-	enum dpll_pin_type t = dpll_pin_attr_type_get(attr);
+	enum dpll_pin_type t;
 
-	if (t == DPLL_PIN_TYPE_UNSPEC)
+	if (dpll_pin_type_get(dpll, pin, &t))
 		return 0;
 
-	return __dpll_msg_add_pin_type(msg, DPLLA_PIN_TYPE, t);
-}
-
-static int dpll_msg_add_pin_types_supported(struct sk_buff *msg,
-					    const struct dpll_pin_attr *attr)
-{
-	enum dpll_pin_type i;
-	int ret;
-
-	for (i = DPLL_PIN_TYPE_UNSPEC + 1; i <= DPLL_PIN_TYPE_MAX; i++) {
-		if (dpll_pin_attr_type_supported(attr, i)) {
-			ret = __dpll_msg_add_pin_type(msg,
-						      DPLLA_PIN_TYPE_SUPPORTED,
-						      i);
-			if (ret)
-				return ret;
-		}
-	}
+	if (nla_put_s32(msg, DPLLA_PIN_TYPE, t))
+		return -EMSGSIZE;
 
 	return 0;
 }
@@ -215,28 +213,46 @@ static int __dpll_msg_add_pin_signal_type(struct sk_buff *msg,
 }
 
 static int dpll_msg_add_pin_signal_type(struct sk_buff *msg,
-					const struct dpll_pin_attr *attr)
+					const struct dpll_device *dpll,
+					const struct dpll_pin *pin)
 {
-	enum dpll_pin_signal_type t = dpll_pin_attr_signal_type_get(attr);
+	enum dpll_pin_signal_type t;
+	int ret;
 
-	if (t == DPLL_PIN_SIGNAL_TYPE_UNSPEC)
+	if (dpll_pin_signal_type_get(dpll, pin, &t))
 		return 0;
+	ret = __dpll_msg_add_pin_signal_type(msg, DPLLA_PIN_SIGNAL_TYPE, t);
+	if (ret)
+		return ret;
 
-	return __dpll_msg_add_pin_signal_type(msg, DPLLA_PIN_SIGNAL_TYPE, t);
+	if (t == DPLL_PIN_SIGNAL_TYPE_CUSTOM_FREQ) {
+		u32 freq;
+
+		if (dpll_pin_custom_freq_get(dpll, pin, &freq))
+			return 0;
+		if (nla_put_u32(msg, DPLLA_PIN_CUSTOM_FREQ, freq))
+			return -EMSGSIZE;
+	}
+
+	return 0;
 }
 
 static int
 dpll_msg_add_pin_signal_types_supported(struct sk_buff *msg,
-					const struct dpll_pin_attr *attr)
+					const struct dpll_device *dpll,
+					const struct dpll_pin *pin)
 {
 	const enum dplla da = DPLLA_PIN_SIGNAL_TYPE_SUPPORTED;
 	enum dpll_pin_signal_type i;
-	int ret;
+	bool supported;
 
 	for (i = DPLL_PIN_SIGNAL_TYPE_UNSPEC + 1;
 	     i <= DPLL_PIN_SIGNAL_TYPE_MAX; i++) {
-		if (dpll_pin_attr_signal_type_supported(attr, i)) {
-			ret = __dpll_msg_add_pin_signal_type(msg, da, i);
+		if (dpll_pin_signal_type_supported(dpll, pin, i, &supported))
+			continue;
+		if (supported) {
+			int ret = __dpll_msg_add_pin_signal_type(msg, da, i);
+
 			if (ret)
 				return ret;
 		}
@@ -245,51 +261,49 @@ dpll_msg_add_pin_signal_types_supported(struct sk_buff *msg,
 	return 0;
 }
 
-static int dpll_msg_add_pin_custom_freq(struct sk_buff *msg,
-					const struct dpll_pin_attr *attr)
-{
-	u32 freq;
-
-	if (dpll_pin_attr_custom_freq_get(attr, &freq))
-		return 0;
-	if (nla_put_u32(msg, DPLLA_PIN_CUSTOM_FREQ, freq))
-		return -EMSGSIZE;
-
-	return 0;
-}
-
 static int dpll_msg_add_pin_states(struct sk_buff *msg,
-				   const struct dpll_pin_attr *attr)
+				   const struct dpll_device *dpll,
+				   const struct dpll_pin *pin)
 {
 	enum dpll_pin_state i;
+	bool active;
 
-	for (i = DPLL_PIN_STATE_UNSPEC + 1; i <= DPLL_PIN_STATE_MAX; i++)
-		if (dpll_pin_attr_state_enabled(attr, i))
+	for (i = DPLL_PIN_STATE_UNSPEC + 1; i <= DPLL_PIN_STATE_MAX; i++) {
+		if (dpll_pin_state_active(dpll, pin, i, &active))
+			return 0;
+		if (active)
 			if (nla_put_s32(msg, DPLLA_PIN_STATE, i))
 				return -EMSGSIZE;
+	}
 
 	return 0;
 }
 
 static int dpll_msg_add_pin_states_supported(struct sk_buff *msg,
-					     const struct dpll_pin_attr *attr)
+					     const struct dpll_device *dpll,
+					     const struct dpll_pin *pin)
 {
 	enum dpll_pin_state i;
+	bool supported;
 
-	for (i = DPLL_PIN_STATE_UNSPEC + 1; i <= DPLL_PIN_STATE_MAX; i++)
-		if (dpll_pin_attr_state_supported(attr, i))
+	for (i = DPLL_PIN_STATE_UNSPEC + 1; i <= DPLL_PIN_STATE_MAX; i++) {
+		if (dpll_pin_state_supported(dpll, pin, i, &supported))
+			return 0;
+		if (supported)
 			if (nla_put_s32(msg, DPLLA_PIN_STATE_SUPPORTED, i))
 				return -EMSGSIZE;
+	}
 
 	return 0;
 }
 
 static int
-dpll_msg_add_pin_prio(struct sk_buff *msg, const struct dpll_pin_attr *attr)
+dpll_msg_add_pin_prio(struct sk_buff *msg, const struct dpll_device *dpll,
+		      const struct dpll_pin *pin)
 {
 	u32 prio;
 
-	if (dpll_pin_attr_prio_get(attr, &prio))
+	if (dpll_pin_prio_get(dpll, pin, &prio))
 		return 0;
 	if (nla_put_u32(msg, DPLLA_PIN_PRIO, prio))
 		return -EMSGSIZE;
@@ -298,13 +312,14 @@ dpll_msg_add_pin_prio(struct sk_buff *msg, const struct dpll_pin_attr *attr)
 }
 
 static int
-dpll_msg_add_pin_netifindex(struct sk_buff *msg, const struct dpll_pin_attr *attr)
+dpll_msg_add_pin_netifindex(struct sk_buff *msg, const struct dpll_device *dpll,
+			    const struct dpll_pin *pin)
 {
-	unsigned int netifindex; // TODO: Should be u32?
+	int netifindex;
 
-	if (dpll_pin_attr_netifindex_get(attr, &netifindex))
+	if (dpll_pin_netifindex_get(dpll, pin, &netifindex))
 		return 0;
-	if (nla_put_u32(msg, DPLLA_PIN_NETIFINDEX, netifindex))
+	if (nla_put_s32(msg, DPLLA_PIN_NETIFINDEX, netifindex))
 		return -EMSGSIZE;
 
 	return 0;
@@ -336,57 +351,41 @@ static int
 __dpll_cmd_pin_dump_one(struct sk_buff *msg, struct dpll_device *dpll,
 			struct dpll_pin *pin)
 {
-	struct dpll_pin_attr *attr = dpll_pin_attr_alloc();
 	struct dpll_pin *parent = NULL;
 	int ret;
 
-	if (!attr)
-		return -ENOMEM;
 	ret = dpll_msg_add_pin_idx(msg, dpll_pin_idx(dpll, pin));
 	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_description(msg, dpll_pin_get_description(pin));
+		return ret;
+	ret = dpll_msg_add_pin_description(msg, dpll_pin_description(pin));
 	if (ret)
-		goto out;
-	parent = dpll_pin_get_parent(pin);
+		return ret;
+	ret = dpll_msg_add_pin_type(msg, dpll, pin);
+	if (ret)
+		return ret;
+	parent = dpll_pin_parent(pin);
 	if (parent) {
 		ret = dpll_msg_add_pin_parent_idx(msg, dpll_pin_idx(dpll,
 								    parent));
 		if (ret)
-			goto out;
+			return ret;
 	}
-	ret = dpll_pin_get_attr(dpll, pin, attr);
+	ret = dpll_msg_add_pin_signal_type(msg, dpll, pin);
 	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_type(msg, attr);
+		return ret;
+	ret = dpll_msg_add_pin_signal_types_supported(msg, dpll, pin);
 	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_types_supported(msg, attr);
+		return ret;
+	ret = dpll_msg_add_pin_states(msg, dpll, pin);
 	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_signal_type(msg, attr);
+		return ret;
+	ret = dpll_msg_add_pin_states_supported(msg, dpll, pin);
 	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_signal_types_supported(msg, attr);
+		return ret;
+	ret = dpll_msg_add_pin_prio(msg, dpll, pin);
 	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_custom_freq(msg, attr);
-	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_states(msg, attr);
-	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_states_supported(msg, attr);
-	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_prio(msg, attr);
-	if (ret)
-		goto out;
-	ret = dpll_msg_add_pin_netifindex(msg, attr);
-	if (ret)
-		goto out;
-out:
-	dpll_pin_attr_free(attr);
+		return ret;
+	ret = dpll_msg_add_pin_netifindex(msg, dpll, pin);
 
 	return ret;
 }
@@ -420,23 +419,22 @@ nest_cancel:
 static int
 __dpll_cmd_dump_status(struct sk_buff *msg, struct dpll_device *dpll)
 {
-	struct dpll_attr *attr = dpll_attr_alloc();
-	int ret = dpll_get_attr(dpll, attr);
+	int ret = dpll_msg_add_source_pin(msg, dpll);
 
 	if (ret)
-		return -EAGAIN;
-	if (dpll_msg_add_source_pin(msg, attr))
-		return -EMSGSIZE;
-	if (dpll_msg_add_temp(msg, attr))
-		return -EMSGSIZE;
-	if (dpll_msg_add_lock_status(msg, attr))
-		return -EMSGSIZE;
-	if (dpll_msg_add_mode(msg, attr))
-		return -EMSGSIZE;
-	if (dpll_msg_add_modes_supported(msg, attr))
-		return -EMSGSIZE;
+		return ret;
+	ret = dpll_msg_add_temp(msg, dpll);
+	if (ret)
+		return ret;
+	ret = dpll_msg_add_lock_status(msg, dpll);
+	if (ret)
+		return ret;
+	ret = dpll_msg_add_mode(msg, dpll);
+	if (ret)
+		return ret;
+	ret = dpll_msg_add_modes_supported(msg, dpll);
 
-	return 0;
+	return ret;
 }
 
 static int
@@ -452,8 +450,11 @@ dpll_device_dump_one(struct dpll_device *dpll, struct sk_buff *msg,
 
 	if (dump_filter & DPLL_DUMP_FILTER_STATUS) {
 		ret = __dpll_cmd_dump_status(msg, dpll);
-		if (ret)
+		if (ret) {
+			if (ret != -EMSGSIZE)
+				ret = -EAGAIN;
 			goto out_unlock;
+		}
 	}
 	if (dump_filter & DPLL_DUMP_FILTER_PINS)
 		ret = __dpll_cmd_dump_pins(msg, dpll);
@@ -463,11 +464,6 @@ dpll_device_dump_one(struct dpll_device *dpll, struct sk_buff *msg,
 out_unlock:
 	dpll_unlock(dpll);
 	return ret;
-}
-
-static enum dpll_pin_type dpll_msg_read_pin_type(struct nlattr *a)
-{
-	return nla_get_s32(a);
 }
 
 static enum dpll_pin_signal_type dpll_msg_read_pin_sig_type(struct nlattr *a)
@@ -496,11 +492,11 @@ static u32 dpll_msg_read_dump_filter(struct nlattr *a)
 }
 
 static int
-dpll_pin_attr_from_nlattr(struct dpll_pin_attr *pa, struct genl_info *info)
+dpll_pin_set_from_nlattr(struct dpll_device *dpll,
+			 struct dpll_pin *pin, struct genl_info *info)
 {
 	enum dpll_pin_signal_type st;
 	enum dpll_pin_state state;
-	enum dpll_pin_type t;
 	struct nlattr *a;
 	int rem, ret = 0;
 	u32 prio, freq;
@@ -508,33 +504,27 @@ dpll_pin_attr_from_nlattr(struct dpll_pin_attr *pa, struct genl_info *info)
 	nla_for_each_attr(a, genlmsg_data(info->genlhdr),
 			  genlmsg_len(info->genlhdr), rem) {
 		switch (nla_type(a)) {
-		case DPLLA_PIN_TYPE:
-			t = dpll_msg_read_pin_type(a);
-			ret = dpll_pin_attr_type_set(pa, t);
-			if (ret)
-				return ret;
-			break;
 		case DPLLA_PIN_SIGNAL_TYPE:
 			st = dpll_msg_read_pin_sig_type(a);
-			ret = dpll_pin_attr_signal_type_set(pa, st);
+			ret = dpll_pin_signal_type_set(dpll, pin, st);
 			if (ret)
 				return ret;
 			break;
 		case DPLLA_PIN_CUSTOM_FREQ:
 			freq = dpll_msg_read_pin_custom_freq(a);
-			ret = dpll_pin_attr_custom_freq_set(pa, freq);
+			ret = dpll_pin_custom_freq_set(dpll, pin, freq);
 			if (ret)
 				return ret;
 			break;
 		case DPLLA_PIN_STATE:
 			state = dpll_msg_read_pin_state(a);
-			ret = dpll_pin_attr_state_set(pa, state);
+			ret = dpll_pin_state_set(dpll, pin, state);
 			if (ret)
 				return ret;
 			break;
 		case DPLLA_PIN_PRIO:
 			prio = dpll_msg_read_pin_prio(a);
-			ret = dpll_pin_attr_prio_set(pa, prio);
+			ret = dpll_pin_prio_set(dpll, pin, prio);
 			if (ret)
 				return ret;
 			break;
@@ -548,54 +538,21 @@ dpll_pin_attr_from_nlattr(struct dpll_pin_attr *pa, struct genl_info *info)
 
 static int dpll_cmd_pin_set(struct sk_buff *skb, struct genl_info *info)
 {
-	struct dpll_pin_attr *old = NULL, *new = NULL, *delta = NULL;
 	struct dpll_device *dpll = info->user_ptr[0];
 	struct nlattr **attrs = info->attrs;
 	struct dpll_pin *pin;
-	int ret, pin_id;
+	int pin_id;
 
 	if (!attrs[DPLLA_PIN_IDX])
 		return -EINVAL;
 	pin_id = nla_get_u32(attrs[DPLLA_PIN_IDX]);
-	old = dpll_pin_attr_alloc();
-	new = dpll_pin_attr_alloc();
-	delta = dpll_pin_attr_alloc();
-	if (!old || !new || !delta) {
-		ret = -ENOMEM;
-		goto mem_free;
-	}
 	dpll_lock(dpll);
 	pin = dpll_pin_get_by_idx(dpll, pin_id);
+	dpll_unlock(dpll);
 	if (!pin) {
-		ret = -ENODEV;
-		goto mem_free_unlock;
+		return -ENODEV;
 	}
-	ret = dpll_pin_get_attr(dpll, pin, old);
-	if (ret)
-		goto mem_free_unlock;
-	ret = dpll_pin_attr_from_nlattr(new, info);
-	if (ret)
-		goto mem_free_unlock;
-	ret = dpll_pin_attr_delta(delta, new, old);
-	dpll_unlock(dpll);
-	if (!ret)
-		ret = dpll_pin_set_attr(dpll, pin, delta);
-	else
-		ret = -EINVAL;
-
-	dpll_pin_attr_free(delta);
-	dpll_pin_attr_free(new);
-	dpll_pin_attr_free(old);
-
-	return ret;
-
-mem_free_unlock:
-	dpll_unlock(dpll);
-mem_free:
-	dpll_pin_attr_free(delta);
-	dpll_pin_attr_free(new);
-	dpll_pin_attr_free(old);
-	return ret;
+	return dpll_pin_set_from_nlattr(dpll, pin, info);
 }
 
 enum dpll_mode dpll_msg_read_mode(struct nlattr *a)
@@ -609,7 +566,7 @@ u32 dpll_msg_read_source_pin_id(struct nlattr *a)
 }
 
 static int
-dpll_attr_from_nlattr(struct dpll_attr *dpll, struct genl_info *info)
+dpll_set_from_nlattr(struct dpll_device *dpll, struct genl_info *info)
 {
 	enum dpll_mode m;
 	struct nlattr *a;
@@ -622,14 +579,14 @@ dpll_attr_from_nlattr(struct dpll_attr *dpll, struct genl_info *info)
 		case DPLLA_MODE:
 			m = dpll_msg_read_mode(a);
 
-			ret = dpll_attr_mode_set(dpll, m);
+			ret = dpll_mode_set(dpll, m);
 			if (ret)
 				return ret;
 			break;
 		case DPLLA_SOURCE_PIN_IDX:
 			source_pin = dpll_msg_read_source_pin_id(a);
 
-			ret = dpll_attr_source_idx_set(dpll, source_pin);
+			ret = dpll_source_idx_set(dpll, source_pin);
 			if (ret)
 				return ret;
 			break;
@@ -643,33 +600,9 @@ dpll_attr_from_nlattr(struct dpll_attr *dpll, struct genl_info *info)
 
 static int dpll_cmd_device_set(struct sk_buff *skb, struct genl_info *info)
 {
-	struct dpll_attr *old = NULL, *new = NULL, *delta = NULL;
 	struct dpll_device *dpll = info->user_ptr[0];
-	int ret;
 
-	old = dpll_attr_alloc();
-	new = dpll_attr_alloc();
-	delta = dpll_attr_alloc();
-	if (!old || !new || !delta) {
-		ret = -ENOMEM;
-		goto mem_free;
-	}
-	dpll_lock(dpll);
-	ret = dpll_get_attr(dpll, old);
-	dpll_unlock(dpll);
-	if (!ret) {
-		dpll_attr_from_nlattr(new, info);
-		ret = dpll_attr_delta(delta, new, old);
-		if (!ret)
-			ret = dpll_set_attr(dpll, delta);
-	}
-
-mem_free:
-	dpll_attr_free(old);
-	dpll_attr_free(new);
-	dpll_attr_free(delta);
-
-	return ret;
+	return dpll_set_from_nlattr(dpll, info);
 }
 
 static int

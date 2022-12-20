@@ -15,17 +15,56 @@ struct dpll_pin;
 
 #define DPLL_COOKIE_LEN		10
 #define PIN_IDX_INVALID		((u32)ULONG_MAX)
+
 struct dpll_device_ops {
-	int (*get)(struct dpll_device *dpll, struct dpll_attr *attr);
-	int (*set)(struct dpll_device *dpll, const struct dpll_attr *attr);
+	int (*mode_get)(const struct dpll_device *dpll, enum dpll_mode *mode);
+	int (*mode_set)(const struct dpll_device *dpll,
+			const enum dpll_mode mode);
+	bool (*mode_supported)(const struct dpll_device *dpll,
+			       const enum dpll_mode mode);
+	int (*source_pin_idx_get)(const struct dpll_device *dpll,
+				  u32 *pin_idx);
+	int (*lock_status_get)(const struct dpll_device *dpll,
+			       enum dpll_lock_status *status);
+	int (*temp_get)(const struct dpll_device *dpll, s32 *temp);
 };
 
 struct dpll_pin_ops {
-	int (*get)(struct dpll_device *dpll, struct dpll_pin *pin,
-		   struct dpll_pin_attr *attr);
-	int (*set)(struct dpll_device *dpll, struct dpll_pin *pin,
-		   const struct dpll_pin_attr *attr);
-	int (*select)(struct dpll_device *dpll, struct dpll_pin *pin);
+	int (*signal_type_get)(const struct dpll_device *dpll,
+			       const struct dpll_pin *pin,
+			       enum dpll_pin_signal_type *type);
+	int (*signal_type_set)(const struct dpll_device *dpll,
+			       const struct dpll_pin *pin,
+			       const enum dpll_pin_signal_type type);
+	bool (*signal_type_supported)(const struct dpll_device *dpll,
+				      const struct dpll_pin *pin,
+				      const enum dpll_pin_signal_type type);
+	int (*custom_freq_set)(const struct dpll_device *dpll,
+			       const struct dpll_pin *pin,
+			       const u32 custom_freq);
+	int (*custom_freq_get)(const struct dpll_device *dpll,
+			       const struct dpll_pin *pin,
+			       u32 *custom_freq);
+	bool (*state_active)(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin,
+			     const enum dpll_pin_state state);
+	int (*state_enable)(const struct dpll_device *dpll,
+			    const struct dpll_pin *pin,
+			    const enum dpll_pin_state state);
+	bool (*state_supported)(const struct dpll_device *dpll,
+				const struct dpll_pin *pin,
+				const enum dpll_pin_state state);
+	int (*prio_get)(const struct dpll_device *dpll,
+			const struct dpll_pin *pin,
+			u32 *prio);
+	int (*prio_set)(const struct dpll_device *dpll,
+			const struct dpll_pin *pin,
+			const u32 prio);
+	int (*net_if_idx_get)(const struct dpll_device *dpll,
+			      const struct dpll_pin *pin,
+			      int *net_if_idx);
+	int (*select)(const struct dpll_device *dpll,
+		      const struct dpll_pin *pin);
 };
 
 enum dpll_type {
@@ -96,7 +135,7 @@ void dpll_device_free(struct dpll_device *dpll);
  * Obtain private data pointer passed to dpll subsystem when allocating
  * device with ``dpll_device_alloc(..)``
  */
-void *dpll_priv(struct dpll_device *dpll);
+void *dpll_priv(const struct dpll_device *dpll);
 
 /**
  * dpll_pin_priv - get private data
@@ -105,7 +144,7 @@ void *dpll_priv(struct dpll_device *dpll);
  * Obtain private pin data pointer passed to dpll subsystem when pin
  * was registered with dpll.
  */
-void *dpll_pin_priv(struct dpll_device *dpll, struct dpll_pin *pin);
+void *dpll_pin_priv(const struct dpll_device *dpll, const struct dpll_pin *pin);
 
 /**
  * dpll_pin_idx - get pin idx
@@ -145,6 +184,7 @@ dpll_shared_pin_register(struct dpll_device *dpll_pin_owner,
  * @description: pointer to string description of a pin with max length
  * equal to PIN_DESC_LEN
  * @desc_len: number of chars in description
+ * @type: type of allocated pin
  *
  * Allocate memory for a new pin and initialize its resources.
  *
@@ -152,7 +192,8 @@ dpll_shared_pin_register(struct dpll_device *dpll_pin_owner,
  * * pointer to initialized pin - success
  * * NULL - memory allocation fail
  */
-struct dpll_pin *dpll_pin_alloc(const char *description, size_t desc_len);
+struct dpll_pin *dpll_pin_alloc(const char *description, size_t desc_len,
+				const enum dpll_pin_type type);
 
 
 /**

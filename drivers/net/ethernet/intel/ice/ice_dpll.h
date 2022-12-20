@@ -10,24 +10,34 @@
 
 /** ice_dpll_pin - store info about pins
  * @pin: dpll pin structure
- * @attr: pin attributes structure
- * @rclk_idx: number of recovered clock pin
  * @flags: pin flags returned from HW
- * @idx: pin id
+ * @idx: ice pin private idx
+ * @pin_state_mask: current pin states as bitmask
+ * @type: type of a pin
+ * @signal_type: current signal type
+ * @signal_type_mask: signal types supported
+ * @freq: current frequency of a pin
+ * @state_mask: current pin states as bitmask
+ * @state_supported_mask: supported pin states
  * @name: pin name
  */
 struct ice_dpll_pin {
 	struct dpll_pin *pin;
-	struct dpll_pin_attr *attr;
-	u8 rclk_idx;
+#define ICE_DPLL_RCLK_SOURCE_FLAG_EN	BIT(0)
 	u8 flags;
 	u8 idx;
+	u32 pin_state_mask;
+	enum dpll_pin_type type;
+	enum dpll_pin_signal_type signal_type;
+	unsigned long signal_type_mask;
+	u32 freq;
+	unsigned long state_mask;
+	unsigned long state_supported_mask;
 	const char *name;
 };
 
 /** ice_dpll - store info required for DPLL control
  * @dpll: pointer to dpll dev
- * @attr: dpll attributes structure
  * @dpll_idx: index of dpll on the NIC
  * @source_idx: source currently selected
  * @prev_source_idx: source previously selected
@@ -40,7 +50,6 @@ struct ice_dpll_pin {
  */
 struct ice_dpll {
 	struct dpll_device *dpll;
-	struct dpll_attr *attr;
 	int dpll_idx;
 	u8 source_idx;
 	u8 prev_source_idx;

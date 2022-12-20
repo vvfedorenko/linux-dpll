@@ -104,7 +104,6 @@ int dpll_pin_attr_type_supported_set(struct dpll_pin_attr *attr,
 		return -EINVAL;
 
 	set_bit(type, &attr->types_supported_mask);
-	set_bit(DPLLA_PIN_TYPE_SUPPORTED, &attr->valid_mask);
 
 	return 0;
 }
@@ -114,8 +113,6 @@ bool dpll_pin_attr_type_supported(const struct dpll_pin_attr *attr,
 				     enum dpll_pin_type type)
 {
 	if (!dpll_pin_type_valid(type))
-		return false;
-	if (!dpll_pin_attr_valid(DPLLA_PIN_TYPE_SUPPORTED, attr))
 		return false;
 
 	return test_bit(type, &attr->types_supported_mask);
