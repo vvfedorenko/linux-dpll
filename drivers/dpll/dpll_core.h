@@ -24,6 +24,7 @@
  * @priv:	pointer to private information of owner
  * @pins:	list of pointers to pins registered with this dpll
  * @clock_id:	unique identifier (clock_id) of a dpll
+ * @clock_class	quality class of a DPLL clock
  * @dev_driver_idx: provided by driver for
  */
 struct dpll_device {
@@ -36,6 +37,7 @@ struct dpll_device {
 	void *priv;
 	struct xarray pins;
 	u64 clock_id;
+	enum dpll_clock_class clock_class;
 	u8 dev_driver_idx;
 };
 

@@ -131,8 +131,8 @@ static const char *dpll_type_str(enum dpll_type type)
 
 struct dpll_device
 *dpll_device_alloc(struct dpll_device_ops *ops, enum dpll_type type,
-		   const u64 clock_id, u8 idx,
-		   void *priv, struct device *parent)
+		   const u64 clock_id, enum dpll_clock_class clock_class,
+		   u8 dev_driver_idx, void *priv, struct device *parent)
 {
 	struct dpll_device *dpll;
 	int ret;
@@ -146,8 +146,9 @@ struct dpll_device
 	dpll->dev.class = &dpll_class;
 	dpll->parent = parent;
 	dpll->type = type;
-	dpll->dev_driver_idx = idx;
+	dpll->dev_driver_idx = dev_driver_idx;
 	dpll->clock_id = clock_id;
+	dpll->clock_class = clock_class;
 
 	mutex_lock(&dpll_device_xa_lock);
 	ret = xa_alloc(&dpll_device_xa, &dpll->id, dpll,
@@ -155,7 +156,8 @@ struct dpll_device
 	if (ret)
 		goto error;
 	dev_set_name(&dpll->dev, "dpll-%s-%s-%s%d", dev_driver_string(parent),
-		     dev_name(parent), type ? dpll_type_str(type) : "", idx);
+		     dev_name(parent), type ? dpll_type_str(type) : "",
+		     dev_driver_idx);
 	dpll->priv = priv;
 	xa_init_flags(&dpll->pins, XA_FLAGS_ALLOC);
 	mutex_unlock(&dpll_device_xa_lock);

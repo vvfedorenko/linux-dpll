@@ -26,6 +26,7 @@
  * @DPLLA_LOCK_STATUS - dpll's lock status (enum dpll_lock_status)
  * @DPLLA_TEMP - dpll's temperature (signed int - Celsius degrees)
  * @DPLLA_CLOCK_ID - Unique Clock Identifier of dpll (u64)
+ * @DPLLA_CLOCK_CLASS - clock quality class of dpll (enum dpll_clock_class)
  * @DPLLA_DUMP_FILTER - filter bitmask (int, sum of DPLL_DUMP_FILTER_* defines)
  * @DPLLA_PIN - nested attribute, each contains single pin attributes
  * @DPLLA_PIN_IDX - index of a pin on dpll (unsigned int)
@@ -57,6 +58,7 @@ enum dplla {
 	DPLLA_LOCK_STATUS,
 	DPLLA_TEMP,
 	DPLLA_CLOCK_ID,
+	DPLLA_CLOCK_CLASS,
 	DPLLA_DUMP_FILTER,
 	DPLLA_PIN,
 	DPLLA_PIN_IDX,
@@ -257,5 +259,20 @@ enum dpll_mode {
 };
 
 #define DPLL_MODE_MAX (__DPLL_MODE_MAX - 1)
+
+/**
+ * dpll_clock_class - enumerate quality class of a DPLL clock as specified in
+ * Recommendation ITU-T G.8273.2/Y.1368.2.
+ */
+enum dpll_clock_class {
+	DPLL_CLOCK_CLASS_UNSPEC,
+	DPLL_CLOCK_CLASS_A,
+	DPLL_CLOCK_CLASS_B,
+	DPLL_CLOCK_CLASS_C,
+
+	__DPLL_CLOCK_CLASS_MAX,
+};
+
+#define DPLL_CLOCK_CLASS_MAX (__DPLL_CLOCK_CLASS_MAX - 1)
 
 #endif /* _UAPI_LINUX_DPLL_H */

@@ -79,6 +79,7 @@ enum dpll_type {
  * @ops: pointer to dpll operations structure
  * @type: type of a dpll being allocated
  * @clock_id: a system unique number for a device
+ * @clock_class: quality class of a DPLL clock
  * @dev_driver_idx: index of dpll device on parent device
  * @priv: private data of a registerer
  * @parent: device structure of a module registering dpll device
@@ -97,8 +98,8 @@ enum dpll_type {
  */
 struct dpll_device
 *dpll_device_alloc(struct dpll_device_ops *ops, enum dpll_type type,
-		   const u64 clock_id, u8 dev_driver_idx,
-		   void *priv, struct device *parent);
+		   const u64 clock_id, enum dpll_clock_class clock_class,
+		   u8 dev_driver_idx, void *priv, struct device *parent);
 
 /**
  * dpll_device_register - registers allocated dpll
