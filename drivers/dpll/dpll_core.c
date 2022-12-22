@@ -115,20 +115,6 @@ static struct class dpll_class = {
 	.dev_release = dpll_device_release,
 };
 
-static const char *dpll_type_name[__DPLL_TYPE_MAX] = {
-	[DPLL_TYPE_UNSPEC] = "",
-	[DPLL_TYPE_PPS] = "PPS",
-	[DPLL_TYPE_EEC] = "EEC",
-};
-
-static const char *dpll_type_str(enum dpll_type type)
-{
-	if (type >= DPLL_TYPE_UNSPEC && type <= DPLL_TYPE_MAX)
-		return dpll_type_name[type];
-	else
-		return "";
-}
-
 struct dpll_device
 *dpll_device_alloc(struct dpll_device_ops *ops, enum dpll_type type,
 		   const u64 clock_id, enum dpll_clock_class clock_class,
@@ -155,8 +141,7 @@ struct dpll_device
 		       xa_limit_16b, GFP_KERNEL);
 	if (ret)
 		goto error;
-	dev_set_name(&dpll->dev, "dpll-%s-%s-%s%d", dev_driver_string(parent),
-		     dev_name(parent), type ? dpll_type_str(type) : "",
+	dev_set_name(&dpll->dev, "dpll_%s_%d_%d", dev_name(parent), type,
 		     dev_driver_idx);
 	dpll->priv = priv;
 	xa_init_flags(&dpll->pins, XA_FLAGS_ALLOC);
