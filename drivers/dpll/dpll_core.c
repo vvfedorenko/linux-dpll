@@ -44,7 +44,7 @@ static DEFINE_XARRAY_FLAGS(dpll_device_xa, XA_FLAGS_ALLOC);
 #define ASSERT_DPLL_NOT_REGISTERED(d)                                      \
 	WARN_ON_ONCE(xa_get_mark(&dpll_device_xa, (d)->id, DPLL_REGISTERED))
 
-struct pin_ref_dpll {
+struct dpll_pin_ref {
 	struct dpll_device *dpll;
 	struct dpll_pin_ops *ops;
 	void *priv;
@@ -271,14 +271,14 @@ static int dpll_alloc_pin_on_xa(struct xarray *pins, struct dpll_pin *pin)
 	return ret;
 }
 
-static int pin_ref_dpll_add(struct dpll_pin *pin, struct dpll_device *dpll,
+static int dpll_pin_ref_add(struct dpll_pin *pin, struct dpll_device *dpll,
 			    struct dpll_pin_ops *ops, void *priv)
 {
-	struct pin_ref_dpll *ref, *pos;
+	struct dpll_pin_ref *ref, *pos;
 	unsigned long index;
 	u32 idx;
 
-	ref = kzalloc(sizeof(struct pin_ref_dpll), GFP_KERNEL);
+	ref = kzalloc(sizeof(struct dpll_pin_ref), GFP_KERNEL);
 	if (!ref)
 		return -ENOMEM;
 	ref->dpll = dpll;
@@ -294,9 +294,9 @@ static int pin_ref_dpll_add(struct dpll_pin *pin, struct dpll_device *dpll,
 	return xa_alloc(&pin->ref_dplls, &idx, ref, xa_limit_16b, GFP_KERNEL);
 }
 
-static void pin_ref_dpll_del(struct dpll_pin *pin, struct dpll_device *dpll)
+static void dpll_pin_ref_del(struct dpll_pin *pin, struct dpll_device *dpll)
 {
-	struct pin_ref_dpll *pos;
+	struct dpll_pin_ref *pos;
 	unsigned long index;
 
 	xa_for_each(&pin->ref_dplls, index, pos) {
@@ -333,7 +333,7 @@ int dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
 	mutex_lock(&dpll->lock);
 	ret = dpll_alloc_pin_on_xa(&dpll->pins, pin);
 	if (!ret) {
-		ret = pin_ref_dpll_add(pin, dpll, ops, priv);
+		ret = dpll_pin_ref_add(pin, dpll, ops, priv);
 		if (ret)
 			pin_deregister_from_xa(&dpll->pins, pin);
 	}
@@ -377,7 +377,7 @@ int dpll_pin_deregister(struct dpll_device *dpll, struct dpll_pin *pin)
 	mutex_lock(&dpll->lock);
 	ret = pin_deregister_from_xa(&dpll->pins, pin);
 	if (!ret)
-		pin_ref_dpll_del(pin, dpll);
+		dpll_pin_ref_del(pin, dpll);
 	mutex_unlock(&dpll->lock);
 	if (!ret)
 		dpll_pin_notify(dpll, pin, DPLL_CHANGE_PIN_DEL);
@@ -408,7 +408,7 @@ int dpll_muxed_pin_register(struct dpll_device *dpll,
 	mutex_lock(&dpll->lock);
 	ret = dpll_alloc_pin_on_xa(&dpll->pins, pin);
 	if (!ret)
-		ret = pin_ref_dpll_add(pin, dpll, ops, priv);
+		ret = dpll_pin_ref_add(pin, dpll, ops, priv);
 	if (!ret)
 		pin->parent_pin = parent_pin;
 	mutex_unlock(&dpll->lock);
@@ -482,10 +482,10 @@ struct dpll_device *dpll_next(unsigned long *index)
 	return xa_find_after(&dpll_device_xa, index, LONG_MAX, DPLL_REGISTERED);
 }
 
-static struct pin_ref_dpll
+static struct dpll_pin_ref
 *dpll_pin_find_ref(const struct dpll_device *dpll, const struct dpll_pin *pin)
 {
-	struct pin_ref_dpll *ref;
+	struct dpll_pin_ref *ref;
 	unsigned long index;
 
 	xa_for_each((struct xarray *)&pin->ref_dplls, index, ref) {
@@ -513,7 +513,7 @@ int dpll_pin_signal_type_get(const struct dpll_device *dpll,
 			     const struct dpll_pin *pin,
 			     enum dpll_pin_signal_type *type)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 	int ret;
 
 	if (!ref)
@@ -529,7 +529,7 @@ int dpll_pin_signal_type_set(const struct dpll_device *dpll,
 			     const struct dpll_pin *pin,
 			     const enum dpll_pin_signal_type type)
 {
-	struct pin_ref_dpll *ref;
+	struct dpll_pin_ref *ref;
 	unsigned long index;
 	int ret;
 
@@ -555,7 +555,7 @@ int dpll_pin_signal_type_supported(const struct dpll_device *dpll,
 				   const enum dpll_pin_signal_type type,
 				   bool *supported)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 
 	if (!ref)
 		return -ENODEV;
@@ -571,7 +571,7 @@ int dpll_pin_state_active(const struct dpll_device *dpll,
 			  const enum dpll_pin_state state,
 			  bool *active)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 
 	if (!ref)
 		return -ENODEV;
@@ -587,7 +587,7 @@ int dpll_pin_state_supported(const struct dpll_device *dpll,
 			     const enum dpll_pin_state state,
 			     bool *supported)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 
 	if (!ref)
 		return -ENODEV;
@@ -602,7 +602,7 @@ int dpll_pin_state_set(const struct dpll_device *dpll,
 		       const struct dpll_pin *pin,
 		       const enum dpll_pin_state state)
 {
-	struct pin_ref_dpll *ref;
+	struct dpll_pin_ref *ref;
 	unsigned long index;
 	int ret;
 
@@ -626,7 +626,7 @@ int dpll_pin_state_set(const struct dpll_device *dpll,
 int dpll_pin_custom_freq_get(const struct dpll_device *dpll,
 			     const struct dpll_pin *pin, u32 *freq)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 	int ret;
 
 	if (!ref)
@@ -642,7 +642,7 @@ int dpll_pin_custom_freq_set(const struct dpll_device *dpll,
 			     const struct dpll_pin *pin, const u32 freq)
 {
 	enum dpll_pin_signal_type type;
-	struct pin_ref_dpll *ref;
+	struct dpll_pin_ref *ref;
 	unsigned long index;
 	int ret;
 
@@ -669,7 +669,7 @@ int dpll_pin_custom_freq_set(const struct dpll_device *dpll,
 int dpll_pin_prio_get(const struct dpll_device *dpll,
 		      const struct dpll_pin *pin, u32 *prio)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 	int ret;
 
 	if (!ref)
@@ -684,7 +684,7 @@ int dpll_pin_prio_get(const struct dpll_device *dpll,
 int dpll_pin_prio_set(const struct dpll_device *dpll,
 		      const struct dpll_pin *pin, const u32 prio)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 	int ret;
 
 	if (!ref)
@@ -700,7 +700,7 @@ int dpll_pin_netifindex_get(const struct dpll_device *dpll,
 			    const struct dpll_pin *pin,
 			    int *netifindex)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 	int ret;
 
 	if (!ref)
@@ -736,7 +736,7 @@ int dpll_mode_set(struct dpll_device *dpll, const enum dpll_mode mode)
 
 int dpll_source_idx_set(struct dpll_device *dpll, const u32 source_pin_idx)
 {
-	struct pin_ref_dpll *ref;
+	struct dpll_pin_ref *ref;
 	struct dpll_pin *pin;
 	int ret;
 
@@ -776,7 +776,7 @@ EXPORT_SYMBOL_GPL(dpll_priv);
 
 void *dpll_pin_priv(const struct dpll_device *dpll, const struct dpll_pin *pin)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 
 	if (!ref)
 		return NULL;
