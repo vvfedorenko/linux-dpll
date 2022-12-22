@@ -1438,10 +1438,7 @@ ice_dpll_register_pins(struct ice_pf *pf, struct dpll_device *dpll,
 	}
 
 	for (i = 0; i < count; i++) {
-		pins[i].pin = dpll_pin_alloc(pins[i].name,
-					     strnlen(pins[i].name,
-						     PIN_DESC_LEN),
-					     pins[i].type);
+		pins[i].pin = dpll_pin_alloc(pins[i].name, pins[i].type);
 		if (IS_ERR_OR_NULL(pins[i].pin))
 			return -ENOMEM;
 
@@ -1940,16 +1937,13 @@ int ice_dpll_rclk_pins_init(struct ice_pf *pf, struct ice_dpll_pin *first_parent
 		if (!parent)
 			goto release;
 		p->idx = i;
-		name = kcalloc(PIN_DESC_LEN, sizeof(*p->name), GFP_KERNEL);
+		name = kcalloc(DPLL_PIN_DESC_LEN, sizeof(*p->name), GFP_KERNEL);
 		if (!name)
 			goto release;
-		snprintf(name, PIN_DESC_LEN - 1, "%s-%u",
+		snprintf(name, DPLL_PIN_DESC_LEN - 1, "%s-%u",
 			 parent->name, pf->hw.pf_id);
 		p->name = name;
-		p->pin = dpll_pin_alloc(p->name,
-					strnlen(p->name, PIN_DESC_LEN),
-					p->type);
-
+		p->pin = dpll_pin_alloc(p->name, p->type);
 		if (IS_ERR_OR_NULL(p->pin))
 			goto release;
 		ret = dpll_muxed_pin_register(pf->dplls.eec.dpll, parent->pin,

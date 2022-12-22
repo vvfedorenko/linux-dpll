@@ -4,7 +4,7 @@
 
 #define DPLL_NAME_LEN		32
 #define DPLL_DESC_LEN		20
-#define PIN_DESC_LEN		20
+#define DPLL_PIN_DESC_LEN	20
 
 /* Adding event notification support elements */
 #define DPLL_FAMILY_NAME		"dpll"

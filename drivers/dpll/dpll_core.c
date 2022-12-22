@@ -31,7 +31,7 @@ struct dpll_pin {
 	struct dpll_pin_ops *ops;
 	void *priv;
 	struct xarray ref_dplls;
-	char description[PIN_DESC_LEN];
+	char description[DPLL_PIN_DESC_LEN];
 };
 static DEFINE_MUTEX(dpll_device_xa_lock);
 
@@ -214,22 +214,19 @@ const char *dpll_dev_name(struct dpll_device *dpll)
 }
 EXPORT_SYMBOL_GPL(dpll_dev_name);
 
-struct dpll_pin *dpll_pin_alloc(const char *description, size_t desc_len,
+struct dpll_pin *dpll_pin_alloc(const char *description,
 				const enum dpll_pin_type pin_type)
 {
 	struct dpll_pin *pin = kzalloc(sizeof(struct dpll_pin), GFP_KERNEL);
 
 	if (!pin)
 		return ERR_PTR(-ENOMEM);
-	if (desc_len > PIN_DESC_LEN)
-		return ERR_PTR(-EINVAL);
 	if (pin_type <= DPLL_PIN_TYPE_UNSPEC ||
 	    pin_type > DPLL_PIN_TYPE_MAX)
 		return ERR_PTR(-EINVAL);
 
-	strncpy(pin->description, description, PIN_DESC_LEN);
-	if (desc_len == PIN_DESC_LEN)
-		pin->description[PIN_DESC_LEN - 1] = '\0';
+	strncpy(pin->description, description, DPLL_PIN_DESC_LEN);
+	pin->description[DPLL_PIN_DESC_LEN - 1] = '\0';
 	xa_init_flags(&pin->ref_dplls, XA_FLAGS_ALLOC);
 	pin->type = pin_type;
 
@@ -245,7 +242,8 @@ static int dpll_alloc_pin_on_xa(struct xarray *pins, struct dpll_pin *pin)
 
 	xa_for_each(pins, index, pos) {
 		if (pos == pin ||
-		    !strncmp(pos->description, pin->description, PIN_DESC_LEN))
+		    !strncmp(pos->description, pin->description,
+			     DPLL_PIN_DESC_LEN))
 			return -EEXIST;
 	}
 
@@ -412,7 +410,8 @@ struct dpll_pin
 
 	mutex_lock(&dpll->lock);
 	xa_for_each(&dpll->pins, index, pos) {
-		if (!strncmp(pos->description, description, PIN_DESC_LEN)) {
+		if (!strncmp(pos->description, description,
+			     DPLL_PIN_DESC_LEN)) {
 			pin = pos;
 			break;
 		}

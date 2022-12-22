@@ -182,7 +182,6 @@ dpll_shared_pin_register(struct dpll_device *dpll_pin_owner,
  * dpll_pin_alloc - allocate memory for a new dpll_pin object
  * @description: pointer to string description of a pin with max length
  * equal to PIN_DESC_LEN
- * @desc_len: number of chars in description
  * @type: type of allocated pin
  *
  * Allocate memory for a new pin and initialize its resources.
@@ -191,7 +190,7 @@ dpll_shared_pin_register(struct dpll_device *dpll_pin_owner,
  * * pointer to initialized pin - success
  * * NULL - memory allocation fail
  */
-struct dpll_pin *dpll_pin_alloc(const char *description, size_t desc_len,
+struct dpll_pin *dpll_pin_alloc(const char *description,
 				const enum dpll_pin_type type);
 
 
