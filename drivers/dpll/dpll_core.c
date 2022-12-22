@@ -328,16 +328,53 @@ int dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
 }
 EXPORT_SYMBOL_GPL(dpll_pin_register);
 
+struct dpll_pin *dpll_pin_get_by_idx_from_xa(struct xarray *xa_pins, int idx)
+{
+	struct dpll_pin *pos;
+	unsigned long index;
+
+	xa_for_each_marked(xa_pins, index, pos, PIN_REGISTERED) {
+		if (pos->idx == idx)
+			return pos;
+	}
+
+	return NULL;
+}
+
+struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, int idx)
+{
+	return dpll_pin_get_by_idx_from_xa(&dpll->pins, idx);
+}
+
+struct dpll_pin
+*dpll_pin_get_by_description(struct dpll_device *dpll, const char *description)
+{
+	struct dpll_pin *pos, *pin = NULL;
+	unsigned long index;
+
+	xa_for_each(&dpll->pins, index, pos) {
+		if (!strncmp(pos->description, description,
+			     DPLL_PIN_DESC_LEN)) {
+			pin = pos;
+			break;
+		}
+	}
+
+	return pin;
+}
+
 int
 dpll_shared_pin_register(struct dpll_device *dpll_pin_owner,
-			 struct dpll_device *dpll, u32 pin_idx,
+			 struct dpll_device *dpll,
+			 const char *shared_pin_description,
 			 struct dpll_pin_ops *ops, void *priv)
 {
 	struct dpll_pin *pin;
 	int ret;
 
 	mutex_lock(&dpll_pin_owner->lock);
-	pin = dpll_pin_get_by_idx(dpll_pin_owner, pin_idx);
+	pin = dpll_pin_get_by_description(dpll_pin_owner,
+					  shared_pin_description);
 	if (!pin) {
 		ret = -EINVAL;
 		goto unlock;
@@ -380,15 +417,22 @@ void dpll_pin_free(struct dpll_pin *pin)
 EXPORT_SYMBOL_GPL(dpll_pin_free);
 
 int dpll_muxed_pin_register(struct dpll_device *dpll,
-			    struct dpll_pin *parent_pin, struct dpll_pin *pin,
+			    const char *parent_pin_description,
+			    struct dpll_pin *pin,
 			    struct dpll_pin_ops *ops, void *priv)
 {
+	struct dpll_pin *parent_pin;
 	int ret;
 
-	if (!parent_pin || !pin)
+	if (!parent_pin_description || !pin)
 		return -EINVAL;
 
 	mutex_lock(&dpll->lock);
+	parent_pin = dpll_pin_get_by_description(dpll, parent_pin_description);
+	if (!parent_pin)
+		return -EINVAL;
+	if (parent_pin->type != DPLL_PIN_TYPE_MUX)
+		return -EPERM;
 	ret = dpll_alloc_pin_on_xa(&dpll->pins, pin);
 	if (!ret)
 		ret = dpll_pin_ref_add(pin, dpll, ops, priv);
@@ -401,46 +445,6 @@ int dpll_muxed_pin_register(struct dpll_device *dpll,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(dpll_muxed_pin_register);
-
-struct dpll_pin
-*dpll_pin_get_by_description(struct dpll_device *dpll, const char *description)
-{
-	struct dpll_pin *pos, *pin = NULL;
-	unsigned long index;
-
-	mutex_lock(&dpll->lock);
-	xa_for_each(&dpll->pins, index, pos) {
-		if (!strncmp(pos->description, description,
-			     DPLL_PIN_DESC_LEN)) {
-			pin = pos;
-			break;
-		}
-	}
-	mutex_unlock(&dpll->lock);
-
-	return pin;
-}
-EXPORT_SYMBOL_GPL(dpll_pin_get_by_description);
-
-static struct dpll_pin
-*dpll_pin_get_by_idx_from_xa(struct xarray *xa_pins, int idx)
-{
-	struct dpll_pin *pos;
-	unsigned long index;
-
-	xa_for_each_marked(xa_pins, index, pos, PIN_REGISTERED) {
-		if (pos->idx == idx)
-			return pos;
-	}
-
-	return NULL;
-}
-
-struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, int idx)
-{
-	return dpll_pin_get_by_idx_from_xa(&dpll->pins, idx);
-}
-EXPORT_SYMBOL_GPL(dpll_pin_get_by_idx);
 
 struct dpll_pin *dpll_pin_first(struct dpll_device *dpll, unsigned long *index)
 {
@@ -724,7 +728,7 @@ int dpll_source_idx_set(struct dpll_device *dpll, const u32 source_pin_idx)
 	struct dpll_pin *pin;
 	int ret;
 
-	pin = dpll_pin_get_by_idx(dpll, source_pin_idx);
+	pin = dpll_pin_get_by_idx_from_xa(&dpll->pins, source_pin_idx);
 	if (!pin)
 		return -ENXIO;
 	ref = dpll_pin_find_ref(dpll, pin);

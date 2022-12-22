@@ -1485,13 +1485,8 @@ ice_dpll_register_shared_pins(struct ice_pf *pf, struct dpll_device *dpll_o,
 	}
 
 	for (i = 0; i < count; i++) {
-		u32 pin_idx;
-
-		pin_idx = dpll_pin_idx(dpll_o, pins[i].pin);
-		if (pin_idx == PIN_IDX_INVALID)
-			return -EINVAL;
-
-		ret = dpll_shared_pin_register(dpll_o, dpll, pin_idx, ops, pf);
+		ret = dpll_shared_pin_register(dpll_o, dpll, pins[i].name,
+					       ops, pf);
 		if (ret)
 			return ret;
 	}
@@ -1918,7 +1913,6 @@ void __ice_dpll_rclk_release(struct ice_pf *pf)
 int ice_dpll_rclk_pins_init(struct ice_pf *pf, struct ice_dpll_pin *first_parent)
 {
 	struct ice_dpll_pin *parent, *p;
-	u32 pin_idx;
 	char *name;
 	int i, ret;
 
@@ -1946,18 +1940,14 @@ int ice_dpll_rclk_pins_init(struct ice_pf *pf, struct ice_dpll_pin *first_parent
 		p->pin = dpll_pin_alloc(p->name, p->type);
 		if (IS_ERR_OR_NULL(p->pin))
 			goto release;
-		ret = dpll_muxed_pin_register(pf->dplls.eec.dpll, parent->pin,
+		ret = dpll_muxed_pin_register(pf->dplls.eec.dpll, parent->name,
 					      p->pin, &ice_dpll_rclk_ops, pf);
 		if (ret)
 			goto release;
-		pin_idx = dpll_pin_idx(pf->dplls.eec.dpll, p->pin);
-		if (pin_idx == PIN_IDX_INVALID) {
-			ret = -EINVAL;
-			goto release;
-		}
 		ret = dpll_shared_pin_register(pf->dplls.eec.dpll,
 					       pf->dplls.pps.dpll,
-					       pin_idx, &ice_dpll_rclk_ops, pf);
+					       p->name,
+					       &ice_dpll_rclk_ops, pf);
 		if (ret)
 			goto release;
 	}
@@ -2001,7 +1991,9 @@ static int ice_dpll_rclk_find_dplls(struct ice_pf *pf)
  * @pf: board private structure
  * @base_rclk_idx: number of first recovered clock pin in DPLL
  *
- * This function is run only if ICE_FLAG_DPLL feature is not supported.
+ * This function shall be executed only if ICE_FLAG_DPLL feature is not
+ * supported.
+ *
  * Return:
  * * 0 - success
  * * negative - init failure
@@ -2016,19 +2008,11 @@ static int ice_dpll_rclk_parent_pins_init(struct ice_pf *pf, u8 base_rclk_idx)
 				   sizeof(*pf->dplls.inputs), GFP_KERNEL);
 
 	for (i = ICE_RCLKA_PIN; i < pf->dplls.num_rclk; i++) {
-		struct dpll_device *d;
 		const char *desc;
 
 		desc = ice_cgu_get_pin_name(&pf->hw, base_rclk_idx + i, true);
 		if (!desc)
 			return -EINVAL;
-		if (pf->dplls.eec.dpll)
-			d = pf->dplls.eec.dpll;
-		else
-			return -EFAULT;
-		pf->dplls.inputs[i].pin = dpll_pin_get_by_description(d, desc);
-		if (!pf->dplls.inputs[i].pin)
-			return -EFAULT;
 		pf->dplls.inputs[i].name = desc;
 	}
 	return 0;

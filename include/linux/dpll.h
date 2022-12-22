@@ -156,13 +156,12 @@ void *dpll_pin_priv(const struct dpll_device *dpll, const struct dpll_pin *pin);
  */
 u32 dpll_pin_idx(struct dpll_device *dpll, struct dpll_pin *pin);
 
-
 /**
  * dpll_shared_pin_register - share a pin between dpll devices
  * @dpll_pin_owner: a dpll already registered with a pin
  * @dpll: a dpll being registered with a pin
- * @pin_idx: index of a pin on dpll device (@dpll_pin_owner)
- *	     that is being registered on new dpll (@dpll)
+ * @shared_pin_description: identifies pin registered with dpll device
+ *	(@dpll_pin_owner) which is now being registered with new dpll (@dpll)
  * @ops: struct with pin ops callbacks
  * @priv: private data pointer passed when calling callback ops
  *
@@ -175,7 +174,8 @@ u32 dpll_pin_idx(struct dpll_device *dpll, struct dpll_pin *pin);
  */
 int
 dpll_shared_pin_register(struct dpll_device *dpll_pin_owner,
-			 struct dpll_device *dpll, u32 pin_idx,
+			 struct dpll_device *dpll,
+			 const char *shared_pin_description,
 			 struct dpll_pin_ops *ops, void *priv);
 
 /**
@@ -192,7 +192,6 @@ dpll_shared_pin_register(struct dpll_device *dpll_pin_owner,
  */
 struct dpll_pin *dpll_pin_alloc(const char *description,
 				const enum dpll_pin_type type);
-
 
 /**
  * dpll_pin_register - register pin with a dpll device
@@ -237,8 +236,8 @@ void dpll_pin_free(struct dpll_pin *pin);
 
 /**
  * dpll_muxed_pin_register - register a pin to a muxed-type pin
- * @parent_pin: pointer to object to register pin with
- * @pin: pointer to allocated pin object being deregistered from dpll
+ * @parent_pin_description: parent pin description as given on it's allocation
+ * @pin: pointer to allocated pin object being registered with a parent pin
  * @ops: struct with pin ops callbacks
  * @priv: private data pointer passed when calling callback ops*
  *
@@ -252,8 +251,10 @@ void dpll_pin_free(struct dpll_pin *pin);
  * * -EBUSY - couldn't assign id for a pin.
  */
 int dpll_muxed_pin_register(struct dpll_device *dpll,
-			    struct dpll_pin *parent_pin, struct dpll_pin *pin,
+			    const char *parent_pin_description,
+			    struct dpll_pin *pin,
 			    struct dpll_pin_ops *ops, void *priv);
+
 /**
  * dpll_device_get_by_clock_id - find a dpll by its clock_id, type and index
  * @clock_id: clock_id of dpll, as given by driver on ``dpll_device_alloc``
@@ -267,31 +268,6 @@ int dpll_muxed_pin_register(struct dpll_device *dpll,
  */
 struct dpll_device *dpll_device_get_by_clock_id(u64 clock_id,
 						enum dpll_type type, u8 idx);
-
-/**
- * dpll_pin_get_by_description - find a pin by its description
- * @dpll: dpll device pointer
- * @description: string description of pin
- *
- * Allows multiple driver instances using one physical DPLL to find
- * and share pin already registered with existing dpll device.
- *
- * Return: pointer if pin was found, NULL otherwise.
- */
-struct dpll_pin *dpll_pin_get_by_description(struct dpll_device *dpll,
-					     const char *description);
-
-/**
- * dpll_pin_get_by_idx - find a pin by its index
- * @dpll: dpll device pointer
- * @idx: index of pin
- *
- * Allows multiple driver instances using one physical DPLL to find
- * and share pin already registered with existing dpll device.
- *
- * Return: pointer if pin was found, NULL otherwise.
- */
-struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, int idx);
 
 /**
  * dpll_device_notify - notify on dpll device change

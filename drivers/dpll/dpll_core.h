@@ -288,6 +288,18 @@ int dpll_pin_prio_get(const struct dpll_device *dpll,
 		      const struct dpll_pin *pin, u32 *prio);
 
 /**
+ * dpll_pin_get_by_idx - find a pin by its index
+ * @dpll: dpll device pointer
+ * @idx: index of pin
+ *
+ * Allows multiple driver instances using one physical DPLL to find
+ * and share pin already registered with existing dpll device.
+ *
+ * Return: pointer if pin was found, NULL otherwise.
+ */
+struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, int idx);
+
+/**
  * dpll_pin_prio_set - set pin's prio on dpll
  * @dpll: registered dpll pointer
  * @pin: registered pin pointer
