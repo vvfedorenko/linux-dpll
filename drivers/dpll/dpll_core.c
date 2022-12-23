@@ -653,72 +653,72 @@ int dpll_pin_signal_type_supported(const struct dpll_device *dpll,
 }
 
 /**
- * dpll_pin_state_active - check if given state is active on a pin
+ * dpll_pin_mode_active - check if given mode is active on a pin
  * @dpll: registered dpll pointer
  * @pin: registered pin pointer
- * @state: state being checked
- * @active: on success - if state is active
+ * @mode: mode being checked
+ * @active: on success - if mode is active
  *
  * Return:
- * * 0 - successfully checked if state is active
- * * negative - failed to check for active state
+ * * 0 - successfully checked if mode is active
+ * * negative - failed to check for active mode
  */
-int dpll_pin_state_active(const struct dpll_device *dpll,
+int dpll_pin_mode_active(const struct dpll_device *dpll,
 			  const struct dpll_pin *pin,
-			  const enum dpll_pin_state state,
+			  const enum dpll_pin_mode mode,
 			  bool *active)
 {
 	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 
 	if (!ref)
 		return -ENODEV;
-	if (!ref->ops || !ref->ops->state_active)
+	if (!ref->ops || !ref->ops->mode_active)
 		return -EOPNOTSUPP;
-	*active = ref->ops->state_active(ref->dpll, pin, state);
+	*active = ref->ops->mode_active(ref->dpll, pin, mode);
 
 	return 0;
 }
 
 /**
- * dpll_pin_state_supported - check if given state is supported on a pin
+ * dpll_pin_mode_supported - check if given mode is supported on a pin
  * @dpll: registered dpll pointer
  * @pin: registered pin pointer
- * @state: state being checked
- * @supported: on success - if state is supported
+ * @mode: mode being checked
+ * @supported: on success - if mode is supported
  *
  * Return:
- * * 0 - successfully checked if state is supported
- * * negative - failed to check for supported state
+ * * 0 - successfully checked if mode is supported
+ * * negative - failed to check for supported mode
  */
-int dpll_pin_state_supported(const struct dpll_device *dpll,
+int dpll_pin_mode_supported(const struct dpll_device *dpll,
 			     const struct dpll_pin *pin,
-			     const enum dpll_pin_state state,
+			     const enum dpll_pin_mode mode,
 			     bool *supported)
 {
 	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 
 	if (!ref)
 		return -ENODEV;
-	if (!ref->ops || !ref->ops->state_supported)
+	if (!ref->ops || !ref->ops->mode_supported)
 		return -EOPNOTSUPP;
-	*supported = ref->ops->state_supported(ref->dpll, pin, state);
+	*supported = ref->ops->mode_supported(ref->dpll, pin, mode);
 
 	return 0;
 }
 
 /**
- * dpll_pin_state_set - set pin's state
+ * dpll_pin_mode_set - set pin's mode
  * @dpll: registered dpll pointer
  * @pin: registered pin pointer
- * @state: state being set
+ * @mode: mode being set
  *
  * Return:
- * * 0 - successfully set the state
- * * negative - failed to set the state
+ * * 0 - successfully set the mode
+ * * negative - failed to set the mode
  */
-int dpll_pin_state_set(const struct dpll_device *dpll,
+int dpll_pin_mode_set(const struct dpll_device *dpll,
 		       const struct dpll_pin *pin,
-		       const enum dpll_pin_state state)
+		       const enum dpll_pin_mode mode)
 {
 	struct dpll_pin_ref *ref;
 	unsigned long index;
@@ -727,11 +727,11 @@ int dpll_pin_state_set(const struct dpll_device *dpll,
 	xa_for_each((struct xarray *)&pin->ref_dplls, index, ref) {
 		if (!ref)
 			return -ENODEV;
-		if (!ref->ops || !ref->ops->state_enable)
+		if (!ref->ops || !ref->ops->mode_enable)
 			return -EOPNOTSUPP;
 		if (ref->dpll != dpll)
 			mutex_lock(&ref->dpll->lock);
-		ret = ref->ops->state_enable(ref->dpll, pin, state);
+		ret = ref->ops->mode_enable(ref->dpll, pin, mode);
 		if (ref->dpll != dpll)
 			mutex_unlock(&ref->dpll->lock);
 		if (ret)

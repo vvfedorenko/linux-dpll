@@ -74,17 +74,17 @@ int dpll_pin_signal_type_supported(const struct dpll_device *dpll,
 				   const struct dpll_pin *pin,
 				   const enum dpll_pin_signal_type type,
 				   bool *supported);
-int dpll_pin_state_active(const struct dpll_device *dpll,
-			  const struct dpll_pin *pin,
-			  const enum dpll_pin_state state,
-			  bool *active);
-int dpll_pin_state_supported(const struct dpll_device *dpll,
-			     const struct dpll_pin *pin,
-			     const enum dpll_pin_state state,
-			     bool *supported);
-int dpll_pin_state_set(const struct dpll_device *dpll,
-		       const struct dpll_pin *pin,
-		       const enum dpll_pin_state state);
+int dpll_pin_mode_active(const struct dpll_device *dpll,
+			 const struct dpll_pin *pin,
+			 const enum dpll_pin_mode mode,
+			 bool *active);
+int dpll_pin_mode_supported(const struct dpll_device *dpll,
+			    const struct dpll_pin *pin,
+			    const enum dpll_pin_mode mode,
+			    bool *supported);
+int dpll_pin_mode_set(const struct dpll_device *dpll,
+		      const struct dpll_pin *pin,
+		      const enum dpll_pin_mode mode);
 int dpll_pin_custom_freq_get(const struct dpll_device *dpll,
 			     const struct dpll_pin *pin, u32 *freq);
 int dpll_pin_custom_freq_set(const struct dpll_device *dpll,

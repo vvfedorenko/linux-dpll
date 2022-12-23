@@ -40,9 +40,9 @@
  *	(enum dpll_pin_signal_type)
  * @DPLLA_PIN_CUSTOM_FREQ - freq value for DPLL_PIN_SIGNAL_TYPE_CUSTOM_FREQ
  *	(unsigned int)
- * @DPLLA_PIN_STATE - state of pin's capabilities (enum dpll_pin_state)
- * @DPLLA_PIN_STATE_SUPPORTED - available pin's capabilities
- *	(enum dpll_pin_state)
+ * @DPLLA_PIN_MODE - state of pin's capabilities (enum dpll_pin_mode)
+ * @DPLLA_PIN_MODE_SUPPORTED - available pin's capabilities
+ *	(enum dpll_pin_mode)
  * @DPLLA_PIN_PRIO - priority of a pin on dpll (unsigned int)
  * @DPLLA_PIN_PARENT_IDX - if of a parent pin (unsigned int)
  * @DPLLA_CHANGE_TYPE - type of device change event
@@ -68,8 +68,8 @@ enum dplla {
 	DPLLA_PIN_SIGNAL_TYPE,
 	DPLLA_PIN_SIGNAL_TYPE_SUPPORTED,
 	DPLLA_PIN_CUSTOM_FREQ,
-	DPLLA_PIN_STATE,
-	DPLLA_PIN_STATE_SUPPORTED,
+	DPLLA_PIN_MODE,
+	DPLLA_PIN_MODE_SUPPORTED,
 	DPLLA_PIN_PRIO,
 	DPLLA_PIN_PARENT_IDX,
 	DPLLA_CHANGE_TYPE,
@@ -142,25 +142,25 @@ enum dpll_pin_signal_type {
 
 #define DPLL_PIN_SIGNAL_TYPE_MAX (__DPLL_PIN_SIGNAL_TYPE_MAX - 1)
 
-/* dpll_pin_state - available pin states
+/* dpll_pin_mode - available pin states
  *
- * @DPLL_PIN_STATE_UNSPEC - unspecified value
- * @DPLL_PIN_STATE_CONNECTED - pin connected
- * @DPLL_PIN_STATE_DISCONNECTED - pin disconnected
- * @DPLL_PIN_STATE_SOURCE - pin used as an input pin
- * @DPLL_PIN_STATE_OUTPUT - pin used as an output pin
+ * @DPLL_PIN_MODE_UNSPEC - unspecified value
+ * @DPLL_PIN_MODE_CONNECTED - pin connected
+ * @DPLL_PIN_MODE_DISCONNECTED - pin disconnected
+ * @DPLL_PIN_MODE_SOURCE - pin used as an input pin
+ * @DPLL_PIN_MODE_OUTPUT - pin used as an output pin
  **/
-enum dpll_pin_state {
-	DPLL_PIN_STATE_UNSPEC,
-	DPLL_PIN_STATE_CONNECTED,
-	DPLL_PIN_STATE_DISCONNECTED,
-	DPLL_PIN_STATE_SOURCE,
-	DPLL_PIN_STATE_OUTPUT,
+enum dpll_pin_mode {
+	DPLL_PIN_MODE_UNSPEC,
+	DPLL_PIN_MODE_CONNECTED,
+	DPLL_PIN_MODE_DISCONNECTED,
+	DPLL_PIN_MODE_SOURCE,
+	DPLL_PIN_MODE_OUTPUT,
 
-	__DPLL_PIN_STATE_MAX,
+	__DPLL_PIN_MODE_MAX,
 };
 
-#define DPLL_PIN_STATE_MAX (__DPLL_PIN_STATE_MAX - 1)
+#define DPLL_PIN_MODE_MAX (__DPLL_PIN_MODE_MAX - 1)
 
 /**
  * dpll_event - Events of dpll generic netlink family
@@ -195,7 +195,7 @@ enum dpll_event {
  * @DPLL_CHANGE_PIN_TYPE - pin type cahnged,
  * @DPLL_CHANGE_PIN_SIGNAL_TYPE pin signal type changed
  * @DPLL_CHANGE_PIN_CUSTOM_FREQ custom frequency changed
- * @DPLL_CHANGE_PIN_STATE - pin state changed
+ * @DPLL_CHANGE_PIN_MODE - pin state changed
  * @DPLL_CHANGE_PIN_PRIO - pin prio changed
  **/
 enum dpll_event_change {
@@ -209,7 +209,7 @@ enum dpll_event_change {
 	DPLL_CHANGE_PIN_TYPE,
 	DPLL_CHANGE_PIN_SIGNAL_TYPE,
 	DPLL_CHANGE_PIN_CUSTOM_FREQ,
-	DPLL_CHANGE_PIN_STATE,
+	DPLL_CHANGE_PIN_MODE,
 	DPLL_CHANGE_PIN_PRIO,
 
 	__DPLL_CHANGE_MAX,

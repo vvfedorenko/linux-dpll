@@ -43,15 +43,15 @@ struct dpll_pin_ops {
 	int (*custom_freq_get)(const struct dpll_device *dpll,
 			       const struct dpll_pin *pin,
 			       u32 *custom_freq);
-	bool (*state_active)(const struct dpll_device *dpll,
+	bool (*mode_active)(const struct dpll_device *dpll,
 			     const struct dpll_pin *pin,
-			     const enum dpll_pin_state state);
-	int (*state_enable)(const struct dpll_device *dpll,
+			     const enum dpll_pin_mode mode);
+	int (*mode_enable)(const struct dpll_device *dpll,
 			    const struct dpll_pin *pin,
-			    const enum dpll_pin_state state);
-	bool (*state_supported)(const struct dpll_device *dpll,
+			    const enum dpll_pin_mode mode);
+	bool (*mode_supported)(const struct dpll_device *dpll,
 				const struct dpll_pin *pin,
-				const enum dpll_pin_state state);
+				const enum dpll_pin_mode mode);
 	int (*prio_get)(const struct dpll_device *dpll,
 			const struct dpll_pin *pin,
 			u32 *prio);

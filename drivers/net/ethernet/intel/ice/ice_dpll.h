@@ -12,13 +12,12 @@
  * @pin: dpll pin structure
  * @flags: pin flags returned from HW
  * @idx: ice pin private idx
- * @pin_state_mask: current pin states as bitmask
  * @type: type of a pin
  * @signal_type: current signal type
  * @signal_type_mask: signal types supported
  * @freq: current frequency of a pin
- * @state_mask: current pin states as bitmask
- * @state_supported_mask: supported pin states
+ * @mode_mask: current pin modes as bitmask
+ * @mode_supported_mask: supported pin modes
  * @name: pin name
  */
 struct ice_dpll_pin {
@@ -26,13 +25,12 @@ struct ice_dpll_pin {
 #define ICE_DPLL_RCLK_SOURCE_FLAG_EN	BIT(0)
 	u8 flags;
 	u8 idx;
-	u32 pin_state_mask;
 	enum dpll_pin_type type;
 	enum dpll_pin_signal_type signal_type;
 	unsigned long signal_type_mask;
 	u32 freq;
-	unsigned long state_mask;
-	unsigned long state_supported_mask;
+	unsigned long mode_mask;
+	unsigned long mode_supported_mask;
 	const char *name;
 };
 

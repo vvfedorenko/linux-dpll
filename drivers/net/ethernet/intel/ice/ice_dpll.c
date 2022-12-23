@@ -218,12 +218,12 @@ ice_dpll_pin_disable(struct ice_hw *hw, struct ice_dpll_pin *pin,
 }
 
 /**
- * ice_dpll_pin_update - update pin's state
+ * ice_dpll_pin_update - update pin's mode
  * @hw: private board struct
  * @pin: structure with pin attributes to be updated
  * @pin_type: type of pin being updated
  *
- * Determine pin current state, frequency and signal type. Then update struct
+ * Determine pin current mode, frequency and signal type. Then update struct
  * holding the pin info.
  *
  * Return:
@@ -236,29 +236,29 @@ ice_dpll_pin_update(struct ice_hw *hw, struct ice_dpll_pin *pin,
 {
 	int ret;
 
-	pin->state_mask = 0;
+	pin->mode_mask = 0;
 	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
 		ret = ice_aq_get_input_pin_cfg(hw, pin->idx, NULL, NULL, NULL,
 					       &pin->flags, &pin->freq, NULL);
-		set_bit(DPLL_PIN_STATE_SOURCE, &pin->state_mask);
+		set_bit(DPLL_PIN_MODE_SOURCE, &pin->mode_mask);
 		if (ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN & pin->flags)
-			set_bit(DPLL_PIN_STATE_CONNECTED, &pin->state_mask);
+			set_bit(DPLL_PIN_MODE_CONNECTED, &pin->mode_mask);
 		else
-			set_bit(DPLL_PIN_STATE_DISCONNECTED, &pin->state_mask);
+			set_bit(DPLL_PIN_MODE_DISCONNECTED, &pin->mode_mask);
 	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
 		ret = ice_aq_get_output_pin_cfg(hw, pin->idx, &pin->flags,
 						NULL, &pin->freq, NULL);
-		set_bit(DPLL_PIN_STATE_OUTPUT, &pin->state_mask);
+		set_bit(DPLL_PIN_MODE_OUTPUT, &pin->mode_mask);
 		if (ICE_AQC_SET_CGU_OUT_CFG_OUT_EN & pin->flags)
-			set_bit(DPLL_PIN_STATE_CONNECTED, &pin->state_mask);
+			set_bit(DPLL_PIN_MODE_CONNECTED, &pin->mode_mask);
 		else
-			set_bit(DPLL_PIN_STATE_DISCONNECTED, &pin->state_mask);
+			set_bit(DPLL_PIN_MODE_DISCONNECTED, &pin->mode_mask);
 	} else if (pin_type == ICE_DPLL_PIN_TYPE_RCLK_SOURCE) {
-		set_bit(DPLL_PIN_STATE_SOURCE, &pin->state_mask);
+		set_bit(DPLL_PIN_MODE_SOURCE, &pin->mode_mask);
 		if (ICE_DPLL_RCLK_SOURCE_FLAG_EN & pin->flags)
-			set_bit(DPLL_PIN_STATE_CONNECTED, &pin->state_mask);
+			set_bit(DPLL_PIN_MODE_CONNECTED, &pin->mode_mask);
 		else
-			set_bit(DPLL_PIN_STATE_DISCONNECTED, &pin->state_mask);
+			set_bit(DPLL_PIN_MODE_DISCONNECTED, &pin->mode_mask);
 		ret = 0;
 	}
 	pin->signal_type = ice_dpll_pin_freq_to_signal_type(pin->freq);
@@ -267,34 +267,34 @@ ice_dpll_pin_update(struct ice_hw *hw, struct ice_dpll_pin *pin,
 }
 
 /**
- * ice_dpll_pin_state_set - set pin's state
+ * ice_dpll_pin_mode_set - set pin's mode
  * @pf: Board private structure
  * @pin: pointer to a pin
  * @pin_type: type of modified pin
- * @state: requested state
+ * @mode: requested mode
  *
- * Determine requested pin state set it on a pin.
+ * Determine requested pin mode set it on a pin.
  *
  * Return:
  * * 0 - OK or no change required
  * * negative - error
  */
 static int
-ice_dpll_pin_state_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
-		       const enum ice_dpll_pin_type pin_type,
-		       const enum dpll_pin_state state)
+ice_dpll_pin_mode_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
+		      const enum ice_dpll_pin_type pin_type,
+		      const enum dpll_pin_mode mode)
 {
 	int ret;
 
-	if (!test_bit(state, &pin->state_supported_mask))
+	if (!test_bit(mode, &pin->mode_supported_mask))
 		return -EINVAL;
 
-	if (test_bit(state, &pin->state_mask))
+	if (test_bit(mode, &pin->mode_mask))
 		return 0;
 
-	if (state == DPLL_PIN_STATE_CONNECTED)
+	if (mode == DPLL_PIN_MODE_CONNECTED)
 		ret = ice_dpll_pin_enable(&pf->hw, pin, pin_type);
-	else if (state == DPLL_PIN_STATE_DISCONNECTED)
+	else if (mode == DPLL_PIN_MODE_DISCONNECTED)
 		ret = ice_dpll_pin_disable(&pf->hw, pin, pin_type);
 	else
 		ret = -EINVAL;
@@ -741,22 +741,22 @@ ice_dpll_output_signal_type_set(const struct dpll_device *dpll,
 }
 
 /**
- * ice_dpll_pin_state_enable - enables a pin state
+ * ice_dpll_pin_mode_enable - enables a pin mode
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be set
+ * @mode: mode to be set
  * @pin_type: type of pin being modified
  *
- * Handler for enabling the pin state.
+ * Handler for enabling the pin mode.
  *
  * Return:
- * * 0 - successfully enabled state
- * * negative - failed to enable state
+ * * 0 - successfully enabled mode
+ * * negative - failed to enable mode
  */
-static int ice_dpll_pin_state_enable(const struct dpll_device *dpll,
-				     const struct dpll_pin *pin,
-				     const enum dpll_pin_state state,
-				     const enum ice_dpll_pin_type pin_type)
+static int ice_dpll_pin_mode_enable(const struct dpll_device *dpll,
+				    const struct dpll_pin *pin,
+				    const enum dpll_pin_mode mode,
+				    const enum ice_dpll_pin_type pin_type)
 {
 	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
 	struct ice_dpll_pin *p;
@@ -765,7 +765,7 @@ static int ice_dpll_pin_state_enable(const struct dpll_device *dpll,
 	mutex_lock(&pf->dplls.lock);
 	p = ice_find_pin(pf, pin, pin_type);
 	if (p)
-		ret = ice_dpll_pin_state_set(pf, p, pin_type, state);
+		ret = ice_dpll_pin_mode_set(pf, p, pin_type, mode);
 	mutex_unlock(&pf->dplls.lock);
 	dev_dbg(ice_pf_to_dev(pf),
 		"%s: dpll:%p, pin:%p, pf:%p, p:%p, p->pin:%p, ret:%d\n",
@@ -775,63 +775,63 @@ static int ice_dpll_pin_state_enable(const struct dpll_device *dpll,
 }
 
 /**
- * ice_dpll_rclk_state_enable - enable rclk-source pin state
+ * ice_dpll_rclk_mode_enable - enable rclk-source pin mode
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be set
+ * @mode: mode to be set
  *
- * Dpll subsystem callback. Enables given state on recovered clock source type
+ * Dpll subsystem callback. Enables given mode on recovered clock source type
  * pin.
  *
  * Return:
- * * 0 - successfully enabled state
- * * negative - failed to enable state
+ * * 0 - successfully enabled mode
+ * * negative - failed to enable mode
  */
-static int ice_dpll_rclk_state_enable(const struct dpll_device *dpll,
-				      const struct dpll_pin *pin,
-				      const enum dpll_pin_state state)
+static int ice_dpll_rclk_mode_enable(const struct dpll_device *dpll,
+				     const struct dpll_pin *pin,
+				     const enum dpll_pin_mode mode)
 {
-	return ice_dpll_pin_state_enable(dpll, pin, state,
+	return ice_dpll_pin_mode_enable(dpll, pin, mode,
 					 ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
 }
 
 /**
- * ice_dpll_output_state_enable - enable output pin state
+ * ice_dpll_output_mode_enable - enable output pin mode
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be set
+ * @mode: mode to be set
  *
- * Dpll subsystem callback. Enables given state on output type pin.
+ * Dpll subsystem callback. Enables given mode on output type pin.
  *
  * Return:
- * * 0 - successfully enabled state
- * * negative - failed to enable state
+ * * 0 - successfully enabled mode
+ * * negative - failed to enable mode
  */
-static int ice_dpll_output_state_enable(const struct dpll_device *dpll,
-					const struct dpll_pin *pin,
-					const enum dpll_pin_state state)
+static int ice_dpll_output_mode_enable(const struct dpll_device *dpll,
+				       const struct dpll_pin *pin,
+				       const enum dpll_pin_mode mode)
 {
-	return ice_dpll_pin_state_enable(dpll, pin, state,
+	return ice_dpll_pin_mode_enable(dpll, pin, mode,
 					 ICE_DPLL_PIN_TYPE_OUTPUT);
 }
 
 /**
- * ice_dpll_source_state_enable - enable source pin state
+ * ice_dpll_source_mode_enable - enable source pin mode
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be set
+ * @mode: mode to be set
  *
- * Dpll subsystem callback. Enables given state on source type pin.
+ * Dpll subsystem callback. Enables given mode on source type pin.
  *
  * Return:
- * * 0 - successfully enabled state
- * * negative - failed to enable state
+ * * 0 - successfully enabled mode
+ * * negative - failed to enable mode
  */
-static int ice_dpll_source_state_enable(const struct dpll_device *dpll,
-					const struct dpll_pin *pin,
-					const enum dpll_pin_state state)
+static int ice_dpll_source_mode_enable(const struct dpll_device *dpll,
+				       const struct dpll_pin *pin,
+				       const enum dpll_pin_mode mode)
 {
-	return ice_dpll_pin_state_enable(dpll, pin, state,
+	return ice_dpll_pin_mode_enable(dpll, pin, mode,
 					 ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
@@ -956,22 +956,22 @@ unlock:
 }
 
 /**
- * ice_dpll_pin_state_active -  check if given pin's state is active
+ * ice_dpll_pin_mode_active -  check if given pin's mode is active
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be checked
+ * @mode: mode to be checked
  * @pin_type: type of a pin to be checked
  *
- * Handler for checking if given state is active on a pin.
+ * Handler for checking if given mode is active on a pin.
  *
  * Return:
- * * true - state is active
- * * false - state is not active
+ * * true - mode is active
+ * * false - mode is not active
  */
-static bool ice_dpll_pin_state_active(const struct dpll_device *dpll,
-				      const struct dpll_pin *pin,
-				      const enum dpll_pin_state state,
-				      const enum ice_dpll_pin_type pin_type)
+static bool ice_dpll_pin_mode_active(const struct dpll_device *dpll,
+				     const struct dpll_pin *pin,
+				     const enum dpll_pin_mode mode,
+				     const enum ice_dpll_pin_type pin_type)
 {
 	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
 	struct ice_dpll_pin *p;
@@ -981,7 +981,7 @@ static bool ice_dpll_pin_state_active(const struct dpll_device *dpll,
 	p = ice_find_pin(pf, pin, pin_type);
 	if (!p)
 		goto unlock;
-	if (test_bit(state, &p->state_mask))
+	if (test_bit(mode, &p->mode_mask))
 		ret = true;
 unlock:
 	mutex_unlock(&pf->dplls.lock);
@@ -990,83 +990,85 @@ unlock:
 }
 
 /**
- * ice_dpll_rclk_state_active - check if rclk source pin's state is active
+ * ice_dpll_rclk_mode_active - check if rclk source pin's mode is active
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be checked
+ * @mode: mode to be checked
  *
- * DPLL subsystem callback, Wraps handler for checking if given state is active
+ * DPLL subsystem callback, Wraps handler for checking if given mode is active
  * on a recovered clock pin.
  *
  * Return:
- * * true - state is active
- * * false - state is not active
+ * * true - mode is active
+ * * false - mode is not active
  */
-static bool ice_dpll_rclk_state_active(const struct dpll_device *dpll,
-				       const struct dpll_pin *pin,
-				       const enum dpll_pin_state state)
+static bool ice_dpll_rclk_mode_active(const struct dpll_device *dpll,
+				      const struct dpll_pin *pin,
+				      const enum dpll_pin_mode mode)
 {
-	return ice_dpll_pin_state_active(dpll, pin, state,
+	return ice_dpll_pin_mode_active(dpll, pin, mode,
 					 ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
 }
 
 /**
- * ice_dpll_output_state_active - check if output pin's state is active
+ * ice_dpll_output_mode_active - check if output pin's mode is active
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be checked
+ * @mode: mode to be checked
  *
- * DPLL subsystem callback, Wraps handler for checking if given state is active
+ * DPLL subsystem callback, Wraps handler for checking if given mode is active
  * on an output pin.
  *
  * Return:
- * * true - state is active
- * * false - state is not active
+ * * true - mode is active
+ * * false - mode is not active
  */
-static bool ice_dpll_output_state_active(const struct dpll_device *dpll,
-					 const struct dpll_pin *pin,
-					 const enum dpll_pin_state state)
+static bool ice_dpll_output_mode_active(const struct dpll_device *dpll,
+					const struct dpll_pin *pin,
+					const enum dpll_pin_mode mode)
 {
-	return ice_dpll_pin_state_active(dpll, pin, state, ICE_DPLL_PIN_TYPE_OUTPUT);
+	return ice_dpll_pin_mode_active(dpll, pin, mode,
+					ICE_DPLL_PIN_TYPE_OUTPUT);
 }
 
 /**
- * ice_dpll_source_state_active - check if source pin's state is active
+ * ice_dpll_source_mode_active - check if source pin's mode is active
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be checked
+ * @mode: mode to be checked
  *
- * DPLL subsystem callback, Wraps handler for checking if given state is active
+ * DPLL subsystem callback, Wraps handler for checking if given mode is active
  * on a source pin.
  *
  * Return:
- * * true - state is active
- * * false - state is not active
+ * * true - mode is active
+ * * false - mode is not active
  */
-static bool ice_dpll_source_state_active(const struct dpll_device *dpll,
-					 const struct dpll_pin *pin,
-					 const enum dpll_pin_state state)
+static bool ice_dpll_source_mode_active(const struct dpll_device *dpll,
+					const struct dpll_pin *pin,
+					const enum dpll_pin_mode mode)
 {
-	return ice_dpll_pin_state_active(dpll, pin, state, ICE_DPLL_PIN_TYPE_SOURCE);
+	return ice_dpll_pin_mode_active(dpll, pin, mode,
+					ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
 /**
- * ice_dpll_pin_state_supported - check if pin's state is supported
+ * ice_dpll_pin_mode_supported - check if pin's mode is supported
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be checked
+ * @mode: mode to be checked
  * @pin_type: type of a pin being checked
  *
- * Handler for checking if given state is supported on a pin.
+ * Handler for checking if given mode is supported on a pin.
  *
  * Return:
- * * true - state is active
- * * false - state is not active
+ * * true - mode is active
+ * * false - mode is not active
  */
-static bool ice_dpll_pin_state_supported(const struct dpll_device *dpll,
-					 const struct dpll_pin *pin,
-					 const enum dpll_pin_state state,
-					 const enum ice_dpll_pin_type pin_type)
+static bool ice_dpll_pin_mode_supported(const struct dpll_device *dpll,
+					const struct dpll_pin *pin,
+					const enum dpll_pin_mode mode,
+					const enum ice_dpll_pin_type pin_type)
 {
 	struct ice_pf *pf = dpll_pin_priv(dpll, pin);
 	struct ice_dpll_pin *p;
@@ -1077,7 +1079,7 @@ static bool ice_dpll_pin_state_supported(const struct dpll_device *dpll,
 
 	if (!p)
 		goto unlock;
-	if (test_bit(state, &p->state_supported_mask))
+	if (test_bit(mode, &p->mode_supported_mask))
 		ret = true;
 unlock:
 	mutex_unlock(&pf->dplls.lock);
@@ -1086,65 +1088,65 @@ unlock:
 }
 
 /**
- * ice_dpll_rclk_state_supported - check if rclk pin's state is supported
+ * ice_dpll_rclk_mode_supported - check if rclk pin's mode is supported
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be checked
+ * @mode: mode to be checked
  *
- * DPLL subsystem callback, Wraps handler for checking if given state is
+ * DPLL subsystem callback, Wraps handler for checking if given mode is
  * supported on a clock recovery pin.
  *
  * Return:
- * * true - state is active
- * * false - state is not active
+ * * true - mode is active
+ * * false - mode is not active
  */
-static bool ice_dpll_rclk_state_supported(const struct dpll_device *dpll,
-					  const struct dpll_pin *pin,
-					  const enum dpll_pin_state state)
+static bool ice_dpll_rclk_mode_supported(const struct dpll_device *dpll,
+					 const struct dpll_pin *pin,
+					 const enum dpll_pin_mode mode)
 {
-	return ice_dpll_pin_state_supported(dpll, pin, state,
+	return ice_dpll_pin_mode_supported(dpll, pin, mode,
 					    ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
 }
 
 /**
- * ice_dpll_output_state_supported - check if output pin's state is supported
+ * ice_dpll_output_mode_supported - check if output pin's mode is supported
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be checked
+ * @mode: mode to be checked
  *
- * DPLL subsystem callback, Wraps handler for checking if given state is
+ * DPLL subsystem callback, Wraps handler for checking if given mode is
  * supported on an output pin.
  *
  * Return:
- * * true - state is active
- * * false - state is not active
+ * * true - mode is active
+ * * false - mode is not active
  */
-static bool ice_dpll_output_state_supported(const struct dpll_device *dpll,
-					    const struct dpll_pin *pin,
-					    const enum dpll_pin_state state)
+static bool ice_dpll_output_mode_supported(const struct dpll_device *dpll,
+					   const struct dpll_pin *pin,
+					   const enum dpll_pin_mode mode)
 {
-	return ice_dpll_pin_state_supported(dpll, pin, state,
+	return ice_dpll_pin_mode_supported(dpll, pin, mode,
 					    ICE_DPLL_PIN_TYPE_OUTPUT);
 }
 
 /**
- * ice_dpll_source_state_supported - check if source pin's state is supported
+ * ice_dpll_source_mode_supported - check if source pin's mode is supported
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
- * @state: state to be checked
+ * @mode: mode to be checked
  *
- * DPLL subsystem callback, Wraps handler for checking if given state is
+ * DPLL subsystem callback, Wraps handler for checking if given mode is
  * supported on a source pin.
  *
  * Return:
- * * true - state is active
- * * false - state is not active
+ * * true - mode is active
+ * * false - mode is not active
  */
-static bool ice_dpll_source_state_supported(const struct dpll_device *dpll,
-					    const struct dpll_pin *pin,
-					    const enum dpll_pin_state state)
+static bool ice_dpll_source_mode_supported(const struct dpll_device *dpll,
+					   const struct dpll_pin *pin,
+					   const enum dpll_pin_mode mode)
 {
-	return ice_dpll_pin_state_supported(dpll, pin, state,
+	return ice_dpll_pin_mode_supported(dpll, pin, mode,
 					    ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
@@ -1247,9 +1249,9 @@ unlock:
 }
 
 static struct dpll_pin_ops ice_dpll_rclk_ops = {
-	.state_enable = ice_dpll_rclk_state_enable,
-	.state_active = ice_dpll_rclk_state_active,
-	.state_supported = ice_dpll_rclk_state_supported,
+	.mode_enable = ice_dpll_rclk_mode_enable,
+	.mode_active = ice_dpll_rclk_mode_active,
+	.mode_supported = ice_dpll_rclk_mode_supported,
 	.signal_type_get = ice_dpll_rclk_pin_sig_type_get,
 	.signal_type_supported = ice_dpll_rclk_signal_type_supported,
 	.net_if_idx_get = ice_dpll_rclk_pin_net_if_index_get,
@@ -1260,9 +1262,9 @@ static struct dpll_pin_ops ice_dpll_source_ops = {
 	.signal_type_get = ice_dpll_source_signal_type_get,
 	.signal_type_set = ice_dpll_source_signal_type_set,
 	.signal_type_supported = ice_dpll_source_signal_type_supported,
-	.state_active = ice_dpll_source_state_active,
-	.state_enable = ice_dpll_source_state_enable,
-	.state_supported = ice_dpll_source_state_supported,
+	.mode_active = ice_dpll_source_mode_active,
+	.mode_enable = ice_dpll_source_mode_enable,
+	.mode_supported = ice_dpll_source_mode_supported,
 	.prio_get = ice_dpll_source_prio_get,
 	.prio_set = ice_dpll_source_prio_set,
 };
@@ -1271,9 +1273,9 @@ static struct dpll_pin_ops ice_dpll_output_ops = {
 	.signal_type_get = ice_dpll_output_signal_type_get,
 	.signal_type_set = ice_dpll_output_signal_type_set,
 	.signal_type_supported = ice_dpll_output_signal_type_supported,
-	.state_active = ice_dpll_output_state_active,
-	.state_enable = ice_dpll_output_state_enable,
-	.state_supported = ice_dpll_output_state_supported,
+	.mode_active = ice_dpll_output_mode_active,
+	.mode_enable = ice_dpll_output_mode_enable,
+	.mode_supported = ice_dpll_output_mode_supported,
 };
 
 static struct dpll_device_ops ice_dpll_ops = {
@@ -1333,10 +1335,10 @@ static int ice_dpll_init_pins(struct ice_pf *pf,
 		pins[i].idx = i;
 		pins[i].name = ice_cgu_get_pin_name(hw, i, input);
 		pins[i].type = ice_cgu_get_pin_type(hw, i, input);
-		set_bit(DPLL_PIN_STATE_CONNECTED,
-			&pins[i].state_supported_mask);
-		set_bit(DPLL_PIN_STATE_DISCONNECTED,
-			&pins[i].state_supported_mask);
+		set_bit(DPLL_PIN_MODE_CONNECTED,
+			&pins[i].mode_supported_mask);
+		set_bit(DPLL_PIN_MODE_DISCONNECTED,
+			&pins[i].mode_supported_mask);
 		if (input) {
 			ret = ice_aq_get_cgu_ref_prio(hw, de->dpll_idx, i,
 						      &de->input_prio[i]);
@@ -1346,11 +1348,11 @@ static int ice_dpll_init_pins(struct ice_pf *pf,
 						      &dp->input_prio[i]);
 			if (ret)
 				return ret;
-			set_bit(DPLL_PIN_STATE_SOURCE,
-				&pins[i].state_supported_mask);
+			set_bit(DPLL_PIN_MODE_SOURCE,
+				&pins[i].mode_supported_mask);
 		} else {
-			set_bit(DPLL_PIN_STATE_OUTPUT,
-				&pins[i].state_supported_mask);
+			set_bit(DPLL_PIN_MODE_OUTPUT,
+				&pins[i].mode_supported_mask);
 		}
 		pins[i].signal_type_mask =
 				ice_cgu_get_pin_sig_type_mask(hw, i, input);
@@ -1872,9 +1874,9 @@ void ice_dpll_rclk_pin_init(struct ice_dpll_pin *p)
 	p->flags = ICE_DPLL_RCLK_SOURCE_FLAG_EN;
 	p->type = DPLL_PIN_TYPE_SYNCE_ETH_PORT;
 	set_bit(DPLL_PIN_SIGNAL_TYPE_CUSTOM_FREQ, &p->signal_type_mask);
-	set_bit(DPLL_PIN_STATE_CONNECTED,	  &p->state_supported_mask);
-	set_bit(DPLL_PIN_STATE_DISCONNECTED,	  &p->state_supported_mask);
-	set_bit(DPLL_PIN_STATE_SOURCE,		  &p->state_supported_mask);
+	set_bit(DPLL_PIN_MODE_CONNECTED,	  &p->mode_supported_mask);
+	set_bit(DPLL_PIN_MODE_DISCONNECTED,	  &p->mode_supported_mask);
+	set_bit(DPLL_PIN_MODE_SOURCE,		  &p->mode_supported_mask);
 	ice_dpll_pin_update(0, p, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
 }
 
