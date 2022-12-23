@@ -116,9 +116,10 @@ static void dpll_device_release(struct device *dev)
 {
 	struct dpll_device *dpll;
 
+	mutex_lock(&dpll_device_xa_lock);
 	dpll = to_dpll_device(dev);
-
 	dpll_device_unregister(dpll);
+	mutex_unlock(&dpll_device_xa_lock);
 	dpll_device_free(dpll);
 }
 
