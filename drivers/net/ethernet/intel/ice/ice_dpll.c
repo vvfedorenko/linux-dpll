@@ -1605,7 +1605,6 @@ static int ice_dpll_init_dpll(struct ice_pf *pf)
 		dev_err(ice_pf_to_dev(pf), "dpll_device_alloc failed (eec)\n");
 		return -ENOMEM;
 	}
-	dpll_device_register(de->dpll);
 
 	dp->dpll = dpll_device_alloc(&ice_dpll_ops, DPLL_TYPE_PPS,
 				     clock_id, DPLL_CLOCK_CLASS_C, 0, pf, dev);
@@ -1613,7 +1612,6 @@ static int ice_dpll_init_dpll(struct ice_pf *pf)
 		dev_err(ice_pf_to_dev(pf), "dpll_device_alloc failed (pps)\n");
 		return -ENOMEM;
 	}
-	dpll_device_register(dp->dpll);
 
 	return ret;
 }

@@ -157,6 +157,7 @@ struct dpll_device
 		     dev_driver_idx);
 	dpll->priv = priv;
 	xa_init_flags(&dpll->pins, XA_FLAGS_ALLOC);
+	xa_set_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED);
 	mutex_unlock(&dpll_device_xa_lock);
 	dpll_notify_device_create(dpll);
 
@@ -178,16 +179,6 @@ void dpll_device_free(struct dpll_device *dpll)
 	kfree(dpll);
 }
 EXPORT_SYMBOL_GPL(dpll_device_free);
-
-void dpll_device_register(struct dpll_device *dpll)
-{
-	ASSERT_DPLL_NOT_REGISTERED(dpll);
-
-	mutex_lock(&dpll_device_xa_lock);
-	xa_set_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED);
-	mutex_unlock(&dpll_device_xa_lock);
-}
-EXPORT_SYMBOL_GPL(dpll_device_register);
 
 /**
  * dpll_device_unregister - unregister dpll device

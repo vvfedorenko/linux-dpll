@@ -102,15 +102,6 @@ struct dpll_device
 		   u8 dev_driver_idx, void *priv, struct device *parent);
 
 /**
- * dpll_device_register - registers allocated dpll
- * @dpll: pointer to dpll
- *
- * Register the dpll on the dpll subsystem, make it available for netlink
- * API users.
- */
-void dpll_device_register(struct dpll_device *dpll);
-
-/**
  * dpll_device_unregister - unregister registered dpll
  * @dpll: pointer to dpll
  *
