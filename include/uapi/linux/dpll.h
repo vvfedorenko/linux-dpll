@@ -4,15 +4,15 @@
 
 #define DPLL_NAME_LEN		32
 #define DPLL_DESC_LEN		20
-#define PIN_DESC_LEN		20
+#define DPLL_PIN_DESC_LEN	20
 
 /* Adding event notification support elements */
-#define DPLL_FAMILY_NAME		"dpll"
-#define DPLL_VERSION			0x01
-#define DPLL_MONITOR_GROUP_NAME		"monitor"
+#define DPLL_FAMILY_NAME	"dpll"
+#define DPLL_VERSION		0x01
+#define DPLL_MONITOR_GROUP_NAME	"monitor"
 
-#define DPLL_DUMP_FILTER_PINS	1
-#define DPLL_DUMP_FILTER_STATUS	2
+#define DPLL_FILTER_PINS	1
+#define DPLL_FILTER_STATUS	2
 
 /* dplla - Attributes of dpll generic netlink family
  *
@@ -25,23 +25,24 @@
  *	(unsigned int)
  * @DPLLA_LOCK_STATUS - dpll's lock status (enum dpll_lock_status)
  * @DPLLA_TEMP - dpll's temperature (signed int - Celsius degrees)
- * @DPLLA_DUMP_FILTER - filter bitmask (int, sum of DPLL_DUMP_FILTER_* defines)
- * @DPLLA_NETIFINDEX - related network interface index
+ * @DPLLA_CLOCK_ID - Unique Clock Identifier of dpll (u64)
+ * @DPLLA_CLOCK_CLASS - clock quality class of dpll (enum dpll_clock_class)
+ * @DPLLA_FILTER - filter bitmask for filtering get and dump requests (int,
+ *	sum of DPLL_DUMP_FILTER_* defines)
  * @DPLLA_PIN - nested attribute, each contains single pin attributes
  * @DPLLA_PIN_IDX - index of a pin on dpll (unsigned int)
  * @DPLLA_PIN_DESCRIPTION - human-readable pin description provided by driver
  *	(char array of PIN_DESC_LEN size)
  * @DPLLA_PIN_TYPE - current type of a pin (enum dpll_pin_type)
- * @DPLLA_PIN_TYPE_SUPPORTED - pin types supported (enum dpll_pin_type)
  * @DPLLA_PIN_SIGNAL_TYPE - current type of a signal
  *	(enum dpll_pin_signal_type)
  * @DPLLA_PIN_SIGNAL_TYPE_SUPPORTED - pin signal types supported
  *	(enum dpll_pin_signal_type)
  * @DPLLA_PIN_CUSTOM_FREQ - freq value for DPLL_PIN_SIGNAL_TYPE_CUSTOM_FREQ
  *	(unsigned int)
- * @DPLLA_PIN_STATE - state of pin's capabilities (enum dpll_pin_state)
- * @DPLLA_PIN_STATE_SUPPORTED - available pin's capabilities
- *	(enum dpll_pin_state)
+ * @DPLLA_PIN_MODE - state of pin's capabilities (enum dpll_pin_mode)
+ * @DPLLA_PIN_MODE_SUPPORTED - available pin's capabilities
+ *	(enum dpll_pin_mode)
  * @DPLLA_PIN_PRIO - priority of a pin on dpll (unsigned int)
  * @DPLLA_PIN_PARENT_IDX - if of a parent pin (unsigned int)
  * @DPLLA_CHANGE_TYPE - type of device change event
@@ -57,18 +58,18 @@ enum dplla {
 	DPLLA_SOURCE_PIN_IDX,
 	DPLLA_LOCK_STATUS,
 	DPLLA_TEMP,
-	DPLLA_DUMP_FILTER,
-	DPLLA_NETIFINDEX,
+	DPLLA_CLOCK_ID,
+	DPLLA_CLOCK_CLASS,
+	DPLLA_FILTER,
 	DPLLA_PIN,
 	DPLLA_PIN_IDX,
 	DPLLA_PIN_DESCRIPTION,
 	DPLLA_PIN_TYPE,
-	DPLLA_PIN_TYPE_SUPPORTED,
 	DPLLA_PIN_SIGNAL_TYPE,
 	DPLLA_PIN_SIGNAL_TYPE_SUPPORTED,
 	DPLLA_PIN_CUSTOM_FREQ,
-	DPLLA_PIN_STATE,
-	DPLLA_PIN_STATE_SUPPORTED,
+	DPLLA_PIN_MODE,
+	DPLLA_PIN_MODE_SUPPORTED,
 	DPLLA_PIN_PRIO,
 	DPLLA_PIN_PARENT_IDX,
 	DPLLA_CHANGE_TYPE,
@@ -141,25 +142,25 @@ enum dpll_pin_signal_type {
 
 #define DPLL_PIN_SIGNAL_TYPE_MAX (__DPLL_PIN_SIGNAL_TYPE_MAX - 1)
 
-/* dpll_pin_state - available pin states
+/* dpll_pin_mode - available pin states
  *
- * @DPLL_PIN_STATE_UNSPEC - unspecified value
- * @DPLL_PIN_STATE_CONNECTED - pin connected
- * @DPLL_PIN_STATE_DISCONNECTED - pin disconnected
- * @DPLL_PIN_STATE_SOURCE - pin used as an input pin
- * @DPLL_PIN_STATE_OUTPUT - pin used as an output pin
+ * @DPLL_PIN_MODE_UNSPEC - unspecified value
+ * @DPLL_PIN_MODE_CONNECTED - pin connected
+ * @DPLL_PIN_MODE_DISCONNECTED - pin disconnected
+ * @DPLL_PIN_MODE_SOURCE - pin used as an input pin
+ * @DPLL_PIN_MODE_OUTPUT - pin used as an output pin
  **/
-enum dpll_pin_state {
-	DPLL_PIN_STATE_UNSPEC,
-	DPLL_PIN_STATE_CONNECTED,
-	DPLL_PIN_STATE_DISCONNECTED,
-	DPLL_PIN_STATE_SOURCE,
-	DPLL_PIN_STATE_OUTPUT,
+enum dpll_pin_mode {
+	DPLL_PIN_MODE_UNSPEC,
+	DPLL_PIN_MODE_CONNECTED,
+	DPLL_PIN_MODE_DISCONNECTED,
+	DPLL_PIN_MODE_SOURCE,
+	DPLL_PIN_MODE_OUTPUT,
 
-	__DPLL_PIN_STATE_MAX,
+	__DPLL_PIN_MODE_MAX,
 };
 
-#define DPLL_PIN_STATE_MAX (__DPLL_PIN_STATE_MAX - 1)
+#define DPLL_PIN_MODE_MAX (__DPLL_PIN_MODE_MAX - 1)
 
 /**
  * dpll_event - Events of dpll generic netlink family
@@ -194,7 +195,7 @@ enum dpll_event {
  * @DPLL_CHANGE_PIN_TYPE - pin type cahnged,
  * @DPLL_CHANGE_PIN_SIGNAL_TYPE pin signal type changed
  * @DPLL_CHANGE_PIN_CUSTOM_FREQ custom frequency changed
- * @DPLL_CHANGE_PIN_STATE - pin state changed
+ * @DPLL_CHANGE_PIN_MODE - pin state changed
  * @DPLL_CHANGE_PIN_PRIO - pin prio changed
  **/
 enum dpll_event_change {
@@ -208,7 +209,7 @@ enum dpll_event_change {
 	DPLL_CHANGE_PIN_TYPE,
 	DPLL_CHANGE_PIN_SIGNAL_TYPE,
 	DPLL_CHANGE_PIN_CUSTOM_FREQ,
-	DPLL_CHANGE_PIN_STATE,
+	DPLL_CHANGE_PIN_MODE,
 	DPLL_CHANGE_PIN_PRIO,
 
 	__DPLL_CHANGE_MAX,
@@ -241,7 +242,7 @@ enum dpll_cmd {
  * dpll selects one of its sources to syntonize with a source.
  *
  * @DPLL_MODE_UNSPEC - invalid
- * @DPLL_MODE_FORCED - source can be only selected by sending a request to dpll
+ * @DPLL_MODE_MANUAL - source can be only selected by sending a request to dpll
  * @DPLL_MODE_AUTOMATIC - highest prio, valid source, auto selected by dpll
  * @DPLL_MODE_HOLDOVER - dpll forced into holdover mode
  * @DPLL_MODE_FREERUN - dpll driven on system clk, no holdover available
@@ -249,7 +250,7 @@ enum dpll_cmd {
  **/
 enum dpll_mode {
 	DPLL_MODE_UNSPEC,
-	DPLL_MODE_FORCED,
+	DPLL_MODE_MANUAL,
 	DPLL_MODE_AUTOMATIC,
 	DPLL_MODE_HOLDOVER,
 	DPLL_MODE_FREERUN,
@@ -259,5 +260,37 @@ enum dpll_mode {
 };
 
 #define DPLL_MODE_MAX (__DPLL_MODE_MAX - 1)
+
+/**
+ * dpll_clock_class - enumerate quality class of a DPLL clock as specified in
+ * Recommendation ITU-T G.8273.2/Y.1368.2.
+ */
+enum dpll_clock_class {
+	DPLL_CLOCK_CLASS_UNSPEC,
+	DPLL_CLOCK_CLASS_A,
+	DPLL_CLOCK_CLASS_B,
+	DPLL_CLOCK_CLASS_C,
+
+	__DPLL_CLOCK_CLASS_MAX,
+};
+
+#define DPLL_CLOCK_CLASS_MAX (__DPLL_CLOCK_CLASS_MAX - 1)
+
+/**
+ * enum dpll_type - type of dpll, integer value of enum is embedded into
+ * name of DPLL device (DPLLA_NAME)
+ *
+ * @DPLL_TYPE_UNSPEC - unspecified
+ * @DPLL_TYPE_PPS - dpll produces Pulse-Per-Second signal
+ * @DPLL_TYPE_EEC - dpll drives the Ethernet Equipment Clock
+ */
+enum dpll_type {
+	DPLL_TYPE_UNSPEC,
+	DPLL_TYPE_PPS,
+	DPLL_TYPE_EEC,
+
+	__DPLL_TYPE_MAX
+};
+#define DPLL_TYPE_MAX	(__DPLL_TYPE_MAX - 1)
 
 #endif /* _UAPI_LINUX_DPLL_H */

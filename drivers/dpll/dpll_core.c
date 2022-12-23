@@ -31,35 +31,8 @@ struct dpll_pin {
 	struct dpll_pin_ops *ops;
 	void *priv;
 	struct xarray ref_dplls;
-	char description[PIN_DESC_LEN];
+	char description[DPLL_PIN_DESC_LEN];
 };
-
-/**
- * struct dpll_device - structure for a DPLL device
- * @id:		unique id number for each device
- * @dev:	struct device for this dpll device
- * @parent:	parent device
- * @ops:	operations this &dpll_device supports
- * @lock:	mutex to serialize operations
- * @type:	type of a dpll
- * @priv:	pointer to private information of owner
- * @pins:	list of pointers to pins registered with this dpll
- * @cookie:	unique identifier (cookie) of a dpll
- * @dev_driver_idx: provided by driver for
- */
-struct dpll_device {
-	u32 id;
-	struct device dev;
-	struct device *parent;
-	struct dpll_device_ops *ops;
-	struct mutex lock;
-	enum dpll_type type;
-	void *priv;
-	struct xarray pins;
-	u8 cookie[DPLL_COOKIE_LEN];
-	u8 dev_driver_idx;
-};
-
 static DEFINE_MUTEX(dpll_device_xa_lock);
 
 static DEFINE_XARRAY_FLAGS(dpll_device_xa, XA_FLAGS_ALLOC);
@@ -71,12 +44,18 @@ static DEFINE_XARRAY_FLAGS(dpll_device_xa, XA_FLAGS_ALLOC);
 #define ASSERT_DPLL_NOT_REGISTERED(d)                                      \
 	WARN_ON_ONCE(xa_get_mark(&dpll_device_xa, (d)->id, DPLL_REGISTERED))
 
-struct pin_ref_dpll {
+struct dpll_pin_ref {
 	struct dpll_device *dpll;
 	struct dpll_pin_ops *ops;
 	void *priv;
 };
 
+/**
+ * dpll_device_get_by_id - find dpll device by it's id
+ * @id: id of searched dpll
+ *
+ * Return: dpll_device struct if found, NULL otherwise.
+ */
 struct dpll_device *dpll_device_get_by_id(int id)
 {
 	struct dpll_device *dpll = NULL;
@@ -87,6 +66,12 @@ struct dpll_device *dpll_device_get_by_id(int id)
 	return dpll;
 }
 
+/**
+ * dpll_device_get_by_name - find dpll device by it's id
+ * @name: name of searched dpll
+ *
+ * Return: dpll_device struct if found, NULL otherwise.
+ */
 struct dpll_device *dpll_device_get_by_name(const char *name)
 {
 	struct dpll_device *dpll, *ret = NULL;
@@ -104,15 +89,15 @@ struct dpll_device *dpll_device_get_by_name(const char *name)
 	return ret;
 }
 
-struct dpll_device *dpll_device_get_by_cookie(u8 cookie[DPLL_COOKIE_LEN],
-					      enum dpll_type type, u8 idx)
+struct dpll_device *dpll_device_get_by_clock_id(u64 clock_id,
+						enum dpll_type type, u8 idx)
 {
 	struct dpll_device *dpll, *ret = NULL;
 	unsigned long index;
 
 	mutex_lock(&dpll_device_xa_lock);
 	xa_for_each_marked(&dpll_device_xa, index, dpll, DPLL_REGISTERED) {
-		if (!memcmp(dpll->cookie, cookie, DPLL_COOKIE_LEN)) {
+		if (dpll->clock_id == clock_id) {
 			if (dpll->type == type) {
 				if (dpll->dev_driver_idx == idx) {
 					ret = dpll;
@@ -125,15 +110,16 @@ struct dpll_device *dpll_device_get_by_cookie(u8 cookie[DPLL_COOKIE_LEN],
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(dpll_device_get_by_cookie);
+EXPORT_SYMBOL_GPL(dpll_device_get_by_clock_id);
 
 static void dpll_device_release(struct device *dev)
 {
 	struct dpll_device *dpll;
 
+	mutex_lock(&dpll_device_xa_lock);
 	dpll = to_dpll_device(dev);
-
 	dpll_device_unregister(dpll);
+	mutex_unlock(&dpll_device_xa_lock);
 	dpll_device_free(dpll);
 }
 
@@ -142,24 +128,10 @@ static struct class dpll_class = {
 	.dev_release = dpll_device_release,
 };
 
-static const char *dpll_type_name[__DPLL_TYPE_MAX] = {
-	[DPLL_TYPE_UNSPEC] = "",
-	[DPLL_TYPE_PPS] = "PPS",
-	[DPLL_TYPE_EEC] = "EEC",
-};
-
-static const char *dpll_type_str(enum dpll_type type)
-{
-	if (type >= DPLL_TYPE_UNSPEC && type <= DPLL_TYPE_MAX)
-		return dpll_type_name[type];
-	else
-		return "";
-}
-
 struct dpll_device
 *dpll_device_alloc(struct dpll_device_ops *ops, enum dpll_type type,
-		   const u8 cookie[DPLL_COOKIE_LEN], u8 idx,
-		   void *priv, struct device *parent)
+		   const u64 clock_id, enum dpll_clock_class clock_class,
+		   u8 dev_driver_idx, void *priv, struct device *parent)
 {
 	struct dpll_device *dpll;
 	int ret;
@@ -173,18 +145,20 @@ struct dpll_device
 	dpll->dev.class = &dpll_class;
 	dpll->parent = parent;
 	dpll->type = type;
-	dpll->dev_driver_idx = idx;
-	memcpy(dpll->cookie, cookie, sizeof(dpll->cookie));
+	dpll->dev_driver_idx = dev_driver_idx;
+	dpll->clock_id = clock_id;
+	dpll->clock_class = clock_class;
 
 	mutex_lock(&dpll_device_xa_lock);
 	ret = xa_alloc(&dpll_device_xa, &dpll->id, dpll,
 		       xa_limit_16b, GFP_KERNEL);
 	if (ret)
 		goto error;
-	dev_set_name(&dpll->dev, "dpll-%s-%s-%s%d", dev_driver_string(parent),
-		     dev_name(parent), type ? dpll_type_str(type) : "", idx);
+	dev_set_name(&dpll->dev, "dpll_%s_%d_%d", dev_name(parent), type,
+		     dev_driver_idx);
 	dpll->priv = priv;
 	xa_init_flags(&dpll->pins, XA_FLAGS_ALLOC);
+	xa_set_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED);
 	mutex_unlock(&dpll_device_xa_lock);
 	dpll_notify_device_create(dpll);
 
@@ -207,16 +181,12 @@ void dpll_device_free(struct dpll_device *dpll)
 }
 EXPORT_SYMBOL_GPL(dpll_device_free);
 
-void dpll_device_register(struct dpll_device *dpll)
-{
-	ASSERT_DPLL_NOT_REGISTERED(dpll);
-
-	mutex_lock(&dpll_device_xa_lock);
-	xa_set_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED);
-	mutex_unlock(&dpll_device_xa_lock);
-}
-EXPORT_SYMBOL_GPL(dpll_device_register);
-
+/**
+ * dpll_device_unregister - unregister dpll device
+ * @dpll: registered dpll pointer
+ *
+ * Note: It does not free the memory
+ */
 void dpll_device_unregister(struct dpll_device *dpll)
 {
 	ASSERT_DPLL_REGISTERED(dpll);
@@ -228,12 +198,24 @@ void dpll_device_unregister(struct dpll_device *dpll)
 }
 EXPORT_SYMBOL_GPL(dpll_device_unregister);
 
+/**
+ * dpll_id - return dpll id
+ * @dpll: registered dpll pointer
+ *
+ * Return: dpll id.
+ */
 u32 dpll_id(struct dpll_device *dpll)
 {
 	return dpll->id;
 }
-EXPORT_SYMBOL_GPL(dpll_id);
 
+/**
+ * dpll_pin_idx - return index of a pin
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ *
+ * Return: index of a pin or PIN_IDX_INVALID if not found.
+ */
 u32 dpll_pin_idx(struct dpll_device *dpll, struct dpll_pin *pin)
 {
 	struct dpll_pin *pos;
@@ -252,21 +234,22 @@ const char *dpll_dev_name(struct dpll_device *dpll)
 {
 	return dev_name(&dpll->dev);
 }
-EXPORT_SYMBOL_GPL(dpll_dev_name);
 
-struct dpll_pin *dpll_pin_alloc(const char *description, size_t desc_len)
+struct dpll_pin *dpll_pin_alloc(const char *description,
+				const enum dpll_pin_type pin_type)
 {
 	struct dpll_pin *pin = kzalloc(sizeof(struct dpll_pin), GFP_KERNEL);
 
 	if (!pin)
 		return ERR_PTR(-ENOMEM);
-	if (desc_len > PIN_DESC_LEN)
+	if (pin_type <= DPLL_PIN_TYPE_UNSPEC ||
+	    pin_type > DPLL_PIN_TYPE_MAX)
 		return ERR_PTR(-EINVAL);
 
-	strncpy(pin->description, description, PIN_DESC_LEN);
-	if (desc_len == PIN_DESC_LEN)
-		pin->description[PIN_DESC_LEN - 1] = '\0';
+	strncpy(pin->description, description, DPLL_PIN_DESC_LEN);
+	pin->description[DPLL_PIN_DESC_LEN - 1] = '\0';
 	xa_init_flags(&pin->ref_dplls, XA_FLAGS_ALLOC);
+	pin->type = pin_type;
 
 	return pin;
 }
@@ -280,7 +263,8 @@ static int dpll_alloc_pin_on_xa(struct xarray *pins, struct dpll_pin *pin)
 
 	xa_for_each(pins, index, pos) {
 		if (pos == pin ||
-		    !strncmp(pos->description, pin->description, PIN_DESC_LEN))
+		    !strncmp(pos->description, pin->description,
+			     DPLL_PIN_DESC_LEN))
 			return -EEXIST;
 	}
 
@@ -291,14 +275,14 @@ static int dpll_alloc_pin_on_xa(struct xarray *pins, struct dpll_pin *pin)
 	return ret;
 }
 
-static int pin_ref_dpll_add(struct dpll_pin *pin, struct dpll_device *dpll,
+static int dpll_pin_ref_add(struct dpll_pin *pin, struct dpll_device *dpll,
 			    struct dpll_pin_ops *ops, void *priv)
 {
-	struct pin_ref_dpll *ref, *pos;
+	struct dpll_pin_ref *ref, *pos;
 	unsigned long index;
 	u32 idx;
 
-	ref = kzalloc(sizeof(struct pin_ref_dpll), GFP_KERNEL);
+	ref = kzalloc(sizeof(struct dpll_pin_ref), GFP_KERNEL);
 	if (!ref)
 		return -ENOMEM;
 	ref->dpll = dpll;
@@ -314,9 +298,9 @@ static int pin_ref_dpll_add(struct dpll_pin *pin, struct dpll_device *dpll,
 	return xa_alloc(&pin->ref_dplls, &idx, ref, xa_limit_16b, GFP_KERNEL);
 }
 
-static void pin_ref_dpll_del(struct dpll_pin *pin, struct dpll_device *dpll)
+static void dpll_pin_ref_del(struct dpll_pin *pin, struct dpll_device *dpll)
 {
-	struct pin_ref_dpll *pos;
+	struct dpll_pin_ref *pos;
 	unsigned long index;
 
 	xa_for_each(&pin->ref_dplls, index, pos) {
@@ -353,28 +337,75 @@ int dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
 	mutex_lock(&dpll->lock);
 	ret = dpll_alloc_pin_on_xa(&dpll->pins, pin);
 	if (!ret) {
-		ret = pin_ref_dpll_add(pin, dpll, ops, priv);
+		ret = dpll_pin_ref_add(pin, dpll, ops, priv);
 		if (ret)
 			pin_deregister_from_xa(&dpll->pins, pin);
 	}
 	mutex_unlock(&dpll->lock);
 	if (!ret)
-		dpll_notify_device_change(dpll, DPLL_CHANGE_PIN_ADD, pin);
+		dpll_pin_notify(dpll, pin, DPLL_CHANGE_PIN_ADD);
 
 	return ret;
 }
 EXPORT_SYMBOL_GPL(dpll_pin_register);
 
+struct dpll_pin *dpll_pin_get_by_idx_from_xa(struct xarray *xa_pins, int idx)
+{
+	struct dpll_pin *pos;
+	unsigned long index;
+
+	xa_for_each_marked(xa_pins, index, pos, PIN_REGISTERED) {
+		if (pos->idx == idx)
+			return pos;
+	}
+
+	return NULL;
+}
+
+/**
+ * dpll_pin_get_by_idx - find a pin by its index
+ * @dpll: dpll device pointer
+ * @idx: index of pin
+ *
+ * Allows multiple driver instances using one physical DPLL to find
+ * and share pin already registered with existing dpll device.
+ *
+ * Return: pointer if pin was found, NULL otherwise.
+ */
+struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, int idx)
+{
+	return dpll_pin_get_by_idx_from_xa(&dpll->pins, idx);
+}
+
+	struct dpll_pin
+*dpll_pin_get_by_description(struct dpll_device *dpll, const char *description)
+{
+	struct dpll_pin *pos, *pin = NULL;
+	unsigned long index;
+
+	xa_for_each(&dpll->pins, index, pos) {
+		if (!strncmp(pos->description, description,
+			     DPLL_PIN_DESC_LEN)) {
+			pin = pos;
+			break;
+		}
+	}
+
+	return pin;
+}
+
 int
 dpll_shared_pin_register(struct dpll_device *dpll_pin_owner,
-			 struct dpll_device *dpll, u32 pin_idx,
+			 struct dpll_device *dpll,
+			 const char *shared_pin_description,
 			 struct dpll_pin_ops *ops, void *priv)
 {
 	struct dpll_pin *pin;
 	int ret;
 
 	mutex_lock(&dpll_pin_owner->lock);
-	pin = dpll_pin_get_by_idx(dpll_pin_owner, pin_idx);
+	pin = dpll_pin_get_by_description(dpll_pin_owner,
+					  shared_pin_description);
 	if (!pin) {
 		ret = -EINVAL;
 		goto unlock;
@@ -397,10 +428,10 @@ int dpll_pin_deregister(struct dpll_device *dpll, struct dpll_pin *pin)
 	mutex_lock(&dpll->lock);
 	ret = pin_deregister_from_xa(&dpll->pins, pin);
 	if (!ret)
-		pin_ref_dpll_del(pin, dpll);
+		dpll_pin_ref_del(pin, dpll);
 	mutex_unlock(&dpll->lock);
 	if (!ret)
-		dpll_notify_device_change(dpll, DPLL_CHANGE_PIN_DEL, pin);
+		dpll_pin_notify(dpll, pin, DPLL_CHANGE_PIN_DEL);
 
 	return ret;
 }
@@ -417,67 +448,42 @@ void dpll_pin_free(struct dpll_pin *pin)
 EXPORT_SYMBOL_GPL(dpll_pin_free);
 
 int dpll_muxed_pin_register(struct dpll_device *dpll,
-			    struct dpll_pin *parent_pin, struct dpll_pin *pin,
+			    const char *parent_pin_description,
+			    struct dpll_pin *pin,
 			    struct dpll_pin_ops *ops, void *priv)
 {
+	struct dpll_pin *parent_pin;
 	int ret;
 
-	if (!parent_pin || !pin)
+	if (!parent_pin_description || !pin)
 		return -EINVAL;
 
 	mutex_lock(&dpll->lock);
+	parent_pin = dpll_pin_get_by_description(dpll, parent_pin_description);
+	if (!parent_pin)
+		return -EINVAL;
+	if (parent_pin->type != DPLL_PIN_TYPE_MUX)
+		return -EPERM;
 	ret = dpll_alloc_pin_on_xa(&dpll->pins, pin);
 	if (!ret)
-		ret = pin_ref_dpll_add(pin, dpll, ops, priv);
+		ret = dpll_pin_ref_add(pin, dpll, ops, priv);
 	if (!ret)
 		pin->parent_pin = parent_pin;
 	mutex_unlock(&dpll->lock);
 	if (!ret)
-		dpll_notify_device_change(dpll, DPLL_CHANGE_PIN_ADD, pin);
+		dpll_pin_notify(dpll, pin, DPLL_CHANGE_PIN_ADD);
 
 	return ret;
 }
 EXPORT_SYMBOL_GPL(dpll_muxed_pin_register);
 
-struct dpll_pin
-*dpll_pin_get_by_description(struct dpll_device *dpll, const char *description)
-{
-	struct dpll_pin *pos, *pin = NULL;
-	unsigned long index;
-
-	mutex_lock(&dpll->lock);
-	xa_for_each(&dpll->pins, index, pos) {
-		if (!strncmp(pos->description, description, PIN_DESC_LEN)) {
-			pin = pos;
-			break;
-		}
-	}
-	mutex_unlock(&dpll->lock);
-
-	return pin;
-}
-EXPORT_SYMBOL_GPL(dpll_pin_get_by_description);
-
-static struct dpll_pin
-*dpll_pin_get_by_idx_from_xa(struct xarray *xa_pins, int idx)
-{
-	struct dpll_pin *pos;
-	unsigned long index;
-
-	xa_for_each_marked(xa_pins, index, pos, PIN_REGISTERED) {
-		if (pos->idx == idx)
-			return pos;
-	}
-
-	return NULL;
-}
-
-struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, int idx)
-{
-	return dpll_pin_get_by_idx_from_xa(&dpll->pins, idx);
-}
-EXPORT_SYMBOL_GPL(dpll_pin_get_by_idx);
-
+/**
+ * dpll_pin_first - get first registered pin
+ * @dpll: registered dpll pointer
+ * @index: found pin index (out)
+ *
+ * Return: dpll_pin struct if found, NULL otherwise.
+ */
 struct dpll_pin *dpll_pin_first(struct dpll_device *dpll, unsigned long *index)
 {
 	*index = 0;
@@ -485,11 +491,24 @@ struct dpll_pin *dpll_pin_first(struct dpll_device *dpll, unsigned long *index)
 	return xa_find(&dpll->pins, index, LONG_MAX, PIN_REGISTERED);
 }
 
+/**
+ * dpll_pin_next - get next registered pin to the relative pin
+ * @dpll: registered dpll pointer
+ * @index: relative pin index (in and out)
+ *
+ * Return: dpll_pin struct if found, NULL otherwise.
+ */
 struct dpll_pin *dpll_pin_next(struct dpll_device *dpll, unsigned long *index)
 {
 	return xa_find_after(&dpll->pins, index, LONG_MAX, PIN_REGISTERED);
 }
 
+/**
+ * dpll_first - get first registered dpll device
+ * @index: found dpll index (out)
+ *
+ * Return: dpll_device struct if found, NULL otherwise.
+ */
 struct dpll_device *dpll_first(unsigned long *index)
 {
 	*index = 0;
@@ -497,62 +516,24 @@ struct dpll_device *dpll_first(unsigned long *index)
 	return xa_find(&dpll_device_xa, index, LONG_MAX, DPLL_REGISTERED);
 }
 
+/**
+ * dpll_pin_next - get next registered dpll device to the relative pin
+ * @index: relative dpll index (in and out)
+ *
+ * Return: dpll_pin struct if found, NULL otherwise.
+ */
 struct dpll_device *dpll_next(unsigned long *index)
 {
 	return xa_find_after(&dpll_device_xa, index, LONG_MAX, DPLL_REGISTERED);
 }
 
-static int
-dpll_notify_pin_change_attr(struct dpll_device *dpll, struct dpll_pin *pin,
-			    const struct dpll_pin_attr *attr)
+static struct dpll_pin_ref
+*dpll_pin_find_ref(const struct dpll_device *dpll, const struct dpll_pin *pin)
 {
-	enum dpll_event_change change;
-	int ret = 0;
-
-	if (dpll_pin_attr_valid(DPLLA_PIN_TYPE, attr)) {
-		change = DPLL_CHANGE_PIN_TYPE;
-		ret = dpll_notify_device_change(dpll, change, pin);
-	}
-	if (!ret && dpll_pin_attr_valid(DPLLA_PIN_SIGNAL_TYPE, attr)) {
-		change = DPLL_CHANGE_PIN_SIGNAL_TYPE;
-		ret = dpll_notify_device_change(dpll, change, pin);
-	}
-	if (!ret && dpll_pin_attr_valid(DPLLA_PIN_CUSTOM_FREQ, attr)) {
-		change = DPLL_CHANGE_PIN_CUSTOM_FREQ;
-		ret = dpll_notify_device_change(dpll, change, pin);
-	}
-	if (!ret && dpll_pin_attr_valid(DPLLA_PIN_STATE, attr)) {
-		change = DPLL_CHANGE_PIN_STATE;
-		ret = dpll_notify_device_change(dpll, change, pin);
-	}
-	if (!ret && dpll_pin_attr_valid(DPLLA_PIN_PRIO, attr)) {
-		change = DPLL_CHANGE_PIN_PRIO;
-		ret = dpll_notify_device_change(dpll, change, pin);
-	}
-
-	return ret;
-}
-
-static int dpll_notify_device_change_attr(struct dpll_device *dpll,
-					  const struct dpll_attr *attr)
-{
-	int ret = 0;
-
-	if (dpll_attr_valid(DPLLA_MODE, attr))
-		ret = dpll_notify_device_change(dpll, DPLL_CHANGE_MODE, NULL);
-	if (!ret && dpll_attr_valid(DPLLA_SOURCE_PIN_IDX, attr))
-		ret = dpll_notify_device_change(dpll, DPLL_CHANGE_SOURCE_PIN,
-						NULL);
-	return ret;
-}
-
-static struct pin_ref_dpll
-*dpll_pin_find_ref(struct dpll_device *dpll, struct dpll_pin *pin)
-{
-	struct pin_ref_dpll *ref;
+	struct dpll_pin_ref *ref;
 	unsigned long index;
 
-	xa_for_each(&pin->ref_dplls, index, ref) {
+	xa_for_each((struct xarray *)&pin->ref_dplls, index, ref) {
 		if (ref->dpll != dpll)
 			continue;
 		else
@@ -562,173 +543,442 @@ static struct pin_ref_dpll
 	return NULL;
 }
 
-static int
-dpll_pin_set_attr_single_ref(struct dpll_device *dpll, struct dpll_pin *pin,
-			     const struct dpll_pin_attr *attr)
+/**
+ * dpll_pin_type_get - get type of a pin
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @type: on success - configured pin type
+ *
+ * Return:
+ * * 0 - successfully got pin's type
+ * * negative - failed to get pin's type
+ */
+int dpll_pin_type_get(const struct dpll_device *dpll,
+		      const struct dpll_pin *pin,
+		      enum dpll_pin_type *type)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
-	int ret;
-
-	mutex_lock(&ref->dpll->lock);
-	ret = ref->ops->set(ref->dpll, pin, attr);
-	if (!ret)
-		dpll_notify_pin_change_attr(dpll, pin, attr);
-	mutex_unlock(&ref->dpll->lock);
-
-	return ret;
-}
-
-static int
-dpll_pin_set_attr_all_refs(struct dpll_pin *pin,
-			   const struct dpll_pin_attr *attr)
-{
-	struct pin_ref_dpll *ref;
-	unsigned long index;
-	int ret;
-
-	xa_for_each(&pin->ref_dplls, index, ref) {
-		if (!ref->dpll)
-			return -EFAULT;
-		if (!ref || !ref->ops || !ref->ops->set)
-			return -EOPNOTSUPP;
-		mutex_lock(&ref->dpll->lock);
-		ret = ref->ops->set(ref->dpll, pin, attr);
-		mutex_unlock(&ref->dpll->lock);
-		if (!ret)
-			dpll_notify_pin_change_attr(ref->dpll, pin, attr);
-	}
-
-	return ret;
-}
-
-int dpll_pin_set_attr(struct dpll_device *dpll, struct dpll_pin *pin,
-		      const struct dpll_pin_attr *attr)
-{
-	struct dpll_pin_attr *tmp_attr;
-	int ret;
-
-	tmp_attr = dpll_pin_attr_alloc();
-	if (!tmp_attr)
-		return -ENOMEM;
-	ret = dpll_pin_attr_prep_common(tmp_attr, attr);
-	if (ret < 0)
-		goto tmp_free;
-	if (ret == PIN_ATTR_CHANGE) {
-		ret = dpll_pin_set_attr_all_refs(pin, tmp_attr);
-		if (ret)
-			goto tmp_free;
-	}
-
-	ret = dpll_pin_attr_prep_exclusive(tmp_attr, attr);
-	if (ret < 0)
-		goto tmp_free;
-	if (ret == PIN_ATTR_CHANGE)
-		ret = dpll_pin_set_attr_single_ref(dpll, pin, tmp_attr);
-
-tmp_free:
-	dpll_pin_attr_free(tmp_attr);
-	return ret;
-}
-
-int dpll_pin_get_attr(struct dpll_device *dpll, struct dpll_pin *pin,
-		      struct dpll_pin_attr *attr)
-{
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
-	int ret;
-
-	if (!ref)
+	if (!pin)
 		return -ENODEV;
-	if (!ref->ops || !ref->ops->get)
-		return -EOPNOTSUPP;
-
-	ret = ref->ops->get(dpll, pin, attr);
-	if (ret)
-		return -EAGAIN;
-
-	return ret;
-}
-
-const char *dpll_pin_get_description(struct dpll_pin *pin)
-{
-	return pin->description;
-}
-
-struct dpll_pin *dpll_pin_get_parent(struct dpll_pin *pin)
-{
-	return pin->parent_pin;
-}
-
-int dpll_set_attr(struct dpll_device *dpll, const struct dpll_attr *attr)
-{
-	int ret;
-
-	if (dpll_attr_valid(DPLLA_SOURCE_PIN_IDX, attr)) {
-		struct pin_ref_dpll *ref;
-		struct dpll_pin *pin;
-		u32 source_idx;
-
-		ret = dpll_attr_source_idx_get(attr, &source_idx);
-		if (ret)
-			return -EINVAL;
-		pin = dpll_pin_get_by_idx(dpll, source_idx);
-		if (!pin)
-			return -ENXIO;
-		ref = dpll_pin_find_ref(dpll, pin);
-		if (!ref || !ref->ops)
-			return -EFAULT;
-		if (!ref->ops->select)
-			return -ENODEV;
-		dpll_lock(ref->dpll);
-		ret = ref->ops->select(ref->dpll, pin);
-		dpll_unlock(ref->dpll);
-		if (ret)
-			return -EINVAL;
-		dpll_notify_device_change_attr(dpll, attr);
-	}
-
-	if (dpll_attr_valid(DPLLA_MODE, attr)) {
-		dpll_lock(dpll);
-		ret = dpll->ops->set(dpll, attr);
-		dpll_unlock(dpll);
-		if (ret)
-			return -EINVAL;
-	}
-	dpll_notify_device_change_attr(dpll, attr);
-
-	return ret;
-}
-
-int dpll_get_attr(struct dpll_device *dpll, struct dpll_attr *attr)
-{
-	if (!dpll)
-		return -ENODEV;
-	if (!dpll->ops || !dpll->ops->get)
-		return -EOPNOTSUPP;
-	if (dpll->ops->get(dpll, attr))
-		return -EAGAIN;
+	*type = pin->type;
 
 	return 0;
 }
 
+/**
+ * dpll_pin_signal_type_get - get signal type of a pin
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @type: on success - configured signal type
+ *
+ * Return:
+ * * 0 - successfully got signal type
+ * * negative - failed to obtain signal type
+ */
+int dpll_pin_signal_type_get(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin,
+			     enum dpll_pin_signal_type *type)
+{
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
+	int ret;
+
+	if (!ref)
+		return -ENODEV;
+	if (!ref->ops || !ref->ops->signal_type_get)
+		return -EOPNOTSUPP;
+	ret = ref->ops->signal_type_get(ref->dpll, pin, type);
+
+	return ret;
+}
+
+/**
+ * dpll_pin_signal_type_set - set signal type of a pin
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @type: type to be set
+ *
+ * Return:
+ * * 0 - signal type set
+ * * negative - failed to set signal type
+ */
+int dpll_pin_signal_type_set(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin,
+			     const enum dpll_pin_signal_type type)
+{
+	struct dpll_pin_ref *ref;
+	unsigned long index;
+	int ret;
+
+	xa_for_each((struct xarray *)&pin->ref_dplls, index, ref) {
+		if (!ref->dpll)
+			return -EFAULT;
+		if (!ref || !ref->ops || !ref->ops->signal_type_set)
+			return -EOPNOTSUPP;
+		if (ref->dpll != dpll)
+			mutex_lock(&ref->dpll->lock);
+		ret = ref->ops->signal_type_set(ref->dpll, pin, type);
+		if (ref->dpll != dpll)
+			mutex_unlock(&ref->dpll->lock);
+		if (ret)
+			return ret;
+	}
+
+	return ret;
+}
+
+/**
+ * dpll_pin_signal_type_supported - check if signal type is supported on a pin
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @type: type being checked
+ * @supported: on success - if given signal type is supported
+ *
+ * Return:
+ * * 0 - successfully got supported signal type
+ * * negative - failed to obtain supported signal type
+ */
+int dpll_pin_signal_type_supported(const struct dpll_device *dpll,
+				   const struct dpll_pin *pin,
+				   const enum dpll_pin_signal_type type,
+				   bool *supported)
+{
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
+
+	if (!ref)
+		return -ENODEV;
+	if (!ref->ops || !ref->ops->signal_type_supported)
+		return -EOPNOTSUPP;
+	*supported = ref->ops->signal_type_supported(ref->dpll, pin, type);
+
+	return 0;
+}
+
+/**
+ * dpll_pin_mode_active - check if given mode is active on a pin
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @mode: mode being checked
+ * @active: on success - if mode is active
+ *
+ * Return:
+ * * 0 - successfully checked if mode is active
+ * * negative - failed to check for active mode
+ */
+int dpll_pin_mode_active(const struct dpll_device *dpll,
+			  const struct dpll_pin *pin,
+			  const enum dpll_pin_mode mode,
+			  bool *active)
+{
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
+
+	if (!ref)
+		return -ENODEV;
+	if (!ref->ops || !ref->ops->mode_active)
+		return -EOPNOTSUPP;
+	*active = ref->ops->mode_active(ref->dpll, pin, mode);
+
+	return 0;
+}
+
+/**
+ * dpll_pin_mode_supported - check if given mode is supported on a pin
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @mode: mode being checked
+ * @supported: on success - if mode is supported
+ *
+ * Return:
+ * * 0 - successfully checked if mode is supported
+ * * negative - failed to check for supported mode
+ */
+int dpll_pin_mode_supported(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin,
+			     const enum dpll_pin_mode mode,
+			     bool *supported)
+{
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
+
+	if (!ref)
+		return -ENODEV;
+	if (!ref->ops || !ref->ops->mode_supported)
+		return -EOPNOTSUPP;
+	*supported = ref->ops->mode_supported(ref->dpll, pin, mode);
+
+	return 0;
+}
+
+/**
+ * dpll_pin_mode_set - set pin's mode
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @mode: mode being set
+ *
+ * Return:
+ * * 0 - successfully set the mode
+ * * negative - failed to set the mode
+ */
+int dpll_pin_mode_set(const struct dpll_device *dpll,
+		       const struct dpll_pin *pin,
+		       const enum dpll_pin_mode mode)
+{
+	struct dpll_pin_ref *ref;
+	unsigned long index;
+	int ret;
+
+	xa_for_each((struct xarray *)&pin->ref_dplls, index, ref) {
+		if (!ref)
+			return -ENODEV;
+		if (!ref->ops || !ref->ops->mode_enable)
+			return -EOPNOTSUPP;
+		if (ref->dpll != dpll)
+			mutex_lock(&ref->dpll->lock);
+		ret = ref->ops->mode_enable(ref->dpll, pin, mode);
+		if (ref->dpll != dpll)
+			mutex_unlock(&ref->dpll->lock);
+		if (ret)
+			return ret;
+	}
+
+	return ret;
+}
+
+/**
+ * dpll_pin_custom_freq_get - get pin's custom frequency
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @freq: on success - custom frequency of a pin
+ *
+ * Return:
+ * * 0 - successfully got custom frequency
+ * * negative - failed to obtain custom frequency
+ */
+int dpll_pin_custom_freq_get(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin, u32 *freq)
+{
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
+	int ret;
+
+	if (!ref)
+		return -ENODEV;
+	if (!ref->ops || !ref->ops->custom_freq_get)
+		return -EOPNOTSUPP;
+	ret = ref->ops->custom_freq_get(ref->dpll, pin, freq);
+
+	return ret;
+}
+
+/**
+ * dpll_pin_custom_freq_set - set pin's custom frequency
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @freq: custom frequency to be set
+ *
+ * Return:
+ * * 0 - successfully set custom frequency
+ * * negative - failed to set custom frequency
+ */
+int dpll_pin_custom_freq_set(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin, const u32 freq)
+{
+	enum dpll_pin_signal_type type;
+	struct dpll_pin_ref *ref;
+	unsigned long index;
+	int ret;
+
+	xa_for_each((struct xarray *)&pin->ref_dplls, index, ref) {
+		if (!ref)
+			return -ENODEV;
+		if (!ref->ops || !ref->ops->custom_freq_set ||
+		    !ref->ops->signal_type_get)
+			return -EOPNOTSUPP;
+		if (dpll != ref->dpll)
+			mutex_lock(&ref->dpll->lock);
+		ret = ref->ops->signal_type_get(dpll, pin, &type);
+		if (!ret && type == DPLL_PIN_SIGNAL_TYPE_CUSTOM_FREQ)
+			ret = ref->ops->custom_freq_set(ref->dpll, pin, freq);
+		if (dpll != ref->dpll)
+			mutex_unlock(&ref->dpll->lock);
+		if (ret)
+			return ret;
+	}
+
+	return ret;
+}
+
+/**
+ * dpll_pin_prio_get - get pin's prio on dpll
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @prio: on success - priority of a pin on a dpll
+ *
+ * Return:
+ * * 0 - successfully got priority
+ * * negative - failed to obtain priority
+ */
+int dpll_pin_prio_get(const struct dpll_device *dpll,
+		      const struct dpll_pin *pin, u32 *prio)
+{
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
+	int ret;
+
+	if (!ref)
+		return -ENODEV;
+	if (!ref->ops || !ref->ops->prio_get)
+		return -EOPNOTSUPP;
+	ret = ref->ops->prio_get(ref->dpll, pin, prio);
+
+	return ret;
+}
+
+/**
+ * dpll_pin_prio_set - set pin's prio on dpll
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @prio: priority of a pin to be set on a dpll
+ *
+ * Return:
+ * * 0 - successfully set priority
+ * * negative - failed to set the priority
+ */
+int dpll_pin_prio_set(const struct dpll_device *dpll,
+		      const struct dpll_pin *pin, const u32 prio)
+{
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
+	int ret;
+
+	if (!ref)
+		return -ENODEV;
+	if (!ref->ops || !ref->ops->prio_set)
+		return -EOPNOTSUPP;
+	ret = ref->ops->prio_set(ref->dpll, pin, prio);
+
+	return ret;
+}
+
+/**
+ * dpll_pin_netifindex_get - get pin's netdev iterface index
+ * @dpll: registered dpll pointer
+ * @pin: registered pin pointer
+ * @netifindex: on success - index of a netdevice associated with pin
+ *
+ * Return:
+ * * 0 - successfully got netdev interface index
+ * * negative - failed to obtain netdev interface index
+ */
+int dpll_pin_netifindex_get(const struct dpll_device *dpll,
+			    const struct dpll_pin *pin,
+			    int *netifindex)
+{
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
+	int ret;
+
+	if (!ref)
+		return -ENODEV;
+	if (!ref->ops || !ref->ops->net_if_idx_get)
+		return -EOPNOTSUPP;
+	ret = ref->ops->net_if_idx_get(ref->dpll, pin, netifindex);
+
+	return ret;
+}
+
+/**
+ * dpll_pin_description - provide pin's description string
+ * @pin: registered pin pointer
+ *
+ * Return: pointer to a description string.
+ */
+const char *dpll_pin_description(struct dpll_pin *pin)
+{
+	return pin->description;
+}
+
+/**
+ * dpll_pin_parent - provide pin's parent pin if available
+ * @pin: registered pin pointer
+ *
+ * Return: pointer to aparent if found, NULL otherwise.
+ */
+struct dpll_pin *dpll_pin_parent(struct dpll_pin *pin)
+{
+	return pin->parent_pin;
+}
+
+/**
+ * dpll_mode_set - handler for dpll mode set
+ * @dpll: registered dpll pointer
+ * @mode: mode to be set
+ *
+ * Return: 0 if succeeds, error code otherwise.
+ */
+int dpll_mode_set(struct dpll_device *dpll, const enum dpll_mode mode)
+{
+	int ret;
+
+	if (!dpll->ops || !dpll->ops)
+		return -EOPNOTSUPP;
+
+	ret = dpll->ops->mode_set(dpll, mode);
+
+	return ret;
+}
+
+/**
+ * dpll_source_idx_set - handler for selecting a dpll's source
+ * @dpll: registered dpll pointer
+ * @source_pin_idx: index of a source pin to e selected
+ *
+ * Return: 0 if succeeds, error code otherwise.
+ */
+int dpll_source_idx_set(struct dpll_device *dpll, const u32 source_pin_idx)
+{
+	struct dpll_pin_ref *ref;
+	struct dpll_pin *pin;
+	int ret;
+
+	pin = dpll_pin_get_by_idx_from_xa(&dpll->pins, source_pin_idx);
+	if (!pin)
+		return -ENXIO;
+	ref = dpll_pin_find_ref(dpll, pin);
+	if (!ref || !ref->ops)
+		return -EFAULT;
+	if (!ref->ops->select)
+		return -ENODEV;
+	ret = ref->ops->select(ref->dpll, pin);
+
+	return ret;
+}
+
+/**
+ * dpll_lock - locks the dpll using internal mutex
+ * @dpll: registered dpll pointer
+ */
 void dpll_lock(struct dpll_device *dpll)
 {
 	mutex_lock(&dpll->lock);
 }
 
+/**
+ * dpll_unlock - unlocks the dpll using internal mutex
+ * @dpll: registered dpll pointer
+ */
 void dpll_unlock(struct dpll_device *dpll)
 {
 	mutex_unlock(&dpll->lock);
 }
 
-void *dpll_priv(struct dpll_device *dpll)
+enum dpll_pin_type dpll_pin_type(const struct dpll_pin *pin)
+{
+	return pin->type;
+}
+
+void *dpll_priv(const struct dpll_device *dpll)
 {
 	return dpll->priv;
 }
 EXPORT_SYMBOL_GPL(dpll_priv);
 
-void *dpll_pin_priv(struct dpll_device *dpll, struct dpll_pin *pin)
+void *dpll_pin_priv(const struct dpll_device *dpll, const struct dpll_pin *pin)
 {
-	struct pin_ref_dpll *ref = dpll_pin_find_ref(dpll, pin);
+	struct dpll_pin_ref *ref = dpll_pin_find_ref(dpll, pin);
 
 	if (!ref)
 		return NULL;

@@ -13,164 +13,93 @@
 #define to_dpll_device(_dev) \
 	container_of(_dev, struct dpll_device, dev)
 
+/**
+ * struct dpll_device - structure for a DPLL device
+ * @id:		unique id number for each device
+ * @dev:	struct device for this dpll device
+ * @parent:	parent device
+ * @ops:	operations this &dpll_device supports
+ * @lock:	mutex to serialize operations
+ * @type:	type of a dpll
+ * @priv:	pointer to private information of owner
+ * @pins:	list of pointers to pins registered with this dpll
+ * @clock_id:	unique identifier (clock_id) of a dpll
+ * @clock_class	quality class of a DPLL clock
+ * @dev_driver_idx: provided by driver for
+ */
+struct dpll_device {
+	u32 id;
+	struct device dev;
+	struct device *parent;
+	struct dpll_device_ops *ops;
+	struct mutex lock;
+	enum dpll_type type;
+	void *priv;
+	struct xarray pins;
+	u64 clock_id;
+	enum dpll_clock_class clock_class;
+	u8 dev_driver_idx;
+};
+
 #define for_each_pin_on_dpll(dpll, pin, i)			\
 	for (pin = dpll_pin_first(dpll, &i); pin != NULL;	\
 	     pin = dpll_pin_next(dpll, &i))
 
-#define for_each_dpll(dpll, i)				\
-	for (dpll = dpll_first(&i); dpll != NULL;	\
-	     dpll = dpll_next(&i))
+#define for_each_dpll(dpll, i)                         \
+	for (dpll = dpll_first(&i); dpll != NULL; dpll = dpll_next(&i))
 
-
-/**
- * dpll_device_get_by_id - find dpll device by it's id
- * @id: dpll id
- *
- * Return: dpll_device struct if found, NULL otherwise.
- */
 struct dpll_device *dpll_device_get_by_id(int id);
 
-/**
- * dpll_device_get_by_name - find dpll device by it's id
- * @name: dpll name
- *
- * Return: dpll_device struct if found, NULL otherwise.
- */
 struct dpll_device *dpll_device_get_by_name(const char *name);
-
-/**
- * dpll_pin_first - get first registered pin
- * @dpll: registered dpll pointer
- * @index: found pin index (out)
- *
- * Return: dpll_pin struct if found, NULL otherwise.
- */
 struct dpll_pin *dpll_pin_first(struct dpll_device *dpll, unsigned long *index);
-
-/**
- * dpll_pin_next - get next registered pin to the relative pin
- * @dpll: registered dpll pointer
- * @index: relative pin index (in and out)
- *
- * Return: dpll_pin struct if found, NULL otherwise.
- */
 struct dpll_pin *dpll_pin_next(struct dpll_device *dpll, unsigned long *index);
-
-/**
- * dpll_first - get first registered dpll device
- * @index: found dpll index (out)
- *
- * Return: dpll_device struct if found, NULL otherwise.
- */
 struct dpll_device *dpll_first(unsigned long *index);
-
-/**
- * dpll_pin_next - get next registered dpll device to the relative pin
- * @index: relative dpll index (in and out)
- *
- * Return: dpll_pin struct if found, NULL otherwise.
- */
 struct dpll_device *dpll_next(unsigned long *index);
-
-/**
- * dpll_device_unregister - unregister dpll device
- * @dpll: registered dpll pointer
- *
- * Note: It does not free the memory
- */
 void dpll_device_unregister(struct dpll_device *dpll);
-
-/**
- * dpll_id - return dpll id
- * @dpll: registered dpll pointer
- *
- * Return: dpll id.
- */
 u32 dpll_id(struct dpll_device *dpll);
-
-/**
- * dpll_pin_idx - return dpll name
- * @dpll: registered dpll pointer
- *
- * Return: dpll name.
- */
 const char *dpll_dev_name(struct dpll_device *dpll);
-
-/**
- * dpll_lock - locks the dpll using internal mutex
- * @dpll: registered dpll pointer
- */
 void dpll_lock(struct dpll_device *dpll);
-
-/**
- * dpll_unlock - unlocks the dpll using internal mutex
- * @dpll: registered dpll pointer
- */
 void dpll_unlock(struct dpll_device *dpll);
-
-/**
- * dpll_set_attr - handler for dpll subsystem: dpll set attributes
- * @dpll: registered dpll pointer
- * @attr: dpll attributes
- *
- * Return: 0 if succeeds, error code otherwise.
- */
-int dpll_set_attr(struct dpll_device *dpll, const struct dpll_attr *attr);
-
-/**
- * dpll_get_attr - handler for dpll subsystem: dpll get attributes
- * @dpll: registered dpll pointer
- * @attr: dpll attributes
- *
- * Return: 0 if succeeds, error code otherwise.
- */
-int dpll_get_attr(struct dpll_device *dpll, struct dpll_attr *attr);
-
-/**
- * dpll_pin_idx - return dpll id
- * @dpll: registered dpll pointer
- * @pin: registered pin pointer
- *
- * Return: dpll id.
- */
 u32 dpll_pin_idx(struct dpll_device *dpll, struct dpll_pin *pin);
-
-/**
- * dpll_pin_get_attr - handler for dpll subsystem: dpll pin get attributes
- * @dpll: registered dpll pointer
- * @pin: registered pin pointer
- * @attr: dpll pin attributes
- *
- * Return: 0 if succeeds, error code otherwise.
- */
-int dpll_pin_get_attr(struct dpll_device *dpll, struct dpll_pin *pin,
-		      struct dpll_pin_attr *attr);
-
-/**
- * dpll_pin_get_description - provide pin's description string
- * @pin: registered pin pointer
- *
- * Return: pointer to a description string.
- */
-const char *dpll_pin_get_description(struct dpll_pin *pin);
-
-/**
- * dpll_pin_get_parent - provide pin's parent pin if available
- * @pin: registered pin pointer
- *
- * Return: pointer to aparent if found, NULL otherwise.
- */
-struct dpll_pin *dpll_pin_get_parent(struct dpll_pin *pin);
-
-/**
- * dpll_pin_set_attr - handler for dpll subsystem: dpll pin get attributes
- * @dpll: registered dpll pointer
- * @pin: registered pin pointer
- * @attr: dpll pin attributes
- *
- * Return: 0 if succeeds, error code otherwise.
- */
-int dpll_pin_set_attr(struct dpll_device *dpll, struct dpll_pin *pin,
-		      const struct dpll_pin_attr *attr);
+int dpll_pin_type_get(const struct dpll_device *dpll,
+		      const struct dpll_pin *pin,
+		      enum dpll_pin_type *type);
+int dpll_pin_signal_type_get(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin,
+			     enum dpll_pin_signal_type *type);
+int dpll_pin_signal_type_set(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin,
+			     const enum dpll_pin_signal_type type);
+int dpll_pin_signal_type_supported(const struct dpll_device *dpll,
+				   const struct dpll_pin *pin,
+				   const enum dpll_pin_signal_type type,
+				   bool *supported);
+int dpll_pin_mode_active(const struct dpll_device *dpll,
+			 const struct dpll_pin *pin,
+			 const enum dpll_pin_mode mode,
+			 bool *active);
+int dpll_pin_mode_supported(const struct dpll_device *dpll,
+			    const struct dpll_pin *pin,
+			    const enum dpll_pin_mode mode,
+			    bool *supported);
+int dpll_pin_mode_set(const struct dpll_device *dpll,
+		      const struct dpll_pin *pin,
+		      const enum dpll_pin_mode mode);
+int dpll_pin_custom_freq_get(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin, u32 *freq);
+int dpll_pin_custom_freq_set(const struct dpll_device *dpll,
+			     const struct dpll_pin *pin, const u32 freq);
+int dpll_pin_prio_get(const struct dpll_device *dpll,
+		      const struct dpll_pin *pin, u32 *prio);
+struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, int idx);
+int dpll_pin_prio_set(const struct dpll_device *dpll,
+		      const struct dpll_pin *pin, const u32 prio);
+int dpll_pin_netifindex_get(const struct dpll_device *dpll,
+			    const struct dpll_pin *pin,
+			    int *netifindex);
+const char *dpll_pin_description(struct dpll_pin *pin);
+struct dpll_pin *dpll_pin_parent(struct dpll_pin *pin);
+int dpll_mode_set(struct dpll_device *dpll, const enum dpll_mode mode);
+int dpll_source_idx_set(struct dpll_device *dpll, const u32 source_pin_idx);
 
 #endif
