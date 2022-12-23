@@ -20,7 +20,7 @@ static const struct nla_policy dpll_cmd_device_get_policy[] = {
 	[DPLLA_ID]		= { .type = NLA_U32 },
 	[DPLLA_NAME]		= { .type = NLA_STRING,
 				    .len = DPLL_NAME_LEN },
-	[DPLLA_DUMP_FILTER]	= { .type = NLA_U32 },
+	[DPLLA_FILTER]		= { .type = NLA_U32 },
 };
 
 static const struct nla_policy dpll_cmd_device_set_policy[] = {
@@ -463,7 +463,7 @@ dpll_device_dump_one(struct dpll_device *dpll, struct sk_buff *msg,
 	if (ret)
 		goto out_unlock;
 
-	if (dump_filter & DPLL_DUMP_FILTER_STATUS) {
+	if (dump_filter & DPLL_FILTER_STATUS) {
 		ret = __dpll_cmd_dump_status(msg, dpll);
 		if (ret) {
 			if (ret != -EMSGSIZE)
@@ -471,7 +471,7 @@ dpll_device_dump_one(struct dpll_device *dpll, struct sk_buff *msg,
 			goto out_unlock;
 		}
 	}
-	if (dump_filter & DPLL_DUMP_FILTER_PINS)
+	if (dump_filter & DPLL_FILTER_PINS)
 		ret = __dpll_cmd_dump_pins(msg, dpll);
 	dpll_unlock(dpll);
 
@@ -632,8 +632,8 @@ static int dpll_cmd_device_get(struct sk_buff *skb, struct genl_info *info)
 	struct nlattr *hdr;
 	int ret;
 
-	if (attrs[DPLLA_DUMP_FILTER])
-		dump_filter = nla_get_s32(attrs[DPLLA_DUMP_FILTER]);
+	if (attrs[DPLLA_FILTER])
+		dump_filter = nla_get_s32(attrs[DPLLA_FILTER]);
 
 	msg = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!msg)
@@ -660,7 +660,7 @@ static int dpll_cmd_device_get_start(struct netlink_callback *cb)
 {
 	const struct genl_dumpit_info *info = genl_dumpit_info(cb);
 	struct dpll_dump_ctx *ctx = dpll_dump_context(cb);
-	struct nlattr *attr = info->attrs[DPLLA_DUMP_FILTER];
+	struct nlattr *attr = info->attrs[DPLLA_FILTER];
 
 	if (attr)
 		ctx->dump_filter = nla_get_s32(attr);

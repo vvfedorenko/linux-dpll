@@ -7,12 +7,12 @@
 #define DPLL_PIN_DESC_LEN	20
 
 /* Adding event notification support elements */
-#define DPLL_FAMILY_NAME		"dpll"
-#define DPLL_VERSION			0x01
-#define DPLL_MONITOR_GROUP_NAME		"monitor"
+#define DPLL_FAMILY_NAME	"dpll"
+#define DPLL_VERSION		0x01
+#define DPLL_MONITOR_GROUP_NAME	"monitor"
 
-#define DPLL_DUMP_FILTER_PINS	1
-#define DPLL_DUMP_FILTER_STATUS	2
+#define DPLL_FILTER_PINS	1
+#define DPLL_FILTER_STATUS	2
 
 /* dplla - Attributes of dpll generic netlink family
  *
@@ -27,7 +27,8 @@
  * @DPLLA_TEMP - dpll's temperature (signed int - Celsius degrees)
  * @DPLLA_CLOCK_ID - Unique Clock Identifier of dpll (u64)
  * @DPLLA_CLOCK_CLASS - clock quality class of dpll (enum dpll_clock_class)
- * @DPLLA_DUMP_FILTER - filter bitmask (int, sum of DPLL_DUMP_FILTER_* defines)
+ * @DPLLA_FILTER - filter bitmask for filtering get and dump requests (int,
+ *	sum of DPLL_DUMP_FILTER_* defines)
  * @DPLLA_PIN - nested attribute, each contains single pin attributes
  * @DPLLA_PIN_IDX - index of a pin on dpll (unsigned int)
  * @DPLLA_PIN_DESCRIPTION - human-readable pin description provided by driver
@@ -59,7 +60,7 @@ enum dplla {
 	DPLLA_TEMP,
 	DPLLA_CLOCK_ID,
 	DPLLA_CLOCK_CLASS,
-	DPLLA_DUMP_FILTER,
+	DPLLA_FILTER,
 	DPLLA_PIN,
 	DPLLA_PIN_IDX,
 	DPLLA_PIN_DESCRIPTION,
