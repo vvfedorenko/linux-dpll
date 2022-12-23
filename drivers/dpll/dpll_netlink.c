@@ -345,16 +345,6 @@ dpll_msg_add_pin_netifindex(struct sk_buff *msg, const struct dpll_device *dpll,
 }
 
 static int
-dpll_msg_add_event_change_type(struct sk_buff *msg,
-			       enum dpll_event_change event)
-{
-	if (nla_put_s32(msg, DPLLA_CHANGE_TYPE, event))
-		return -EMSGSIZE;
-
-	return 0;
-}
-
-static int
 __dpll_cmd_device_dump_one(struct sk_buff *msg, struct dpll_device *dpll)
 {
 	int ret = dpll_msg_add_id(msg, dpll_id(dpll));
@@ -491,31 +481,6 @@ out_unlock:
 	return ret;
 }
 
-static enum dpll_pin_signal_type dpll_msg_read_pin_sig_type(struct nlattr *a)
-{
-	return nla_get_s32(a);
-}
-
-static u32 dpll_msg_read_pin_custom_freq(struct nlattr *a)
-{
-	return nla_get_u32(a);
-}
-
-static enum dpll_pin_state dpll_msg_read_pin_state(struct nlattr *a)
-{
-	return nla_get_s32(a);
-}
-
-static u32 dpll_msg_read_pin_prio(struct nlattr *a)
-{
-	return nla_get_u32(a);
-}
-
-static u32 dpll_msg_read_dump_filter(struct nlattr *a)
-{
-	return nla_get_u32(a);
-}
-
 static int
 dpll_pin_set_from_nlattr(struct dpll_device *dpll,
 			 struct dpll_pin *pin, struct genl_info *info)
@@ -530,25 +495,25 @@ dpll_pin_set_from_nlattr(struct dpll_device *dpll,
 			  genlmsg_len(info->genlhdr), rem) {
 		switch (nla_type(a)) {
 		case DPLLA_PIN_SIGNAL_TYPE:
-			st = dpll_msg_read_pin_sig_type(a);
+			st = nla_get_s32(a);
 			ret = dpll_pin_signal_type_set(dpll, pin, st);
 			if (ret)
 				return ret;
 			break;
 		case DPLLA_PIN_CUSTOM_FREQ:
-			freq = dpll_msg_read_pin_custom_freq(a);
+			freq = nla_get_u32(a);
 			ret = dpll_pin_custom_freq_set(dpll, pin, freq);
 			if (ret)
 				return ret;
 			break;
 		case DPLLA_PIN_STATE:
-			state = dpll_msg_read_pin_state(a);
+			state = nla_get_s32(a);
 			ret = dpll_pin_state_set(dpll, pin, state);
 			if (ret)
 				return ret;
 			break;
 		case DPLLA_PIN_PRIO:
-			prio = dpll_msg_read_pin_prio(a);
+			prio = nla_get_u32(a);
 			ret = dpll_pin_prio_set(dpll, pin, prio);
 			if (ret)
 				return ret;
@@ -668,8 +633,7 @@ static int dpll_cmd_device_get(struct sk_buff *skb, struct genl_info *info)
 	int ret;
 
 	if (attrs[DPLLA_DUMP_FILTER])
-		dump_filter =
-			dpll_msg_read_dump_filter(attrs[DPLLA_DUMP_FILTER]);
+		dump_filter = nla_get_s32(attrs[DPLLA_DUMP_FILTER]);
 
 	msg = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!msg)
@@ -699,7 +663,7 @@ static int dpll_cmd_device_get_start(struct netlink_callback *cb)
 	struct nlattr *attr = info->attrs[DPLLA_DUMP_FILTER];
 
 	if (attr)
-		ctx->dump_filter = dpll_msg_read_dump_filter(attr);
+		ctx->dump_filter = nla_get_s32(attr);
 	else
 		ctx->dump_filter = 0;
 
@@ -796,7 +760,7 @@ static int dpll_event_device_change(struct sk_buff *msg,
 
 	if (ret)
 		return ret;
-	ret = dpll_msg_add_event_change_type(msg, event);
+	ret = nla_put_s32(msg, DPLLA_CHANGE_TYPE, event);
 	if (ret)
 		return ret;
 	switch (event)	{
