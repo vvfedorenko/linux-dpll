@@ -276,4 +276,21 @@ enum dpll_clock_class {
 
 #define DPLL_CLOCK_CLASS_MAX (__DPLL_CLOCK_CLASS_MAX - 1)
 
+/**
+ * enum dpll_type - type of dpll, integer value of enum is embedded into
+ * name of DPLL device (DPLLA_NAME)
+ *
+ * @DPLL_TYPE_UNSPEC - unspecified
+ * @DPLL_TYPE_PPS - dpll produces Pulse-Per-Second signal
+ * @DPLL_TYPE_EEC - dpll drives the Ethernet Equipment Clock
+ */
+enum dpll_type {
+	DPLL_TYPE_UNSPEC,
+	DPLL_TYPE_PPS,
+	DPLL_TYPE_EEC,
+
+	__DPLL_TYPE_MAX
+};
+#define DPLL_TYPE_MAX	(__DPLL_TYPE_MAX - 1)
+
 #endif /* _UAPI_LINUX_DPLL_H */

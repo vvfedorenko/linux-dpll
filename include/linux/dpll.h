@@ -65,15 +65,6 @@ struct dpll_pin_ops {
 		      const struct dpll_pin *pin);
 };
 
-enum dpll_type {
-	DPLL_TYPE_UNSPEC,
-	DPLL_TYPE_PPS,
-	DPLL_TYPE_EEC,
-
-	__DPLL_TYPE_MAX
-};
-#define DPLL_TYPE_MAX	(__DPLL_TYPE_MAX - 1)
-
 /**
  * dpll_device_alloc - allocate memory for a new dpll_device object
  * @ops: pointer to dpll operations structure
