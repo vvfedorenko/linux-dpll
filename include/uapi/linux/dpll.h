@@ -242,7 +242,7 @@ enum dpll_cmd {
  * dpll selects one of its sources to syntonize with a source.
  *
  * @DPLL_MODE_UNSPEC - invalid
- * @DPLL_MODE_FORCED - source can be only selected by sending a request to dpll
+ * @DPLL_MODE_MANUAL - source can be only selected by sending a request to dpll
  * @DPLL_MODE_AUTOMATIC - highest prio, valid source, auto selected by dpll
  * @DPLL_MODE_HOLDOVER - dpll forced into holdover mode
  * @DPLL_MODE_FREERUN - dpll driven on system clk, no holdover available
@@ -250,7 +250,7 @@ enum dpll_cmd {
  **/
 enum dpll_mode {
 	DPLL_MODE_UNSPEC,
-	DPLL_MODE_FORCED,
+	DPLL_MODE_MANUAL,
 	DPLL_MODE_AUTOMATIC,
 	DPLL_MODE_HOLDOVER,
 	DPLL_MODE_FREERUN,
