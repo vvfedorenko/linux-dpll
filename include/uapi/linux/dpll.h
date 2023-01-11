@@ -45,9 +45,9 @@
  *	(enum dpll_pin_mode)
  * @DPLLA_PIN_PRIO - priority of a pin on dpll (unsigned int)
  * @DPLLA_PIN_PARENT_IDX - if of a parent pin (unsigned int)
+ * @DPLLA_PIN_NETIFINDEX - related network interface index for the pin
  * @DPLLA_CHANGE_TYPE - type of device change event
  *	(enum dpll_change_type)
- * @DPLLA_PIN_NETIFINDEX - related network interface index for the pin
  **/
 enum dplla {
 	DPLLA_UNSPEC,
@@ -72,8 +72,8 @@ enum dplla {
 	DPLLA_PIN_MODE_SUPPORTED,
 	DPLLA_PIN_PRIO,
 	DPLLA_PIN_PARENT_IDX,
-	DPLLA_CHANGE_TYPE,
 	DPLLA_PIN_NETIFINDEX,
+	DPLLA_CHANGE_TYPE,
 	__DPLLA_MAX,
 };
 
@@ -192,7 +192,6 @@ enum dpll_event {
  * @DPLL_CHANGE_TEMP - temperature changed
  * @DPLL_CHANGE_PIN_ADD - source pin added,
  * @DPLL_CHANGE_PIN_DEL - source pin deleted,
- * @DPLL_CHANGE_PIN_TYPE - pin type cahnged,
  * @DPLL_CHANGE_PIN_SIGNAL_TYPE pin signal type changed
  * @DPLL_CHANGE_PIN_CUSTOM_FREQ custom frequency changed
  * @DPLL_CHANGE_PIN_MODE - pin state changed
@@ -206,7 +205,6 @@ enum dpll_event_change {
 	DPLL_CHANGE_TEMP,
 	DPLL_CHANGE_PIN_ADD,
 	DPLL_CHANGE_PIN_DEL,
-	DPLL_CHANGE_PIN_TYPE,
 	DPLL_CHANGE_PIN_SIGNAL_TYPE,
 	DPLL_CHANGE_PIN_CUSTOM_FREQ,
 	DPLL_CHANGE_PIN_MODE,
