@@ -34,7 +34,6 @@ static const struct nla_policy dpll_cmd_device_set_policy[] = {
 static const struct nla_policy dpll_cmd_pin_set_policy[] = {
 	[DPLLA_ID]		= { .type = NLA_U32 },
 	[DPLLA_PIN_IDX]		= { .type = NLA_U32 },
-	[DPLLA_PIN_TYPE]	= { .type = NLA_U32 },
 	[DPLLA_PIN_SIGNAL_TYPE]	= { .type = NLA_U32 },
 	[DPLLA_PIN_CUSTOM_FREQ] = { .type = NLA_U32 },
 	[DPLLA_PIN_MODE]	= { .type = NLA_U32 },
@@ -765,7 +764,6 @@ static int dpll_event_device_change(struct sk_buff *msg,
 		return ret;
 	switch (event)	{
 	case DPLL_CHANGE_PIN_ADD:
-	case DPLL_CHANGE_PIN_TYPE:
 	case DPLL_CHANGE_PIN_SIGNAL_TYPE:
 	case DPLL_CHANGE_PIN_MODE:
 	case DPLL_CHANGE_PIN_PRIO:
