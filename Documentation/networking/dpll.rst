@@ -23,8 +23,8 @@ provided for a single dpll device.
 Direction of a pin and it's capabilities are provided to the user in
 response for netlink dump request messages.
 Pin can be shared by multiple dpll devices. Where configuration on one
-pin can alter multiple dplls (i.e. DPLL_PIN_SGINAL_TYPE, DPLL_PIN_TYPE,
-DPLL_PIN_STATE), or just one pin-dpll pair (i.e. DPLL_PIN_PRIO).
+pin can alter multiple dplls (i.e. DPLL_PIN_SIGNAL_TYPE, DPLL_PIN_MODE),
+or just one pin-dpll pair (i.e. DPLL_PIN_PRIO).
 Pin can be also a MUX type, where one or more pins are attached to
 a parent pin. The parent pin is the one directly connected to the dpll,
 which may be used by dplls in DPLL_MODE_AUTOMATIC selection mode, where
@@ -58,56 +58,63 @@ prefix and suffix according to attribute purpose:
     ``SOURCE_PIN_IDX``          attr index of currently selected source
     ``LOCK_STATUS``             attr internal frequency-lock status
     ``TEMP``                    attr device temperature information
-    ``NETIFINDEX``              attr dpll owner Linux netdevice index
+    ``CLOCK_ID``                attr Unique Clock Identifier (EUI-64),
+                                as defined by the IEEE 1588 standard
+    ``CLOCK_CLASS``             attr clock class, as defined in
+                                recommendation ITU-T G.8273.2/Y.1368.2
+    ``FILTER``                  attr for filtering dump or get requests
   ``DEVICE_SET``                userspace to set dpll device
                                 configuration
     ``ID``                      attr internal dpll device index
+    ``NAME``                    attr dpll device name (not required if
+                                dpll device index was provided)
     ``MODE``                    attr selection mode to configure
     ``PIN_IDX``                 attr index of source pin to select as
                                 active source
   ``PIN_SET``                   userspace to set pins configuration
     ``ID``                      attr internal dpll device index
+    ``NAME``                    attr dpll device name (not required if
+                                dpll device index was provided)
     ``PIN_IDX``                 attr index of a pin to configure
-    ``PIN_TYPE``                attr type configuration value for
-                                selected pin
     ``PIN_SIGNAL_TYPE``         attr signal type configuration value
                                 for selected pin
     ``PIN_CUSTOM_FREQ``         attr signal custom frequency to be set
-    ``PIN_STATE``               attr pin state to be set
+    ``PIN_MODE``                attr pin mode to be set
     ``PIN_PRIO``                attr pin priority to be set
 
 Netlink dump requests
 =====================
+All below attributes of dump requests use ``DPLLA_`` prefix.
+
 The ``DEVICE_GET`` command is capable of dump type netlink requests.
-In such case the userspace shall provide ``DUMP_FILTER`` attribute
+In such case the userspace shall provide ``FILTER`` attribute
 value to filter the response as required.
 If filter is not provided only name and id of available dpll(s) is
 provided. If the request also contains ``ID`` attribute, only selected
 dpll device shall be dumped.
 
 Possible response message attributes for netlink requests depending on
-the value of ``DPLLA_DUMP_FILTER`` attribute:
+the value of ``FILTER`` attribute:
 
   =============================== ====================================
-  ``DPLL_DUMP_FILTER_PINS``       value of ``DUMP_FILTER`` attribute
+  ``DPLL_FILTER_PINS``            value of ``FILTER`` attribute
     ``PIN``                       attr nested type contain single pin
                                   attributes
     ``PIN_IDX``                   attr index of dumped pin
     ``PIN_DESCRIPTION``           description of a pin provided by
                                   driver
     ``PIN_TYPE``                  attr value of pin type
-    ``PIN_TYPE_SUPPORTED``        attr value of supported pin type
     ``PIN_SIGNAL_TYPE``           attr value of pin signal type
     ``PIN_SIGNAL_TYPE_SUPPORTED`` attr value of supported pin signal
                                   type
     ``PIN_CUSTOM_FREQ``           attr value of pin custom frequency
-    ``PIN_STATE``                 attr value of pin state
-    ``PIN_STATE_SUPPORTED``       attr value of supported pin state
+    ``PIN_MODE``                  attr value of pin mode
+    ``PIN_MODE_SUPPORTED``        attr value of supported pin modes
     ``PIN_PRIO``                  attr value of pin prio
     ``PIN_PARENT_IDX``            attr value of pin patent index
     ``PIN_NETIFINDEX``            attr value of netdevice assocaiated
                                   with the pin
-  ``DPLL_DUMP_FILTER_STATUS``     value of ``DUMP_FILTER`` attribute
+  ``DPLL_FILTER_STATUS``          value of ``FILTER`` attribute
     ``ID``                        attr internal dpll device index
     ``NAME``                      attr dpll device name
     ``MODE``                      attr selection mode
@@ -116,7 +123,10 @@ the value of ``DPLLA_DUMP_FILTER`` attribute:
                                   source
     ``LOCK_STATUS``               attr internal frequency-lock status
     ``TEMP``                      attr device temperature information
-    ``NETIFINDEX``                attr dpll owner Linux netdevice index
+    ``CLOCK_ID``                  attr Unique Clock Identifier (EUI-64),
+                                  as defined by the IEEE 1588 standard
+    ``CLOCK_CLASS``               attr clock class, as defined in
+                                  recommendation ITU-T G.8273.2/Y.1368.2
 
 
 The pre-defined enums
@@ -156,13 +166,13 @@ Values for ``LOCK_STATUS`` attribute:
   ``LOCK_STATUS_HOLDOVER``      DPLL device lost a lock, using its
                                 frequency holdover capabilities
 
-Values for ``PIN_STATE`` and ``PIN_STATE_SUPPORTED`` attributes:
+Values for ``PIN_MODE`` and ``PIN_STATE_SUPPORTED`` attributes:
 
 ============================= ============================
-  ``PIN_STATE_CONNECTED``     Pin connected to a dpll
-  ``PIN_STATE_DISCONNECTED``  Pin disconnected from dpll
-  ``PIN_STATE_SOURCE``        Source pin
-  ``PIN_STATE_OUTPUT``        Output pin
+  ``PIN_MODE_CONNECTED``     Pin connected to a dpll
+  ``PIN_MODE_DISCONNECTED``  Pin disconnected from dpll
+  ``PIN_MODE_SOURCE``        Source pin
+  ``PIN_MODE_OUTPUT``        Output pin
 
 Possible DPLL source selection mode values:
 
@@ -209,10 +219,9 @@ Device change event reasons, values of ``CHANGE_TYPE`` attribute:
    ``CHANGE_TEMP``            DPLL temperature has changed
    ``CHANGE_PIN_ADD``         pin added to DPLL
    ``CHANGE_PIN_DEL``         pin removed from DPLL
-   ``CHANGE_PIN_TYPE``        pin type has chaned
    ``CHANGE_PIN_SIGNAL_TYPE`` pin signal type has changed
    ``CHANGE_PIN_CUSTOM_FREQ`` pin custom frequency value has changed
-   ``CHANGE_PIN_STATE``       pin state has changed
+   ``CHANGE_PIN_MODE``        pin mode has changed
    ``CHANGE_PIN_PRIO``        pin prio has changed
 
 
@@ -220,13 +229,13 @@ Device driver implementation
 ============================
 
 For device to operate as DPLL subsystem device, it should implement
-set of operations and register device via ``dpll_device_alloc`` and
-``dpll_device_register`` provide the operations set, unique device
-cookie, type of dpll (PPS/EEC), and pointers to parent device and
-its private data for calling back the ops.
+set of operations and register device via ``dpll_device_alloc``,
+provide the operations set, unique device clock_id, class of a clock,
+type of dpll (PPS/EEC), pointer to parent device and pointer to its
+private data, that can be used in callback ops.
 
 The pins are allocated separately with ``dpll_pin_alloc``, which
-requires providing pin description and its length.
+requires providing pin description and its type.
 
 Once DPLL device is created, allocated pin can be registered with it
 with 2 different methods, always providing implemented pin callbacks,
@@ -241,28 +250,25 @@ registered with that pin.
 
 For different instances of a device driver requiring to find already
 registered DPLL (i.e. to connect its pins to id)
-use ``dpll_device_get_by_cookie`` providing the same cookie, type of
+use ``dpll_device_get_by_clock_id`` providing the same clock_id, type of
 dpll and index of the DPLL device of such type, same as given on
 original device allocation.
 
 The name od DPLL device is generated based on registerer device struct
 pointer, DPLL type and an index received from registerer device driver.
-Name is in format: ``dpll-%s-%s-%s%d`` witch arguments:
-``dev_driver_string(parent)``        - syscall on parent device
-``dev_name(parent)``                 - syscall on parent device
-``type ? dpll_type_str(type) : ""``  - DPLL type converted to string
-``idx``                              - registerer given index
+Name is in format: ``dpll_%s_%d_%d`` witch arguments:
+``dev_name(parent)`` - syscall on parent device
+``type``             - DPLL type converted to string
+``dev_driver_idx``   - registerer given index
 
 Notifications of adding or removing DPLL devices are created within
 subsystem itself.
-Notifications about configurations changes are also invoked when
-requested change was successfully accepted by device driver with
-corresponding set command.
-Although the interface provides device drivers with
-``dpll_notify_device_change``, so notifications or alarms can be
-requested by device driver if needed, as different ways of confirmation
-could be used. All the interfaces for notification messages could be
-found in ``<linux/dpll.h>``, constants and enums are placed in
+Notifications about registering/deregistering pins are also invoked by
+the subsystem.
+Any other change notifications shall be requested by device driver with
+``dpll_device_notify`` or ``dpll_pin_notify`` and corresponding reason.
+Change reason enums ``dpll_event_change`` are defined in
+``<linux/dpll.h>``, constants and enums are placed in
 ``<uapi/linux/dpll.h>`` to be consistent with user-space.
 
 There is no strict requirement to implement all the operations for
