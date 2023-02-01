@@ -1,0 +1,472 @@
+# SPDX-License-Identifier: ((GPL-2.0 WITH Linux-syscall-note) OR BSD-3-Clause)
+
+name: dpll
+
+doc: DPLL subsystem.
+
+definitions:
+  -
+    type: enum
+    name: mode
+    doc: |
+      working-modes a dpll can support, differentiate if and how dpll selects
+      one of its sources to syntonize with it, valid values for DPLL_A_MODE
+      attribute
+    entries:
+      -
+        name: unspec
+        doc: unspecified value
+      -
+        name: manual
+        doc: source can be only selected by sending a request to dpll
+      -
+        name: automatic
+        doc: highest prio, valid source, auto selected by dpll
+      -
+        name: holdover
+        doc: dpll forced into holdover mode
+      -
+        name: freerun
+        doc: dpll driven on system clk, no holdover available
+      -
+        name: nco
+        doc: dpll driven by Numerically Controlled Oscillator
+    render-max: true
+  -
+    type: enum
+    name: lock-status
+    doc: |
+      provides information of dpll device lock status, valid values for
+      DPLL_A_LOCK_STATUS attribute
+    entries:
+      -
+        name: unspec
+        doc: unspecified value
+      -
+        name: unlocked
+        doc: |
+          dpll was not yet locked to any valid source (or is in one of
+          modes: DPLL_MODE_FREERUN, DPLL_MODE_NCO)
+      -
+        name: calibrating
+        doc: dpll is trying to lock to a valid signal
+      -
+        name: locked
+        doc: dpll is locked
+      -
+        name: holdover
+        doc: |
+          dpll is in holdover state - lost a valid lock or was forced by
+          selecting DPLL_MODE_HOLDOVER mode
+    render-max: true
+  -
+    type: const
+    name: temp-divider
+    value: 10
+    doc: |
+      temperature divider allowing userspace to calculate the
+      temperature as float with single digit precision.
+      Value of (DPLL_A_TEMP / DPLL_TEMP_DIVIDER) is integer part of
+      tempearture value.
+      Value of (DPLL_A_TEMP % DPLL_TEMP_DIVIDER) is fractional part of
+      temperature value.
+  -
+    type: enum
+    name: type
+    doc: type of dpll, valid values for DPLL_A_TYPE attribute
+    entries:
+      -
+        name: unspec
+        doc: unspecified value
+      -
+        name: pps
+        doc: dpll produces Pulse-Per-Second signal
+      -
+        name: eec
+        doc: dpll drives the Ethernet Equipment Clock
+    render-max: true
+  -
+    type: enum
+    name: pin-type
+    doc: |
+      defines possible types of a pin, valid values for DPLL_A_PIN_TYPE
+      attribute
+    entries:
+      -
+        name: unspec
+        doc: unspecified value
+      -
+        name: mux
+        doc: aggregates another layer of selectable pins
+      -
+        name: ext
+        doc: external source
+      -
+        name: synce-eth-port
+        doc: ethernet port PHY's recovered clock
+      -
+        name: int-oscillator
+        doc: device internal oscillator
+      -
+        name: gnss
+        doc: GNSS recovered clock
+    render-max: true
+  -
+    type: enum
+    name: pin-direction
+    doc: |
+      defines possible direction of a pin, valid values for
+      DPLL_A_PIN_DIRECTION attribute
+    entries:
+      -
+        name: unspec
+        doc: unspecified value
+      -
+        name: source
+        doc: pin used as a source of a signal
+      -
+        name: output
+        doc: pin used to output the signal
+    render-max: true
+  -
+    type: const
+    name: pin-frequency-1-hz
+    value: 1
+  -
+    type: const
+    name: pin-frequency-10-mhz
+    value: 10000000
+  -
+    type: enum
+    name: pin-state
+    doc: |
+      defines possible states of a pin, valid values for
+      DPLL_A_PIN_STATE attribute
+    entries:
+      -
+        name: unspec
+        doc: unspecified value
+      -
+        name: connected
+        doc: pin connected, active source of phase locked loop
+      -
+        name: disconnected
+        doc: pin disconnected, not considered as a valid source
+      -
+        name: selectable
+        doc: pin enabled for automatic source selection
+    render-max: true
+  -
+    type: flags
+    name: pin-caps
+    doc: |
+      defines possible capabilities of a pin, valid flags on
+      DPLL_A_PIN_CAPS attribute
+    entries:
+      -
+        name: direction-can-change
+      -
+        name: priority-can-change
+      -
+        name: state-can-change
+  -
+    type: enum
+    name: event
+    doc: events of dpll generic netlink family
+    entries:
+      -
+        name: unspec
+        doc: invalid event type
+      -
+        name: device-create
+        doc: dpll device created
+      -
+        name: device-delete
+        doc: dpll device deleted
+      -
+        name: device-change
+        doc: |
+          attribute of dpll device or pin changed, reason is to be found with
+          an attribute type (DPLL_A_*) received with the event
+
+
+attribute-sets:
+  -
+    name: dpll
+    enum-name: dplla
+    attributes:
+      -
+        name: device
+        type: nest
+        value: 1
+        multi-attr: true
+        nested-attributes: device
+      -
+        name: id
+        type: u32
+      -
+        name: dev-name
+        type: string
+      -
+        name: bus-name
+        type: string
+      -
+        name: mode
+        type: u8
+        enum: mode
+      -
+        name: mode-supported
+        type: u8
+        enum: mode
+        multi-attr: true
+      -
+        name: lock-status
+        type: u8
+        enum: lock-status
+      -
+        name: temp
+        type: s32
+      -
+        name: clock-id
+        type: u64
+      -
+        name: type
+        type: u8
+        enum: type
+      -
+        name: pin-idx
+        type: u32
+      -
+        name: pin-label
+        type: string
+      -
+        name: pin-type
+        type: u8
+        enum: pin-type
+      -
+        name: pin-direction
+        type: u8
+        enum: pin-direction
+      -
+        name: pin-frequency
+        type: u64
+      -
+        name: pin-frequency-supported
+        type: nest
+        multi-attr: true
+        nested-attributes: pin-frequency-range
+      -
+        name: pin-frequency-min
+        type: u64
+      -
+        name: pin-frequency-max
+        type: u64
+      -
+        name: pin-prio
+        type: u32
+      -
+        name: pin-state
+        type: u8
+        enum: pin-state
+      -
+        name: pin-parent
+        type: nest
+        multi-attr: true
+        nested-attributes: pin-parent
+      -
+        name: pin-parent-idx
+        type: u32
+      -
+        name: pin-rclk-device
+        type: string
+      -
+        name: pin-dpll-caps
+        type: u32
+  -
+    name: device
+    subset-of: dpll
+    attributes:
+      -
+        name: id
+        type: u32
+        value: 2
+      -
+        name: dev-name
+        type: string
+      -
+        name: bus-name
+        type: string
+      -
+        name: mode
+        type: u8
+        enum: mode
+      -
+        name: mode-supported
+        type: u8
+        enum: mode
+        multi-attr: true
+      -
+        name: lock-status
+        type: u8
+        enum: lock-status
+      -
+        name: temp
+        type: s32
+      -
+        name: clock-id
+        type: u64
+      -
+        name: type
+        type: u8
+        enum: type
+      -
+        name: pin-prio
+        type: u32
+        value: 19
+      -
+        name: pin-state
+        type: u8
+        enum: pin-state
+  -
+    name: pin-parent
+    subset-of: dpll
+    attributes:
+      -
+        name: pin-state
+        type: u8
+        value: 20
+        enum: pin-state
+      -
+        name: pin-parent-idx
+        type: u32
+        value: 22
+      -
+        name: pin-rclk-device
+        type: string
+  -
+    name: pin-frequency-range
+    subset-of: dpll
+    attributes:
+      -
+        name: pin-frequency-min
+        type: u64
+        value: 17
+      -
+        name: pin-frequency-max
+        type: u64
+
+operations:
+  list:
+    -
+      name: unspec
+      doc: unused
+
+    -
+      name: device-get
+      doc: |
+        Get list of DPLL devices (dump) or attributes of a single dpll device
+      attribute-set: dpll
+      flags: [ admin-perm ]
+
+      do:
+        pre: dpll-pre-doit
+        post: dpll-post-doit
+        request:
+          attributes:
+            - id
+            - bus-name
+            - dev-name
+        reply:
+          attributes:
+            - device
+
+      dump:
+        pre: dpll-pre-dumpit
+        post: dpll-post-dumpit
+        reply:
+          attributes:
+            - device
+
+    -
+      name: device-set
+      doc: Set attributes for a DPLL device
+      attribute-set: dpll
+      flags: [ admin-perm ]
+
+      do:
+        pre: dpll-pre-doit
+        post: dpll-post-doit
+        request:
+          attributes:
+            - id
+            - bus-name
+            - dev-name
+            - mode
+
+    -
+      name: pin-get
+      doc: |
+        Get list of pins and its attributes.
+        - dump request without any attributes given - list all the pins in the system
+        - dump request with target dpll - list all the pins registered with a given dpll device
+        - do request with target dpll and target pin - single pin attributes
+      attribute-set: dpll
+      flags: [ admin-perm ]
+
+      do:
+        pre: dpll-pin-pre-doit
+        post: dpll-pin-post-doit
+        request:
+          attributes:
+            - id
+            - bus-name
+            - dev-name
+            - pin-idx
+        reply: &pin-attrs
+          attributes:
+            - pin-idx
+            - pin-label
+            - pin-type
+            - pin-direction
+            - pin-frequency
+            - pin-frequency-supported
+            - pin-parent
+            - pin-rclk-device
+            - pin-dpll-caps
+            - device
+
+      dump:
+        pre: dpll-pin-pre-dumpit
+        post: dpll-pin-post-dumpit
+        request:
+          attributes:
+            - id
+            - bus-name
+            - dev-name
+        reply: *pin-attrs
+
+    -
+      name: pin-set
+      doc: Set attributes of a target pin
+      attribute-set: dpll
+      flags: [ admin-perm ]
+
+      do:
+        pre: dpll-pin-pre-doit
+        post: dpll-pin-post-doit
+        request:
+          attributes:
+            - id
+            - bus-name
+            - dev-name
+            - pin-idx
+            - pin-frequency
+            - pin-direction
+            - pin-prio
+            - pin-state
+            - pin-parent-idx
+
+mcast-groups:
+  list:
+    -
+      name: monitor
