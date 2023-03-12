@@ -17,6 +17,7 @@ Contents:
    dsa/index
    devlink/index
    caif/index
+   dpll
    ethtool-netlink
    ieee802154
    j1939
