@@ -23,6 +23,7 @@
 #include <linux/mtd/mtd.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/crc16.h>
+#include <linux/dpll.h>
 
 #define PCI_VENDOR_ID_FACEBOOK			0x1d9b
 #define PCI_DEVICE_ID_FACEBOOK_TIMECARD		0x0400
@@ -261,12 +262,18 @@ enum ptp_ocp_sma_mode {
 	SMA_MODE_OUT,
 };
 
+static struct dpll_pin_frequency ptp_ocp_sma_freq[] = {
+	DPLL_PIN_FREQUENCY_1PPS,
+	DPLL_PIN_FREQUENCY_10MHZ,
+};
+
 struct ptp_ocp_sma_connector {
 	enum	ptp_ocp_sma_mode mode;
 	bool	fixed_fcn;
 	bool	fixed_dir;
 	bool	disabled;
 	u8	default_fcn;
+	struct dpll_pin *dpll_pin;
 };
 
 struct ocp_attr_group {
@@ -353,6 +360,7 @@ struct ptp_ocp {
 	struct ptp_ocp_signal	signal[4];
 	struct ptp_ocp_sma_connector sma[4];
 	const struct ocp_sma_op *sma_op;
+	struct dpll_device *dpll;
 };
 
 #define OCP_REQ_TIMESTAMP	BIT(0)
@@ -2690,16 +2698,9 @@ sma4_show(struct device *dev, struct device_attribute *attr, char *buf)
 }
 
 static int
-ptp_ocp_sma_store(struct ptp_ocp *bp, const char *buf, int sma_nr)
+ptp_ocp_sma_store_val(struct ptp_ocp *bp, int val, enum ptp_ocp_sma_mode mode, int sma_nr)
 {
 	struct ptp_ocp_sma_connector *sma = &bp->sma[sma_nr - 1];
-	enum ptp_ocp_sma_mode mode;
-	int val;
-
-	mode = sma->mode;
-	val = sma_parse_inputs(bp->sma_op->tbl, buf, &mode);
-	if (val < 0)
-		return val;
 
 	if (sma->fixed_dir && (mode != sma->mode || val & SMA_DISABLE))
 		return -EOPNOTSUPP;
@@ -2732,6 +2733,20 @@ ptp_ocp_sma_store(struct ptp_ocp *bp, const char *buf, int sma_nr)
 		val = ptp_ocp_sma_set_output(bp, sma_nr, val);
 
 	return val;
+}
+
+static int
+ptp_ocp_sma_store(struct ptp_ocp *bp, const char *buf, int sma_nr)
+{
+	struct ptp_ocp_sma_connector *sma = &bp->sma[sma_nr - 1];
+	enum ptp_ocp_sma_mode mode;
+	int val;
+
+	mode = sma->mode;
+	val = sma_parse_inputs(bp->sma_op->tbl, buf, &mode);
+	if (val < 0)
+		return val;
+	return ptp_ocp_sma_store_val(bp, val, mode, sma_nr);
 }
 
 static ssize_t
@@ -4172,12 +4187,149 @@ ptp_ocp_detach(struct ptp_ocp *bp)
 	device_unregister(&bp->dev);
 }
 
+static int ptp_ocp_dpll_pin_to_sma(const struct ptp_ocp *bp, const struct dpll_pin *pin)
+{
+	int i;
+	for (i = 0; i < 4; i++) {
+		if (bp->sma[i].dpll_pin == pin)
+			return i;
+	}
+	return -1;
+}
+
+static int ptp_ocp_dpll_lock_status_get(const struct dpll_device *dpll,
+				    enum dpll_lock_status *status,
+				    struct netlink_ext_ack *extack)
+{
+	struct ptp_ocp *bp = dpll_priv(dpll);
+	int sync;
+
+	sync = ioread32(&bp->reg->status) & OCP_STATUS_IN_SYNC;
+	*status = sync ? DPLL_LOCK_STATUS_LOCKED : DPLL_LOCK_STATUS_UNLOCKED;
+
+	return 0;
+}
+
+static int ptp_ocp_dpll_source_idx_get(const struct dpll_device *dpll,
+				    u32 *idx, struct netlink_ext_ack *extack)
+{
+	struct ptp_ocp *bp = dpll_priv(dpll);
+
+	if (bp->pps_select) {
+		*idx = ioread32(&bp->pps_select->gpio1);
+		return 0;
+	}
+	return -EINVAL;
+}
+
+static int ptp_ocp_dpll_mode_get(const struct dpll_device *dpll,
+				    u32 *mode, struct netlink_ext_ack *extack)
+{
+	*mode = DPLL_MODE_AUTOMATIC;
+	return 0;
+}
+
+static bool ptp_ocp_dpll_mode_supported(const struct dpll_device *dpll,
+				    const enum dpll_mode mode,
+				    struct netlink_ext_ack *extack)
+{
+	return mode == DPLL_MODE_AUTOMATIC;
+}
+
+static int ptp_ocp_dpll_direction_get(const struct dpll_pin *pin,
+				     const struct dpll_device *dpll,
+				     enum dpll_pin_direction *direction,
+				     struct netlink_ext_ack *extack)
+{
+	struct ptp_ocp *bp = dpll_priv(dpll);
+	int sma_nr = ptp_ocp_dpll_pin_to_sma(bp, pin);
+
+	if (sma_nr < 0)
+		return -EINVAL;
+
+	*direction = bp->sma[sma_nr].mode == SMA_MODE_IN ? DPLL_PIN_DIRECTION_SOURCE : DPLL_PIN_DIRECTION_OUTPUT;
+	return 0;
+}
+
+static int ptp_ocp_dpll_direction_set(const struct dpll_pin *pin,
+				     const struct dpll_device *dpll,
+				     enum dpll_pin_direction direction,
+				     struct netlink_ext_ack *extack)
+{
+	enum ptp_ocp_sma_mode mode = direction == DPLL_PIN_DIRECTION_SOURCE ? SMA_MODE_IN : SMA_MODE_OUT;
+	struct ptp_ocp *bp = dpll_priv(dpll);
+	int sma_nr = ptp_ocp_dpll_pin_to_sma(bp, pin);
+
+	if (sma_nr < 0)
+		return -EINVAL;
+
+	return ptp_ocp_sma_store_val(bp, 0, mode, sma_nr);
+}
+
+static int ptp_ocp_dpll_frequency_set(const struct dpll_pin *pin,
+			      const struct dpll_device *dpll,
+			      u64 frequency, struct netlink_ext_ack *extack)
+{
+	struct ptp_ocp *bp = dpll_priv(dpll);
+	int sma_nr = ptp_ocp_dpll_pin_to_sma(bp, pin);
+	int val = frequency == 10000000 ? 0 : 1;
+
+	if (sma_nr < 0)
+		return -EINVAL;
+
+	return ptp_ocp_sma_store_val(bp, val, bp->sma[sma_nr].mode, sma_nr);
+}
+
+static int ptp_ocp_dpll_frequency_get(const struct dpll_pin *pin,
+			      const struct dpll_device *dpll,
+			      u64 *frequency,
+			      struct netlink_ext_ack *extack)
+{
+	struct ptp_ocp *bp = (struct ptp_ocp *)dpll_priv(dpll);
+	int sma_nr = ptp_ocp_dpll_pin_to_sma(bp, pin);
+	u32 val;
+
+	if (sma_nr < 0)
+		return -EINVAL;
+
+	val = bp->sma_op->get(bp, sma_nr);
+	if (!val)
+		*frequency = 1000000;
+	else
+		*frequency = 1;
+	return 0;
+}
+
+const static struct dpll_device_ops dpll_ops = {
+	.lock_status_get = ptp_ocp_dpll_lock_status_get,
+	.source_pin_idx_get = ptp_ocp_dpll_source_idx_get,
+	.mode_get = ptp_ocp_dpll_mode_get,
+	.mode_supported = ptp_ocp_dpll_mode_supported,
+};
+
+const static struct dpll_pin_ops dpll_pins_ops = {
+	.frequency_get = ptp_ocp_dpll_frequency_get,
+	.frequency_set = ptp_ocp_dpll_frequency_set,
+	.direction_get = ptp_ocp_dpll_direction_get,
+	.direction_set = ptp_ocp_dpll_direction_set,
+};
+
 static int
 ptp_ocp_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
+	struct dpll_pin_properties prop = {
+		.label = NULL,
+		.type = DPLL_PIN_TYPE_EXT,
+		.capabilities = DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE,
+		.freq_supported_num = 2,
+		.freq_supported = ptp_ocp_sma_freq,
+		
+	};
 	struct devlink *devlink;
+	char *sma = "SMA0";
 	struct ptp_ocp *bp;
-	int err;
+	int err, i;
+	u64 clkid;
 
 	devlink = devlink_alloc(&ptp_ocp_devlink_ops, sizeof(*bp), &pdev->dev);
 	if (!devlink) {
@@ -4227,8 +4379,43 @@ ptp_ocp_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	ptp_ocp_info(bp);
 	devlink_register(devlink);
-	return 0;
 
+	clkid = pci_get_dsn(pdev);
+	bp->dpll = dpll_device_get(clkid, 0, THIS_MODULE);
+	if (IS_ERR(bp->dpll)) {
+		dev_err(&pdev->dev, "dpll_device_alloc failed\n");
+		goto out;
+	}
+
+	err = dpll_device_register(bp->dpll, DPLL_TYPE_PPS, &dpll_ops, bp, &pdev->dev);
+	if (err)
+		goto out;
+
+	prop.label = sma;
+
+	for (i = 0; i < 4; i++) {
+		sma[3] = 0x31 + i;
+		bp->sma[i].dpll_pin = dpll_pin_get(clkid, i, THIS_MODULE, &prop);
+		if (IS_ERR_OR_NULL(bp->sma[i].dpll_pin)) {
+			bp->sma[i].dpll_pin = NULL;
+			goto out_dpll;
+		}
+		err = dpll_pin_register(bp->dpll, bp->sma[i].dpll_pin, &dpll_pins_ops, bp, NULL);
+		if (err) {
+			dpll_pin_put(bp->sma[i].dpll_pin);
+			goto out_dpll;
+		}
+	}
+
+	return 0;
+out_dpll:
+	for (i = 0; i < 4; i++) {
+		if (bp->sma[i].dpll_pin) {
+			dpll_pin_unregister(bp->dpll, bp->sma[i].dpll_pin);
+			dpll_pin_put(bp->sma[i].dpll_pin);
+		}
+	}
+	dpll_device_put(bp->dpll);
 out:
 	ptp_ocp_detach(bp);
 out_disable:
@@ -4243,7 +4430,16 @@ ptp_ocp_remove(struct pci_dev *pdev)
 {
 	struct ptp_ocp *bp = pci_get_drvdata(pdev);
 	struct devlink *devlink = priv_to_devlink(bp);
+	int i;
 
+	for (i = 0; i < 4; i++) {
+		if (bp->sma[i].dpll_pin) {
+			dpll_pin_unregister(bp->dpll, bp->sma[i].dpll_pin);
+			dpll_pin_put(bp->sma[i].dpll_pin);
+		}
+	}
+	dpll_device_unregister(bp->dpll);
+	dpll_device_put(bp->dpll);
 	devlink_unregister(devlink);
 	ptp_ocp_detach(bp);
 	pci_disable_device(pdev);
