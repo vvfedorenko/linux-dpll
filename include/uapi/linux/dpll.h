@@ -9,9 +9,27 @@
 #define DPLL_FAMILY_NAME	"dpll"
 #define DPLL_FAMILY_VERSION	1
 
-#define DPLL_TEMP_DIVIDER	10
-#define DPLL_PIN_FREQ_1_HZ	1
-#define DPLL_PIN_FREQ_10_MHZ	10000000
+/**
+ * enum dpll_mode - working-modes a dpll can support, differentiate if and how
+ *   dpll selects one of its sources to syntonize with it
+ * @DPLL_MODE_UNSPEC: unspecified value
+ * @DPLL_MODE_MANUAL: source can be only selected by sending a request to dpll
+ * @DPLL_MODE_AUTOMATIC: highest prio, valid source, auto selected by dpll
+ * @DPLL_MODE_HOLDOVER: dpll forced into holdover mode
+ * @DPLL_MODE_FREERUN: dpll driven on system clk, no holdover available
+ * @DPLL_MODE_NCO: dpll driven by Numerically Controlled Oscillator
+ */
+enum dpll_mode {
+	DPLL_MODE_UNSPEC,
+	DPLL_MODE_MANUAL,
+	DPLL_MODE_AUTOMATIC,
+	DPLL_MODE_HOLDOVER,
+	DPLL_MODE_FREERUN,
+	DPLL_MODE_NCO,
+
+	__DPLL_MODE_MAX,
+	DPLL_MODE_MAX = (__DPLL_MODE_MAX - 1)
+};
 
 /**
  * enum dpll_lock_status - Provides information of dpll device lock status,
@@ -33,6 +51,23 @@ enum dpll_lock_status {
 
 	__DPLL_LOCK_STATUS_MAX,
 	DPLL_LOCK_STATUS_MAX = (__DPLL_LOCK_STATUS_MAX - 1)
+};
+
+#define DPLL_TEMP_DIVIDER	10
+
+/**
+ * enum dpll_type - type of dpll, valid values for DPLL_A_TYPE attribute
+ * @DPLL_TYPE_UNSPEC: unspecified value
+ * @DPLL_TYPE_PPS: dpll produces Pulse-Per-Second signal
+ * @DPLL_TYPE_EEC: dpll drives the Ethernet Equipment Clock
+ */
+enum dpll_type {
+	DPLL_TYPE_UNSPEC,
+	DPLL_TYPE_PPS,
+	DPLL_TYPE_EEC,
+
+	__DPLL_TYPE_MAX,
+	DPLL_TYPE_MAX = (__DPLL_TYPE_MAX - 1)
 };
 
 /**
@@ -58,6 +93,24 @@ enum dpll_pin_type {
 };
 
 /**
+ * enum dpll_pin_direction - available pin direction
+ * @DPLL_PIN_DIRECTION_UNSPEC: unspecified value
+ * @DPLL_PIN_DIRECTION_SOURCE: pin used as a source of a signal
+ * @DPLL_PIN_DIRECTION_OUTPUT: pin used to output the signal
+ */
+enum dpll_pin_direction {
+	DPLL_PIN_DIRECTION_UNSPEC,
+	DPLL_PIN_DIRECTION_SOURCE,
+	DPLL_PIN_DIRECTION_OUTPUT,
+
+	__DPLL_PIN_DIRECTION_MAX,
+	DPLL_PIN_DIRECTION_MAX = (__DPLL_PIN_DIRECTION_MAX - 1)
+};
+
+#define DPLL_PIN_FREQ_1_HZ	1
+#define DPLL_PIN_FREQ_10_MHZ	10000000
+
+/**
  * enum dpll_pin_state - available pin modes
  * @DPLL_PIN_STATE_UNSPEC: unspecified value
  * @DPLL_PIN_STATE_CONNECTED: pin connected
@@ -73,55 +126,12 @@ enum dpll_pin_state {
 };
 
 /**
- * enum dpll_pin_direction - available pin direction
- * @DPLL_PIN_DIRECTION_UNSPEC: unspecified value
- * @DPLL_PIN_DIRECTION_SOURCE: pin used as a source of a signal
- * @DPLL_PIN_DIRECTION_OUTPUT: pin used to output the signal
+ * enum dpll_pin_caps - define capabilities of a pin
  */
-enum dpll_pin_direction {
-	DPLL_PIN_DIRECTION_UNSPEC,
-	DPLL_PIN_DIRECTION_SOURCE,
-	DPLL_PIN_DIRECTION_OUTPUT,
-
-	__DPLL_PIN_DIRECTION_MAX,
-	DPLL_PIN_DIRECTION_MAX = (__DPLL_PIN_DIRECTION_MAX - 1)
-};
-
-/**
- * enum dpll_mode - working-modes a dpll can support, differentiate if and how
- *   dpll selects one of its sources to syntonize with it
- * @DPLL_MODE_UNSPEC: unspecified value
- * @DPLL_MODE_MANUAL: source can be only selected by sending a request to dpll
- * @DPLL_MODE_AUTOMATIC: highest prio, valid source, auto selected by dpll
- * @DPLL_MODE_HOLDOVER: dpll forced into holdover mode
- * @DPLL_MODE_FREERUN: dpll driven on system clk, no holdover available
- * @DPLL_MODE_NCO: dpll driven by Numerically Controlled Oscillator
- */
-enum dpll_mode {
-	DPLL_MODE_UNSPEC,
-	DPLL_MODE_MANUAL,
-	DPLL_MODE_AUTOMATIC,
-	DPLL_MODE_HOLDOVER,
-	DPLL_MODE_FREERUN,
-	DPLL_MODE_NCO,
-
-	__DPLL_MODE_MAX,
-	DPLL_MODE_MAX = (__DPLL_MODE_MAX - 1)
-};
-
-/**
- * enum dpll_type - type of dpll, valid values for DPLL_A_TYPE attribute
- * @DPLL_TYPE_UNSPEC: unspecified value
- * @DPLL_TYPE_PPS: dpll produces Pulse-Per-Second signal
- * @DPLL_TYPE_EEC: dpll drives the Ethernet Equipment Clock
- */
-enum dpll_type {
-	DPLL_TYPE_UNSPEC,
-	DPLL_TYPE_PPS,
-	DPLL_TYPE_EEC,
-
-	__DPLL_TYPE_MAX,
-	DPLL_TYPE_MAX = (__DPLL_TYPE_MAX - 1)
+enum dpll_pin_caps {
+	DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE = 1,
+	DPLL_PIN_CAPS_PRIORITY_CAN_CHANGE = 2,
+	DPLL_PIN_CAPS_STATE_CAN_CHANGE = 4,
 };
 
 /**
@@ -137,15 +147,6 @@ enum dpll_event {
 	DPLL_EVENT_DEVICE_CREATE,
 	DPLL_EVENT_DEVICE_DELETE,
 	DPLL_EVENT_DEVICE_CHANGE,
-};
-
-/**
- * enum dpll_pin_caps - define capabilities of a pin
- */
-enum dpll_pin_caps {
-	DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE = 1,
-	DPLL_PIN_CAPS_PRIORITY_CAN_CHANGE = 2,
-	DPLL_PIN_CAPS_STATE_CAN_CHANGE = 4,
 };
 
 enum dplla {

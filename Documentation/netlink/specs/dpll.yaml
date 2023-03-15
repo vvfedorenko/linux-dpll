@@ -4,17 +4,31 @@ doc: DPLL subsystem.
 
 definitions:
   -
-    type: const
-    name: temp-divider
-    value: 10
-  -
-    type: const
-    name: pin-freq-1-hz
-    value: 1
-  -
-    type: const
-    name: pin-freq-10-mhz
-    value: 10000000
+    type: enum
+    name: mode
+    doc: |
+      working-modes a dpll can support, differentiate if and how dpll selects
+      one of its sources to syntonize with it
+    entries:
+      -
+        name: unspec
+        doc: unspecified value
+      -
+        name: manual
+        doc: source can be only selected by sending a request to dpll
+      -
+        name: automatic
+        doc: highest prio, valid source, auto selected by dpll
+      -
+        name: holdover
+        doc: dpll forced into holdover mode
+      -
+        name: freerun
+        doc: dpll driven on system clk, no holdover available
+      -
+        name: nco
+        doc: dpll driven by Numerically Controlled Oscillator
+    render-max: true
   -
     type: enum
     name: lock-status
@@ -43,6 +57,32 @@ definitions:
           selecting DPLL_MODE_HOLDOVER mode
     render-max: true
   -
+    type: const
+    name: temp-divider
+    value: 10
+    doc: |
+      Temperature divider allowing userspace to calculate the
+      temperature as float with single digit precision.
+      Value of (DPLL_A_TEMP / DPLL_TEMP_DIVIDER) is integer part of
+      tempearture value.
+      Value of (DPLL_A_TEMP % DPLL_TEMP_DIVIDER) is fractional part of
+      temperature value.
+  -
+    type: enum
+    name: type
+    doc: type of dpll, valid values for DPLL_A_TYPE attribute
+    entries:
+      -
+        name: unspec
+        doc: unspecified value
+      -
+        name: pps
+        doc: dpll produces Pulse-Per-Second signal
+      -
+        name: eec
+        doc: dpll drives the Ethernet Equipment Clock
+    render-max: true
+  -
     type: enum
     name: pin-type
     doc: Enumerates types of a pin, valid values for DPLL_A_PIN_TYPE attribute
@@ -68,21 +108,6 @@ definitions:
     render-max: true
   -
     type: enum
-    name: pin-state
-    doc: available pin modes
-    entries:
-      -
-        name: unspec
-        doc: unspecified value
-      -
-        name: connected
-        doc: pin connected
-      -
-        name: disconnected
-        doc: pin disconnected
-    render-max: true
-  -
-    type: enum
     name: pin-direction
     doc: available pin direction
     entries:
@@ -97,46 +122,39 @@ definitions:
         doc: pin used to output the signal
     render-max: true
   -
-    type: enum
-    name: mode
-    doc: |
-      working-modes a dpll can support, differentiate if and how dpll selects
-      one of its sources to syntonize with it
-    entries:
-      -
-        name: unspec
-        doc: unspecified value
-      -
-        name: manual
-        doc: source can be only selected by sending a request to dpll
-      -
-        name: automatic
-        doc: highest prio, valid source, auto selected by dpll
-      -
-        name: holdover
-        doc: dpll forced into holdover mode
-      -
-        name: freerun
-        doc: dpll driven on system clk, no holdover available
-      -
-        name: nco
-        doc: dpll driven by Numerically Controlled Oscillator
-    render-max: true
+    type: const
+    name: pin-freq-1-hz
+    value: 1
+  -
+    type: const
+    name: pin-freq-10-mhz
+    value: 10000000
   -
     type: enum
-    name: type
-    doc: type of dpll, valid values for DPLL_A_TYPE attribute
+    name: pin-state
+    doc: available pin modes
     entries:
       -
         name: unspec
         doc: unspecified value
       -
-        name: pps
-        doc: dpll produces Pulse-Per-Second signal
+        name: connected
+        doc: pin connected
       -
-        name: eec
-        doc: dpll drives the Ethernet Equipment Clock
+        name: disconnected
+        doc: pin disconnected
     render-max: true
+  -
+    type: flags
+    name: pin-caps
+    doc: define capabilities of a pin
+    entries:
+      -
+        name: direction-can-change
+      -
+        name: priority-can-change
+      -
+        name: state-can-change
   -
     type: enum
     name: event
@@ -156,17 +174,6 @@ definitions:
         doc: |
           attribute of dpll device or pin changed, reason is to be found with
           an attribute type (DPLL_A_*) received with the event
-  -
-    type: flags
-    name: pin-caps
-    doc: define capabilities of a pin
-    entries:
-      -
-        name: direction-can-change
-      -
-        name: priority-can-change
-      -
-        name: state-can-change
 
 
 attribute-sets:
