@@ -11,7 +11,8 @@
 
 /**
  * enum dpll_mode - working-modes a dpll can support, differentiate if and how
- *   dpll selects one of its sources to syntonize with it
+ *   dpll selects one of its sources to syntonize with it, valid values for
+ *   DPLL_A_MODE attribute
  * @DPLL_MODE_UNSPEC: unspecified value
  * @DPLL_MODE_MANUAL: source can be only selected by sending a request to dpll
  * @DPLL_MODE_AUTOMATIC: highest prio, valid source, auto selected by dpll
@@ -32,11 +33,11 @@ enum dpll_mode {
 };
 
 /**
- * enum dpll_lock_status - Provides information of dpll device lock status,
+ * enum dpll_lock_status - provides information of dpll device lock status,
  *   valid values for DPLL_A_LOCK_STATUS attribute
  * @DPLL_LOCK_STATUS_UNSPEC: unspecified value
- * @DPLL_LOCK_STATUS_UNLOCKED: dpll was not yet locked to any valid (or is in
- *   one of modes: DPLL_MODE_FREERUN, DPLL_MODE_NCO)
+ * @DPLL_LOCK_STATUS_UNLOCKED: dpll was not yet locked to any valid source (or
+ *   is in one of modes: DPLL_MODE_FREERUN, DPLL_MODE_NCO)
  * @DPLL_LOCK_STATUS_CALIBRATING: dpll is trying to lock to a valid signal
  * @DPLL_LOCK_STATUS_LOCKED: dpll is locked
  * @DPLL_LOCK_STATUS_HOLDOVER: dpll is in holdover state - lost a valid lock or
@@ -71,7 +72,7 @@ enum dpll_type {
 };
 
 /**
- * enum dpll_pin_type - Enumerates types of a pin, valid values for
+ * enum dpll_pin_type - defines possible types of a pin, valid values for
  *   DPLL_A_PIN_TYPE attribute
  * @DPLL_PIN_TYPE_UNSPEC: unspecified value
  * @DPLL_PIN_TYPE_MUX: aggregates another layer of selectable pins
@@ -93,7 +94,8 @@ enum dpll_pin_type {
 };
 
 /**
- * enum dpll_pin_direction - available pin direction
+ * enum dpll_pin_direction - defines possible direction of a pin, valid values
+ *   for DPLL_A_PIN_DIRECTION attribute
  * @DPLL_PIN_DIRECTION_UNSPEC: unspecified value
  * @DPLL_PIN_DIRECTION_SOURCE: pin used as a source of a signal
  * @DPLL_PIN_DIRECTION_OUTPUT: pin used to output the signal
@@ -111,7 +113,8 @@ enum dpll_pin_direction {
 #define DPLL_PIN_FREQ_10_MHZ	10000000
 
 /**
- * enum dpll_pin_state - available pin modes
+ * enum dpll_pin_state - defines possible states of a pin, valid values for
+ *   DPLL_A_PIN_STATE attribute
  * @DPLL_PIN_STATE_UNSPEC: unspecified value
  * @DPLL_PIN_STATE_CONNECTED: pin connected
  * @DPLL_PIN_STATE_DISCONNECTED: pin disconnected
@@ -126,7 +129,8 @@ enum dpll_pin_state {
 };
 
 /**
- * enum dpll_pin_caps - define capabilities of a pin
+ * enum dpll_pin_caps - defines possible capabilities of a pin, valid flags on
+ *   DPLL_A_PIN_CAPS attribute
  */
 enum dpll_pin_caps {
 	DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE = 1,
