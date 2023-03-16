@@ -519,8 +519,8 @@ operations:
             - pin-frequency
             - pin-direction
             - pin-prio
-            - pin-parent-idx
             - pin-state
+            - pin-parent-idx
 
 mcast-groups:
   list:
