@@ -3609,28 +3609,31 @@ enum dpll_pin_type ice_cgu_get_pin_type(struct ice_hw *hw, u8 pin, bool input)
 }
 
 /**
- * ice_cgu_get_pin_sig_type_mask
+ * ice_cgu_get_pin_freq_supp
  * @hw: pointer to the hw struct
  * @pin: pin index
  * @input: if request is done against input or output pin
+ * @num: output number of supported frequencies
  *
- * Return: signal type bit mask of a pin.
+ * Get frequency supported number and array of supported frequencies.
+ *
+ * Return: array of supported frequencies for given pin.
  */
-unsigned long
-ice_cgu_get_pin_freq_mask(struct ice_hw *hw, u8 pin, bool input)
+struct dpll_pin_frequency *
+ice_cgu_get_pin_freq_supp(struct ice_hw *hw, u8 pin, bool input, u8 *num)
 {
 	const struct ice_cgu_pin_desc *t;
 	int t_size;
 
+	*num = 0;
 	t = ice_cgu_get_pin_desc(hw, input, &t_size);
-
 	if (!t)
-		return 0;
-
+		return NULL;
 	if (pin >= t_size)
-		return 0;
+		return NULL;
+	*num = t[pin].freq_supp_num;
 
-	return t[pin].sig_type_mask;
+	return t[pin].freq_supp;
 }
 
 /**
