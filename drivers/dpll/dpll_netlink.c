@@ -313,7 +313,7 @@ dpll_cmd_pin_on_dpll_get(struct sk_buff *msg, struct dpll_pin *pin,
 
 	if (nla_put_u32(msg, DPLL_A_PIN_IDX, pin->dev_driver_id))
 		return -EMSGSIZE;
-	if (nla_put_string(msg, DPLL_A_PIN_DESCRIPTION, pin->prop.description))
+	if (nla_put_string(msg, DPLL_A_PIN_LABEL, pin->prop.label))
 		return -EMSGSIZE;
 	if (nla_put_u8(msg, DPLL_A_PIN_TYPE, pin->prop.type))
 		return -EMSGSIZE;
@@ -353,7 +353,7 @@ __dpll_cmd_pin_dump_one(struct sk_buff *msg, struct dpll_pin *pin,
 
 	if (nla_put_u32(msg, DPLL_A_PIN_IDX, pin->dev_driver_id))
 		return -EMSGSIZE;
-	if (nla_put_string(msg, DPLL_A_PIN_DESCRIPTION, pin->prop.description))
+	if (nla_put_string(msg, DPLL_A_PIN_LABEL, pin->prop.label))
 		return -EMSGSIZE;
 	if (nla_put_u8(msg, DPLL_A_PIN_TYPE, pin->prop.type))
 		return -EMSGSIZE;

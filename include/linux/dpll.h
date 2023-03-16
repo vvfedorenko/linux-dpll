@@ -92,7 +92,7 @@ struct dpll_pin_frequency {
 	DPLL_PIN_FREQUENCY(DPLL_PIN_FREQUENCY_10_MHZ)
 
 struct dpll_pin_properties {
-	const char *description;
+	const char *label;
 	enum dpll_pin_type type;
 	unsigned long capabilities;
 	u32 freq_supported_num;
