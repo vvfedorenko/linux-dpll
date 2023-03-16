@@ -8,7 +8,8 @@ definitions:
     name: mode
     doc: |
       working-modes a dpll can support, differentiate if and how dpll selects
-      one of its sources to syntonize with it
+      one of its sources to syntonize with it, valid values for DPLL_A_MODE
+      attribute
     entries:
       -
         name: unspec
@@ -33,7 +34,7 @@ definitions:
     type: enum
     name: lock-status
     doc: |
-      Provides information of dpll device lock status, valid values for
+      provides information of dpll device lock status, valid values for
       DPLL_A_LOCK_STATUS attribute
     entries:
       -
@@ -42,8 +43,8 @@ definitions:
       -
         name: unlocked
         doc: |
-          dpll was not yet locked to any valid (or is in one of modes:
-          DPLL_MODE_FREERUN, DPLL_MODE_NCO)
+          dpll was not yet locked to any valid source (or is in one of
+          modes: DPLL_MODE_FREERUN, DPLL_MODE_NCO)
       -
         name: calibrating
         doc: dpll is trying to lock to a valid signal
@@ -61,7 +62,7 @@ definitions:
     name: temp-divider
     value: 10
     doc: |
-      Temperature divider allowing userspace to calculate the
+      temperature divider allowing userspace to calculate the
       temperature as float with single digit precision.
       Value of (DPLL_A_TEMP / DPLL_TEMP_DIVIDER) is integer part of
       tempearture value.
@@ -85,7 +86,9 @@ definitions:
   -
     type: enum
     name: pin-type
-    doc: Enumerates types of a pin, valid values for DPLL_A_PIN_TYPE attribute
+    doc: |
+      defines possible types of a pin, valid values for DPLL_A_PIN_TYPE
+      attribute
     entries:
       -
         name: unspec
@@ -109,7 +112,9 @@ definitions:
   -
     type: enum
     name: pin-direction
-    doc: available pin direction
+    doc: |
+      defines possible direction of a pin, valid values for
+      DPLL_A_PIN_DIRECTION attribute
     entries:
       -
         name: unspec
@@ -132,7 +137,9 @@ definitions:
   -
     type: enum
     name: pin-state
-    doc: available pin modes
+    doc: |
+      defines possible states of a pin, valid values for
+      DPLL_A_PIN_STATE attribute
     entries:
       -
         name: unspec
@@ -147,7 +154,9 @@ definitions:
   -
     type: flags
     name: pin-caps
-    doc: define capabilities of a pin
+    doc: |
+      defines possible capabilities of a pin, valid flags on
+      DPLL_A_PIN_CAPS attribute
     entries:
       -
         name: direction-can-change
