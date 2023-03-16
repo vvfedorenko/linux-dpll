@@ -269,10 +269,10 @@ unlock:
 static int
 ice_dpll_source_frequency_set(const struct dpll_pin *pin,
 			      const struct dpll_device *dpll,
-			      const u32 frequency,
+			      const u64 frequency,
 			      struct netlink_ext_ack *extack)
 {
-	return ice_dpll_frequency_set(pin, dpll, frequency, extack,
+	return ice_dpll_frequency_set(pin, dpll, (u32)frequency, extack,
 				      ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
@@ -292,7 +292,7 @@ ice_dpll_source_frequency_set(const struct dpll_pin *pin,
 static int
 ice_dpll_output_frequency_set(const struct dpll_pin *pin,
 			      const struct dpll_device *dpll,
-			      const u32 frequency,
+			      const u64 frequency,
 			      struct netlink_ext_ack *extack)
 {
 	return ice_dpll_frequency_set(pin, dpll, frequency, extack,
@@ -316,7 +316,7 @@ ice_dpll_output_frequency_set(const struct dpll_pin *pin,
 static int
 ice_dpll_frequency_get(const struct dpll_pin *pin,
 		       const struct dpll_device *dpll,
-		       u32 *frequency,
+		       u64 *frequency,
 		       struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
@@ -333,7 +333,7 @@ ice_dpll_frequency_get(const struct dpll_pin *pin,
 		NL_SET_ERR_MSG(extack, "pin not found");
 		goto unlock;
 	}
-	*frequency = p->freq;
+	*frequency = (u64)(p->freq);
 	ret = 0;
 unlock:
 	ice_dpll_cb_unlock(pf);
@@ -357,7 +357,7 @@ unlock:
 static int
 ice_dpll_source_frequency_get(const struct dpll_pin *pin,
 			      const struct dpll_device *dpll,
-			      u32 *frequency,
+			      u64 *frequency,
 			      struct netlink_ext_ack *extack)
 {
 	return ice_dpll_frequency_get(pin, dpll, frequency, extack,
@@ -380,7 +380,7 @@ ice_dpll_source_frequency_get(const struct dpll_pin *pin,
 static int
 ice_dpll_output_frequency_get(const struct dpll_pin *pin,
 			      const struct dpll_device *dpll,
-			      u32 *frequency,
+			      u64 *frequency,
 			      struct netlink_ext_ack *extack)
 {
 	return ice_dpll_frequency_get(pin, dpll, frequency, extack,
@@ -1614,6 +1614,7 @@ ice_dpll_init_direct_pins(struct ice_pf *pf, enum ice_dpll_pin_type pin_type)
 	int num_pins, i, ret = -EINVAL;
 	struct ice_hw *hw = &pf->hw;
 	struct ice_dpll_pin *pins;
+	u8 freq_supp_num;
 	bool input;
 
 	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
@@ -1648,10 +1649,9 @@ ice_dpll_init_direct_pins(struct ice_pf *pf, enum ice_dpll_pin_type pin_type)
 		ret = ice_dpll_pin_state_update(pf, &pins[i], pin_type);
 		if (ret)
 			return ret;
-		pins[i].prop.any_freq_min = 0;
-		pins[i].prop.any_freq_max = 0;
-		pins[i].prop.freq_supported = ice_cgu_get_pin_freq_mask(hw, i,
-									input);
+		pins[i].prop.freq_supported =
+			ice_cgu_get_pin_freq_supp(hw, i, input, &freq_supp_num);
+		pins[i].prop.freq_supported_num = freq_supp_num;
 	}
 
 	return ret;
