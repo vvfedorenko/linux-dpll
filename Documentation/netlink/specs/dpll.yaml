@@ -240,7 +240,7 @@ attribute-sets:
         name: pin-idx
         type: u32
       -
-        name: pin-description
+        name: pin-label
         type: string
       -
         name: pin-type
@@ -358,7 +358,7 @@ attribute-sets:
         type: u32
         value: 13
       -
-        name: pin-description
+        name: pin-label
         type: string
       -
         name: pin-type
