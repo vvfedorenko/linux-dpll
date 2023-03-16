@@ -37,11 +37,11 @@ struct dpll_device_ops {
 struct dpll_pin_ops {
 	int (*frequency_set)(const struct dpll_pin *pin,
 			     const struct dpll_device *dpll,
-			     const u32 frequency,
+			     const u64 frequency,
 			     struct netlink_ext_ack *extack);
 	int (*frequency_get)(const struct dpll_pin *pin,
 			     const struct dpll_device *dpll,
-			     u32 *frequency, struct netlink_ext_ack *extack);
+			     u64 *frequency, struct netlink_ext_ack *extack);
 	int (*direction_set)(const struct dpll_pin *pin,
 			     const struct dpll_device *dpll,
 			     const enum dpll_pin_direction direction,
@@ -74,22 +74,29 @@ struct dpll_pin_ops {
 			const u32 prio, struct netlink_ext_ack *extack);
 };
 
+struct dpll_pin_frequency {
+	u64 min;
+	u64 max;
+};
+
+#define DPLL_PIN_FREQUENCY_RANGE(_min, _max)	\
+	{					\
+		.min = _min,			\
+		.max = _max,			\
+	}
+
+#define DPLL_PIN_FREQUENCY(_val) DPLL_PIN_FREQUENCY_RANGE(_val, _val)
+#define DPLL_PIN_FREQUENCY_1PPS \
+	DPLL_PIN_FREQUENCY(DPLL_PIN_FREQUENCY_1_HZ)
+#define DPLL_PIN_FREQUENCY_10MHZ \
+	DPLL_PIN_FREQUENCY(DPLL_PIN_FREQUENCY_10_MHZ)
+
 struct dpll_pin_properties {
 	const char *description;
 	enum dpll_pin_type type;
-	unsigned long freq_supported;
-	u32 any_freq_min;
-	u32 any_freq_max;
 	unsigned long capabilities;
-};
-
-enum dpll_pin_freq_supp {
-	DPLL_PIN_FREQ_SUPP_UNSPEC = 0,
-	DPLL_PIN_FREQ_SUPP_1_HZ,
-	DPLL_PIN_FREQ_SUPP_10_MHZ,
-
-	__DPLL_PIN_FREQ_SUPP_MAX,
-	DPLL_PIN_FREQ_SUPP_MAX = (__DPLL_PIN_FREQ_SUPP_MAX - 1)
+	u32 freq_supported_num;
+	struct dpll_pin_frequency *freq_supported;
 };
 
 /**

@@ -440,7 +440,7 @@ dpll_pin_alloc(u64 clock_id, u8 device_drv_id,	struct module *module,
 	       const struct dpll_pin_properties *prop)
 {
 	struct dpll_pin *pin;
-	int ret;
+	int ret, fs_size;
 
 	pin = kzalloc(sizeof(*pin), GFP_KERNEL);
 	if (!pin)
@@ -465,9 +465,17 @@ dpll_pin_alloc(u64 clock_id, u8 device_drv_id,	struct module *module,
 	}
 	pin->prop.type = prop->type;
 	pin->prop.capabilities = prop->capabilities;
-	pin->prop.freq_supported = prop->freq_supported;
-	pin->prop.any_freq_min = prop->any_freq_min;
-	pin->prop.any_freq_max = prop->any_freq_max;
+	if (prop->freq_supported_num) {
+		fs_size = sizeof(*pin->prop.freq_supported) *
+			  prop->freq_supported_num;
+		pin->prop.freq_supported = kzalloc(fs_size, GFP_KERNEL);
+		if (!pin->prop.freq_supported) {
+			ret = -ENOMEM;
+			goto release;
+		}
+		memcpy(pin->prop.freq_supported, prop->freq_supported, fs_size);
+		pin->prop.freq_supported_num = prop->freq_supported_num;
+	}
 	xa_init_flags(&pin->dpll_refs, XA_FLAGS_ALLOC);
 	xa_init_flags(&pin->parent_refs, XA_FLAGS_ALLOC);
 	ret = xa_alloc(&dpll_pin_xa, &pin->idx, pin,
@@ -540,6 +548,7 @@ void dpll_pin_put(struct dpll_pin *pin)
 		xa_destroy(&pin->parent_refs);
 		xa_erase(&dpll_pin_xa, pin->idx);
 		kfree(pin->prop.description);
+		kfree(pin->prop.freq_supported);
 		kfree(pin->rclk_dev_name);
 		kfree(pin);
 	}
