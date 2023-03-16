@@ -46,7 +46,7 @@ static const struct nla_policy dpll_pin_set_nl_policy[DPLL_A_PIN_PARENT_IDX + 1]
 	[DPLL_A_BUS_NAME] = { .type = NLA_NUL_STRING, },
 	[DPLL_A_DEV_NAME] = { .type = NLA_NUL_STRING, },
 	[DPLL_A_PIN_IDX] = { .type = NLA_U32, },
-	[DPLL_A_PIN_FREQUENCY] = { .type = NLA_U32, },
+	[DPLL_A_PIN_FREQUENCY] = { .type = NLA_U64, },
 	[DPLL_A_PIN_DIRECTION] = NLA_POLICY_MAX(NLA_U8, 2),
 	[DPLL_A_PIN_PRIO] = { .type = NLA_U32, },
 	[DPLL_A_PIN_STATE] = NLA_POLICY_MAX(NLA_U8, 2),

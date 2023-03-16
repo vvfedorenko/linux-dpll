@@ -128,11 +128,11 @@ definitions:
     render-max: true
   -
     type: const
-    name: pin-freq-1-hz
+    name: pin-frequency-1-hz
     value: 1
   -
     type: const
-    name: pin-freq-10-mhz
+    name: pin-frequency-10-mhz
     value: 10000000
   -
     type: enum
@@ -252,17 +252,18 @@ attribute-sets:
         enum: pin-direction
       -
         name: pin-frequency
-        type: u32
+        type: u64
       -
         name: pin-frequency-supported
-        type: u32
+        type: nest
         multi-attr: true
+        nested-attributes: pin-frequency-range
       -
-        name: pin-any-frequency-min
-        type: u32
+        name: pin-frequency-min
+        type: u64
       -
-        name: pin-any-frequency-max
-        type: u32
+        name: pin-frequency-max
+        type: u64
       -
         name: pin-prio
         type: u32
@@ -369,17 +370,18 @@ attribute-sets:
         enum: pin-direction
       -
         name: pin-frequency
-        type: u32
+        type: u64
       -
         name: pin-frequency-supported
-        type: u32
+        type: nest
         multi-attr: true
+        nested-attributes: pin-frequency-range
       -
-        name: pin-any-frequency-min
-        type: u32
+        name: pin-frequency-min
+        type: u64
       -
-        name: pin-any-frequency-max
-        type: u32
+        name: pin-frequency-max
+        type: u64
       -
         name: pin-prio
         type: u32
@@ -416,7 +418,17 @@ attribute-sets:
       -
         name: pin-rclk-device
         type: string
-
+  -
+    name: pin-frequency-range
+    subset-of: dpll
+    attributes:
+      -
+        name: pin-frequency-min
+        type: u64
+        value: 19
+      -
+        name: pin-frequency-max
+        type: u64
 
 operations:
   list:
