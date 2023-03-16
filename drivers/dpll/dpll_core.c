@@ -449,12 +449,12 @@ dpll_pin_alloc(u64 clock_id, u8 device_drv_id,	struct module *module,
 	pin->clock_id = clock_id;
 	pin->module = module;
 	refcount_set(&pin->refcount, 1);
-	if (WARN_ON(!prop->description)) {
+	if (WARN_ON(!prop->label)) {
 		ret = -EINVAL;
 		goto release;
 	}
-	pin->prop.description = kstrdup(prop->description, GFP_KERNEL);
-	if (!pin->prop.description) {
+	pin->prop.label = kstrdup(prop->label, GFP_KERNEL);
+	if (!pin->prop.label) {
 		ret = -ENOMEM;
 		goto release;
 	}
@@ -484,7 +484,7 @@ release:
 	if (ret) {
 		xa_destroy(&pin->dpll_refs);
 		xa_destroy(&pin->parent_refs);
-		kfree(pin->prop.description);
+		kfree(pin->prop.label);
 		kfree(pin->rclk_dev_name);
 		kfree(pin);
 		return ERR_PTR(ret);
@@ -547,7 +547,7 @@ void dpll_pin_put(struct dpll_pin *pin)
 		xa_destroy(&pin->dpll_refs);
 		xa_destroy(&pin->parent_refs);
 		xa_erase(&dpll_pin_xa, pin->idx);
-		kfree(pin->prop.description);
+		kfree(pin->prop.label);
 		kfree(pin->prop.freq_supported);
 		kfree(pin->rclk_dev_name);
 		kfree(pin);
