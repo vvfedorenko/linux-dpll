@@ -12,11 +12,6 @@
 #include "dpll_nl.h"
 #include <uapi/linux/dpll.h>
 
-static u32 dpll_pin_freq_value[] = {
-	[DPLL_PIN_FREQ_SUPP_1_HZ] = DPLL_PIN_FREQ_1_HZ,
-	[DPLL_PIN_FREQ_SUPP_10_MHZ] = DPLL_PIN_FREQ_10_MHZ,
-};
-
 static int
 dpll_msg_add_dev_handle(struct sk_buff *msg, const struct dpll_device *dpll)
 {
@@ -154,12 +149,13 @@ dpll_msg_add_pin_direction(struct sk_buff *msg, const struct dpll_pin *pin,
 
 static int
 dpll_msg_add_pin_freq(struct sk_buff *msg, const struct dpll_pin *pin,
-		      struct netlink_ext_ack *extack, bool dump_any_freq)
+		      struct netlink_ext_ack *extack, bool dump_freq_supported)
 {
-	enum dpll_pin_freq_supp fs;
 	struct dpll_pin_ref *ref;
+	struct nlattr *nest;
 	unsigned long i;
-	u32 freq;
+	u64 freq;
+	int fs;
 
 	xa_for_each((struct xarray *)&pin->dpll_refs, i, ref) {
 		if (ref && ref->ops && ref->dpll)
@@ -171,25 +167,27 @@ dpll_msg_add_pin_freq(struct sk_buff *msg, const struct dpll_pin *pin,
 		return -EOPNOTSUPP;
 	if (ref->ops->frequency_get(pin, ref->dpll, &freq, extack))
 		return -EFAULT;
-	if (nla_put_u32(msg, DPLL_A_PIN_FREQUENCY, freq))
+	if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY, sizeof(freq), &freq, 0))
 		return -EMSGSIZE;
-	if (!dump_any_freq)
+	if (!dump_freq_supported)
 		return 0;
-	for (fs = DPLL_PIN_FREQ_SUPP_UNSPEC + 1;
-	     fs <= DPLL_PIN_FREQ_SUPP_MAX; fs++) {
-		if (test_bit(fs, &pin->prop.freq_supported)) {
-			if (nla_put_u32(msg, DPLL_A_PIN_FREQUENCY_SUPPORTED,
-			    dpll_pin_freq_value[fs]))
-				return -EMSGSIZE;
+	for (fs = 0; fs < pin->prop.freq_supported_num; fs++) {
+		nest = nla_nest_start(msg, DPLL_A_PIN_FREQUENCY_SUPPORTED);
+		if (!nest)
+			return -EMSGSIZE;
+		freq = pin->prop.freq_supported[fs].min;
+		if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY_MIN, sizeof(freq),
+				   &freq, 0)) {
+			nla_nest_cancel(msg, nest);
+			return -EMSGSIZE;
 		}
-	}
-	if (pin->prop.any_freq_min && pin->prop.any_freq_max) {
-		if (nla_put_u32(msg, DPLL_A_PIN_ANY_FREQUENCY_MIN,
-				pin->prop.any_freq_min))
+		freq = pin->prop.freq_supported[fs].max;
+		if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY_MAX, sizeof(freq),
+				   &freq, 0)) {
+			nla_nest_cancel(msg, nest);
 			return -EMSGSIZE;
-		if (nla_put_u32(msg, DPLL_A_PIN_ANY_FREQUENCY_MAX,
-				pin->prop.any_freq_max))
-			return -EMSGSIZE;
+		}
+		nla_nest_end(msg, nest);
 	}
 
 	return 0;
@@ -434,15 +432,12 @@ dpll_device_get_one(struct dpll_device *dpll, struct sk_buff *msg,
 
 static bool dpll_pin_is_freq_supported(struct dpll_pin *pin, u32 freq)
 {
-	enum dpll_pin_freq_supp fs;
+	int fs;
 
-	if (freq >= pin->prop.any_freq_min && freq <= pin->prop.any_freq_max)
-		return true;
-	for (fs = DPLL_PIN_FREQ_SUPP_UNSPEC + 1;
-	     fs <= DPLL_PIN_FREQ_SUPP_MAX; fs++)
-		if (test_bit(fs, &pin->prop.freq_supported))
-			if (freq == dpll_pin_freq_value[fs])
-				return true;
+	for (fs = 0; fs < pin->prop.freq_supported_num; fs++)
+		if (freq >=  pin->prop.freq_supported[fs].min &&
+		    freq <=  pin->prop.freq_supported[fs].max)
+			return true;
 	return false;
 }
 
@@ -450,7 +445,7 @@ static int
 dpll_pin_freq_set(struct dpll_pin *pin, struct nlattr *a,
 		  struct netlink_ext_ack *extack)
 {
-	u32 freq = nla_get_u32(a);
+	u64 freq = nla_get_u64(a);
 	struct dpll_pin_ref *ref;
 	unsigned long i;
 	int ret;
