@@ -24,9 +24,6 @@ struct dpll_device_ops {
 	bool (*mode_supported)(const struct dpll_device *dpll,
 			       const enum dpll_mode mode,
 			       struct netlink_ext_ack *extack);
-	int (*source_pin_idx_get)(const struct dpll_device *dpll,
-				  u32 *pin_idx,
-				  struct netlink_ext_ack *extack);
 	int (*lock_status_get)(const struct dpll_device *dpll,
 			       enum dpll_lock_status *status,
 			       struct netlink_ext_ack *extack);
@@ -287,5 +284,19 @@ void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin);
  */
 int dpll_device_notify(struct dpll_device *dpll, enum dplla attr);
 
+/**
+ * dpll_pin_notify - notify on pin change
+ * @dpll: dpll device pointer
+ * @pin: pin pointer
+ * @attr: changed attribute
+ *
+ * Broadcast event to the netlink multicast registered listeners.
+ *
+ * Return:
+ * * 0 - success
+ * * negative - error
+ */
+int dpll_pin_notify(struct dpll_device *dpll, struct dpll_pin *pin,
+		    enum dplla attr);
 
 #endif
