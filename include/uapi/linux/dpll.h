@@ -116,13 +116,16 @@ enum dpll_pin_direction {
  * enum dpll_pin_state - defines possible states of a pin, valid values for
  *   DPLL_A_PIN_STATE attribute
  * @DPLL_PIN_STATE_UNSPEC: unspecified value
- * @DPLL_PIN_STATE_CONNECTED: pin connected
- * @DPLL_PIN_STATE_DISCONNECTED: pin disconnected
+ * @DPLL_PIN_STATE_CONNECTED: pin connected, active source of phase locked loop
+ * @DPLL_PIN_STATE_DISCONNECTED: pin disconnected, not considered as a valid
+ *   source
+ * @DPLL_PIN_STATE_SELECTABLE: pin enabled for automatic source selection
  */
 enum dpll_pin_state {
 	DPLL_PIN_STATE_UNSPEC,
 	DPLL_PIN_STATE_CONNECTED,
 	DPLL_PIN_STATE_DISCONNECTED,
+	DPLL_PIN_STATE_SELECTABLE,
 
 	__DPLL_PIN_STATE_MAX,
 	DPLL_PIN_STATE_MAX = (__DPLL_PIN_STATE_MAX - 1)
@@ -160,7 +163,6 @@ enum dplla {
 	DPLL_A_BUS_NAME,
 	DPLL_A_MODE,
 	DPLL_A_MODE_SUPPORTED,
-	DPLL_A_SOURCE_PIN_IDX,
 	DPLL_A_LOCK_STATUS,
 	DPLL_A_TEMP,
 	DPLL_A_CLOCK_ID,
