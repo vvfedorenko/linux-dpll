@@ -68,6 +68,19 @@ dpll_device_get_by_name(const char *bus_name, const char *device_name)
 	return ret;
 }
 
+static struct dpll_pin_registration *
+dpll_pin_registration_find(struct dpll_pin_ref *ref,
+			   const struct dpll_pin_ops *ops, void *priv)
+{
+	struct dpll_pin_registration *reg;
+
+	list_for_each_entry(reg, &ref->registration_list, list) {
+		if (reg->ops == ops && reg->priv == priv)
+			return reg;
+	}
+	return NULL;
+}
+
 /**
  * dpll_xa_ref_pin_add - add pin reference to a given xarray
  * @xa_pins: dpll_pin_ref xarray holding pins
@@ -75,8 +88,8 @@ dpll_device_get_by_name(const char *bus_name, const char *device_name)
  * @ops: ops for a pin
  * @priv: pointer to private data of owner
  *
- * Allocate and create reference of a pin or increase refcount on existing pin
- * reference on given xarray.
+ * Allocate and create reference of a pin and enlist a registration
+ * structure storing ops and priv pointers of a caller registant.
  *
  * Return:
  * * 0 on success
@@ -86,31 +99,48 @@ static int
 dpll_xa_ref_pin_add(struct xarray *xa_pins, struct dpll_pin *pin,
 		    const struct dpll_pin_ops *ops, void *priv)
 {
+	struct dpll_pin_registration *reg;
 	struct dpll_pin_ref *ref;
+	bool ref_exists = false;
 	unsigned long i;
 	u32 idx;
 	int ret;
 
 	xa_for_each(xa_pins, i, ref) {
-		if (ref->pin == pin) {
-			refcount_inc(&ref->refcount);
-			return 0;
+		if (ref->pin != pin)
+			continue;
+		reg = dpll_pin_registration_find(ref, ops, priv);
+		if (reg)
+			return -EEXIST;
+		ref_exists = true;
+		break;
+	}
+
+	if (!ref_exists) {
+		ref = kzalloc(sizeof(*ref), GFP_KERNEL);
+		if (!ref)
+			return -ENOMEM;
+		ref->pin = pin;
+		INIT_LIST_HEAD(&ref->registration_list);
+		ret = xa_alloc(xa_pins, &idx, ref, xa_limit_16b, GFP_KERNEL);
+		if (ret) {
+			kfree(ref);
+			return ret;
 		}
 	}
 
-	ref = kzalloc(sizeof(*ref), GFP_KERNEL);
-	if (!ref)
+	reg = kzalloc(sizeof(*reg), GFP_KERNEL);
+	if (!reg) {
+		if (!ref_exists)
+			kfree(ref);
 		return -ENOMEM;
-	ref->pin = pin;
-	ref->ops = ops;
-	ref->priv = priv;
-	ret = xa_alloc(xa_pins, &idx, ref, xa_limit_16b, GFP_KERNEL);
-	if (!ret)
-		refcount_set(&ref->refcount, 1);
-	else
-		kfree(ref);
+	}
+	reg->ops = ops;
+	reg->priv = priv;
 
-	return ret;
+	list_add_tail(&reg->list, &ref->registration_list);
+
+	return 0;
 }
 
 /**
@@ -119,25 +149,31 @@ dpll_xa_ref_pin_add(struct xarray *xa_pins, struct dpll_pin *pin,
  * @pin: pointer to a pin
  *
  * Decrement refcount of existing pin reference on given xarray.
- * If all references are dropped, delete the reference and free its memory.
+ * If all registrations are lifted delete the reference and free its memory.
  *
  * Return:
  * * 0 on success
  * * -EINVAL if reference to a pin was not found
  */
-static int dpll_xa_ref_pin_del(struct xarray *xa_pins, struct dpll_pin *pin)
+static int dpll_xa_ref_pin_del(struct xarray *xa_pins, struct dpll_pin *pin,
+			       const struct dpll_pin_ops *ops, void *priv)
 {
+	struct dpll_pin_registration *reg;
 	struct dpll_pin_ref *ref;
 	unsigned long i;
 
 	xa_for_each(xa_pins, i, ref) {
-		if (ref->pin == pin) {
-			if (refcount_dec_and_test(&ref->refcount)) {
-				xa_erase(xa_pins, i);
-				kfree(ref);
-			}
-			return 0;
-		}
+		if (ref->pin != pin)
+			continue;
+		reg = dpll_pin_registration_find(ref, ops, priv);
+		if (WARN_ON(!reg))
+			return -EINVAL;
+		list_del(&reg->list);
+		kfree(reg);
+		xa_erase(xa_pins, i);
+		WARN_ON(!list_empty(&ref->registration_list));
+		kfree(ref);
+		return 0;
 	}
 
 	return -EINVAL;
@@ -186,30 +222,48 @@ static int
 dpll_xa_ref_dpll_add(struct xarray *xa_dplls, struct dpll_device *dpll,
 		     const struct dpll_pin_ops *ops, void *priv)
 {
+	struct dpll_pin_registration *reg;
 	struct dpll_pin_ref *ref;
+	bool ref_exists = false;
 	unsigned long i;
 	u32 idx;
 	int ret;
 
 	xa_for_each(xa_dplls, i, ref) {
-		if (ref->dpll == dpll) {
-			refcount_inc(&ref->refcount);
-			return 0;
+		if (ref->dpll != dpll)
+			continue;
+		reg = dpll_pin_registration_find(ref, ops, priv);
+		if (reg)
+			return -EEXIST;
+		ref_exists = true;
+		break;
+	}
+
+	if (!ref_exists) {
+		ref = kzalloc(sizeof(*ref), GFP_KERNEL);
+		if (!ref)
+			return -ENOMEM;
+		ref->dpll = dpll;
+		INIT_LIST_HEAD(&ref->registration_list);
+		ret = xa_alloc(xa_dplls, &idx, ref, xa_limit_16b, GFP_KERNEL);
+		if (ret) {
+			kfree(ref);
+			return ret;
 		}
 	}
-	ref = kzalloc(sizeof(*ref), GFP_KERNEL);
-	if (!ref)
-		return -ENOMEM;
-	ref->dpll = dpll;
-	ref->ops = ops;
-	ref->priv = priv;
-	ret = xa_alloc(xa_dplls, &idx, ref, xa_limit_16b, GFP_KERNEL);
-	if (!ret)
-		refcount_set(&ref->refcount, 1);
-	else
-		kfree(ref);
 
-	return ret;
+	reg = kzalloc(sizeof(*reg), GFP_KERNEL);
+	if (!reg) {
+		if (!ref_exists)
+			kfree(ref);
+		return -ENOMEM;
+	}
+	reg->ops = ops;
+	reg->priv = priv;
+
+	list_add_tail(&reg->list, &ref->registration_list);
+
+	return 0;
 }
 
 /**
@@ -221,19 +275,25 @@ dpll_xa_ref_dpll_add(struct xarray *xa_dplls, struct dpll_device *dpll,
  * If all references are dropped, delete the reference and free its memory.
  */
 static void
-dpll_xa_ref_dpll_del(struct xarray *xa_dplls, struct dpll_device *dpll)
+dpll_xa_ref_dpll_del(struct xarray *xa_dplls, struct dpll_device *dpll,
+		     const struct dpll_pin_ops *ops, void *priv)
 {
+	struct dpll_pin_registration *reg;
 	struct dpll_pin_ref *ref;
 	unsigned long i;
 
 	xa_for_each(xa_dplls, i, ref) {
-		if (ref->dpll == dpll) {
-			if (refcount_dec_and_test(&ref->refcount)) {
-				xa_erase(xa_dplls, i);
-				kfree(ref);
-			}
-			break;
-		}
+		if (ref->dpll != dpll)
+			continue;
+		reg = dpll_pin_registration_find(ref, ops, priv);
+		if (WARN_ON(!reg))
+			return;
+		list_del(&reg->list);
+		kfree(reg);
+		xa_erase(xa_dplls, i);
+		WARN_ON(!list_empty(&ref->registration_list));
+		kfree(ref);
+		return;
 	}
 }
 
@@ -639,7 +699,7 @@ __dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
 	return ret;
 
 ref_pin_del:
-	dpll_xa_ref_pin_del(&dpll->pin_refs, pin);
+	dpll_xa_ref_pin_del(&dpll->pin_refs, pin, ops, priv);
 rclk_free:
 	kfree(pin->rclk_dev_name);
 	return ret;
@@ -677,27 +737,31 @@ dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
 EXPORT_SYMBOL_GPL(dpll_pin_register);
 
 static void
-__dpll_pin_unregister(struct dpll_device *dpll, struct dpll_pin *pin)
+__dpll_pin_unregister(struct dpll_device *dpll, struct dpll_pin *pin,
+		      const struct dpll_pin_ops *ops, void *priv)
 {
-	dpll_xa_ref_pin_del(&dpll->pin_refs, pin);
-	dpll_xa_ref_dpll_del(&pin->dpll_refs, dpll);
+	dpll_xa_ref_pin_del(&dpll->pin_refs, pin, ops, priv);
+	dpll_xa_ref_dpll_del(&pin->dpll_refs, dpll, ops, priv);
 }
 
 /**
  * dpll_pin_unregister - deregister dpll pin from dpll device
  * @dpll: registered dpll pointer
  * @pin: pointer to a pin
+ * @ops: ops for a dpll pin
+ * @priv: pointer to private information of owner
  *
  * Note: It does not free the memory
  */
-void dpll_pin_unregister(struct dpll_device *dpll, struct dpll_pin *pin)
+void dpll_pin_unregister(struct dpll_device *dpll, struct dpll_pin *pin,
+			 const struct dpll_pin_ops *ops, void *priv)
 {
 	if (WARN_ON(xa_empty(&dpll->pin_refs)))
 		return;
 
 	mutex_lock(&dpll_device_xa_lock);
 	mutex_lock(&dpll_pin_xa_lock);
-	__dpll_pin_unregister(dpll, pin);
+	__dpll_pin_unregister(dpll, pin, ops, priv);
 	mutex_unlock(&dpll_pin_xa_lock);
 	mutex_unlock(&dpll_device_xa_lock);
 }
@@ -755,12 +819,12 @@ dpll_unregister:
 	xa_for_each(&parent->dpll_refs, i, ref) {
 		if (i < stop) {
 			mutex_lock(&dpll_device_xa_lock);
-			__dpll_pin_unregister(ref->dpll, pin);
+			__dpll_pin_unregister(ref->dpll, pin, ops, priv);
 			mutex_unlock(&dpll_device_xa_lock);
 		}
 	}
 	refcount_dec(&pin->refcount);
-	dpll_xa_ref_pin_del(&pin->parent_refs, parent);
+	dpll_xa_ref_pin_del(&pin->parent_refs, parent, ops, priv);
 unlock:
 	mutex_unlock(&dpll_pin_xa_lock);
 	return ret;
@@ -771,20 +835,23 @@ EXPORT_SYMBOL_GPL(dpll_pin_on_pin_register);
  * dpll_pin_on_pin_unregister - deregister dpll pin from a parent pin
  * @parent: pointer to a parent pin
  * @pin: pointer to a pin
+ * @ops: ops for a dpll pin
+ * @priv: pointer to private information of owner
  *
  * Note: It does not free the memory
  */
-void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin)
+void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin,
+				const struct dpll_pin_ops *ops, void *priv)
 {
 	struct dpll_pin_ref *ref;
 	unsigned long i;
 
 	mutex_lock(&dpll_device_xa_lock);
 	mutex_lock(&dpll_pin_xa_lock);
-	dpll_xa_ref_pin_del(&pin->parent_refs, parent);
+	dpll_xa_ref_pin_del(&pin->parent_refs, parent, ops, priv);
 	refcount_dec(&pin->refcount);
 	xa_for_each(&pin->dpll_refs, i, ref) {
-		__dpll_pin_unregister(ref->dpll, pin);
+		__dpll_pin_unregister(ref->dpll, pin, ops, priv);
 		dpll_pin_parent_notify(ref->dpll, pin, parent,
 				       DPLL_A_PIN_IDX);
 	}
@@ -851,6 +918,17 @@ const struct dpll_device_ops *dpll_device_ops(struct dpll_device *dpll)
 	return reg->ops;
 }
 
+static struct dpll_pin_registration *
+dpll_pin_registration_first(struct dpll_pin_ref *ref)
+{
+	struct dpll_pin_registration *reg;
+
+	reg = list_first_entry_or_null(&ref->registration_list,
+				       struct dpll_pin_registration, list);
+	WARN_ON(!reg);
+	return reg;
+}
+
 /**
  * dpll_pin_on_dpll_priv - get the dpll device private owner data
  * @dpll:	registered dpll pointer
@@ -861,13 +939,14 @@ const struct dpll_device_ops *dpll_device_ops(struct dpll_device *dpll)
 void *dpll_pin_on_dpll_priv(const struct dpll_device *dpll,
 			    const struct dpll_pin *pin)
 {
+	struct dpll_pin_registration *reg;
 	struct dpll_pin_ref *ref;
 
 	ref = dpll_xa_ref_pin_find((struct xarray *)&dpll->pin_refs, pin);
 	if (!ref)
 		return NULL;
-
-	return ref->priv;
+	reg = dpll_pin_registration_first(ref);
+	return reg->priv;
 }
 EXPORT_SYMBOL_GPL(dpll_pin_on_dpll_priv);
 
@@ -881,15 +960,24 @@ EXPORT_SYMBOL_GPL(dpll_pin_on_dpll_priv);
 void *dpll_pin_on_pin_priv(const struct dpll_pin *parent,
 			   const struct dpll_pin *pin)
 {
+	struct dpll_pin_registration *reg;
 	struct dpll_pin_ref *ref;
 
 	ref = dpll_xa_ref_pin_find((struct xarray *)&pin->parent_refs, parent);
 	if (!ref)
 		return NULL;
-
-	return ref->priv;
+	reg = dpll_pin_registration_first(ref);
+	return reg->priv;
 }
 EXPORT_SYMBOL_GPL(dpll_pin_on_pin_priv);
+
+const struct dpll_pin_ops *dpll_pin_ops(struct dpll_pin_ref *ref)
+{
+	struct dpll_pin_registration *reg;
+
+	reg = dpll_pin_registration_first(ref);
+	return reg->ops;
+}
 
 static int __init dpll_init(void)
 {
