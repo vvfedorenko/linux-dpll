@@ -290,5 +290,9 @@ void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin,
  */
 int dpll_device_notify(struct dpll_device *dpll, enum dplla attr);
 
+int dpll_pin_notify(struct dpll_device *dpll, struct dpll_pin *pin,
+		    enum dplla attr);
+
+
 
 #endif

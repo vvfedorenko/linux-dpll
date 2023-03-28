@@ -1049,6 +1049,7 @@ int dpll_pin_notify(struct dpll_device *dpll, struct dpll_pin *pin,
 {
 	return dpll_send_event_change(dpll, pin, NULL, attr);
 }
+EXPORT_SYMBOL_GPL(dpll_pin_notify);
 
 int dpll_pin_parent_notify(struct dpll_device *dpll, struct dpll_pin *pin,
 			   struct dpll_pin *parent, enum dplla attr)
