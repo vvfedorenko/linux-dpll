@@ -7,10 +7,17 @@
 #define __DPLL_CORE_H__
 
 #include <linux/dpll.h>
+#include <linux/list.h>
 #include <linux/refcount.h>
 #include "dpll_netlink.h"
 
 #define DPLL_REGISTERED		XA_MARK_1
+
+struct dpll_device_registration {
+	struct list_head list;
+	const struct dpll_device_ops *ops;
+	void *priv;
+};
 
 /**
  * struct dpll_device - structure for a DPLL device
@@ -35,12 +42,11 @@ struct dpll_device {
 	struct module *module;
 	struct device dev;
 	struct device *parent;
-	const struct dpll_device_ops *ops;
 	enum dpll_type type;
 	struct xarray pin_refs;
 	unsigned long mode_supported_mask;
 	refcount_t refcount;
-	void *priv;
+	struct list_head registration_list;
 };
 
 /**
@@ -85,6 +91,7 @@ struct dpll_pin_ref {
 	void *priv;
 };
 
+const struct dpll_device_ops *dpll_device_ops(struct dpll_device *dpll);
 struct dpll_device *dpll_device_get_by_id(int id);
 struct dpll_device *dpll_device_get_by_name(const char *bus_name,
 					    const char *dev_name);

@@ -137,11 +137,14 @@ int dpll_device_register(struct dpll_device *dpll, enum dpll_type type,
 /**
  * dpll_device_unregister - deregister registered dpll
  * @dpll: pointer to dpll
+ * @ops: ops for a dpll device
+ * @priv: pointer to private information of owner
  *
  * Unregister the dpll from the subsystem, make it unavailable for netlink
  * API users.
  */
-void dpll_device_unregister(struct dpll_device *dpll);
+void dpll_device_unregister(struct dpll_device *dpll,
+			    const struct dpll_device_ops *ops, void *priv);
 
 /**
  * dpll_priv - get dpll private data
