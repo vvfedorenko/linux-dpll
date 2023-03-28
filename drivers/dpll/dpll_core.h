@@ -73,6 +73,12 @@ struct dpll_pin {
 	refcount_t refcount;
 };
 
+struct dpll_pin_registration {
+	struct list_head list;
+	const struct dpll_pin_ops *ops;
+	void *priv;
+};
+
 /**
  * struct dpll_pin_ref - structure for referencing either dpll or pins
  * @dpll:		pointer to a dpll
@@ -86,15 +92,14 @@ struct dpll_pin_ref {
 		struct dpll_device *dpll;
 		struct dpll_pin *pin;
 	};
-	const struct dpll_pin_ops *ops;
-	refcount_t refcount;
-	void *priv;
+	struct list_head registration_list;
 };
 
 const struct dpll_device_ops *dpll_device_ops(struct dpll_device *dpll);
 struct dpll_device *dpll_device_get_by_id(int id);
 struct dpll_device *dpll_device_get_by_name(const char *bus_name,
 					    const char *dev_name);
+const struct dpll_pin_ops *dpll_pin_ops(struct dpll_pin_ref *ref);
 struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, u32 idx);
 struct dpll_pin_ref *
 dpll_xa_ref_pin_find(struct xarray *xa_refs, const struct dpll_pin *pin);

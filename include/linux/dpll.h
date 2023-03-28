@@ -218,15 +218,14 @@ int dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
  * dpll_pin_unregister - deregister pin from a dpll device
  * @dpll: pointer to dpll object to deregister pin from
  * @pin: pointer to allocated pin object being deregistered from dpll
+ * @ops: ops for a dpll pin ops
+ * @priv: pointer to private information of owner
  *
  * Deregister previously registered pin object from a dpll device.
  *
- * Return:
- * * 0 - pin was successfully deregistered from this dpll device,
- * * -ENXIO - given pin was not registered with this dpll device,
- * * -EINVAL - pin pointer is not valid.
  */
-void dpll_pin_unregister(struct dpll_device *dpll, struct dpll_pin *pin);
+void dpll_pin_unregister(struct dpll_device *dpll, struct dpll_pin *pin,
+			 const struct dpll_pin_ops *ops, void *priv);
 
 /**
  * dpll_pin_put - drop reference to a pin acquired with dpll_pin_get
@@ -275,7 +274,8 @@ int dpll_pin_on_pin_register(struct dpll_pin *parent, struct dpll_pin *pin,
  * * -ENOMEM - failed to allocate memory,
  * * -EEXIST - pin already registered with this parent pin,
  */
-void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin);
+void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin,
+				const struct dpll_pin_ops *ops, void *priv);
 
 /**
  * dpll_device_notify - notify on dpll device change
