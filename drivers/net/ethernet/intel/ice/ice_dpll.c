@@ -1549,7 +1549,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 	if (dp->dpll) {
 		mutex_lock(&pf->dplls.lock);
 		if (cgu)
-			dpll_device_unregister(dp->dpll);
+			dpll_device_unregister(dp->dpll, &ice_dpll_ops, pf);
 		dpll_device_put(dp->dpll);
 		mutex_unlock(&pf->dplls.lock);
 		dev_dbg(ice_pf_to_dev(pf), "PPS dpll removed\n");
@@ -1558,7 +1558,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 	if (de->dpll) {
 		mutex_lock(&pf->dplls.lock);
 		if (cgu)
-			dpll_device_unregister(de->dpll);
+			dpll_device_unregister(de->dpll, &ice_dpll_ops, pf);
 		dpll_device_put(de->dpll);
 		mutex_unlock(&pf->dplls.lock);
 		dev_dbg(ice_pf_to_dev(pf), "EEC dpll removed\n");
