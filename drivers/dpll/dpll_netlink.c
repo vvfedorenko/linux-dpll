@@ -13,7 +13,7 @@
 #include <uapi/linux/dpll.h>
 
 static int
-dpll_msg_add_dev_handle(struct sk_buff *msg, const struct dpll_device *dpll)
+dpll_msg_add_dev_handle(struct sk_buff *msg, struct dpll_device *dpll)
 {
 	if (nla_put_u32(msg, DPLL_A_ID, dpll->id))
 		return -EMSGSIZE;
@@ -26,14 +26,15 @@ dpll_msg_add_dev_handle(struct sk_buff *msg, const struct dpll_device *dpll)
 }
 
 static int
-dpll_msg_add_mode(struct sk_buff *msg, const struct dpll_device *dpll,
+dpll_msg_add_mode(struct sk_buff *msg, struct dpll_device *dpll,
 		  struct netlink_ext_ack *extack)
 {
+	const struct dpll_device_ops *ops = dpll_device_ops(dpll);
 	enum dpll_mode mode;
 
-	if (WARN_ON(!dpll->ops->mode_get))
+	if (WARN_ON(!ops->mode_get))
 		return -EOPNOTSUPP;
-	if (dpll->ops->mode_get(dpll, &mode, extack))
+	if (ops->mode_get(dpll, &mode, extack))
 		return -EFAULT;
 	if (nla_put_u8(msg, DPLL_A_MODE, mode))
 		return -EMSGSIZE;
@@ -45,11 +46,12 @@ static int
 dpll_msg_add_source_pin_idx(struct sk_buff *msg, struct dpll_device *dpll,
 			    struct netlink_ext_ack *extack)
 {
+	const struct dpll_device_ops *ops = dpll_device_ops(dpll);
 	u32 source_pin_idx;
 
-	if (WARN_ON(!dpll->ops->source_pin_idx_get))
+	if (WARN_ON(!ops->source_pin_idx_get))
 		return -EOPNOTSUPP;
-	if (dpll->ops->source_pin_idx_get(dpll, &source_pin_idx, extack))
+	if (ops->source_pin_idx_get(dpll, &source_pin_idx, extack))
 		return -EFAULT;
 	if (nla_put_u32(msg, DPLL_A_SOURCE_PIN_IDX, source_pin_idx))
 		return -EMSGSIZE;
@@ -61,11 +63,12 @@ static int
 dpll_msg_add_lock_status(struct sk_buff *msg, struct dpll_device *dpll,
 			 struct netlink_ext_ack *extack)
 {
+	const struct dpll_device_ops *ops = dpll_device_ops(dpll);
 	enum dpll_lock_status status;
 
-	if (WARN_ON(!dpll->ops->lock_status_get))
+	if (WARN_ON(!ops->lock_status_get))
 		return -EOPNOTSUPP;
-	if (dpll->ops->lock_status_get(dpll, &status, extack))
+	if (ops->lock_status_get(dpll, &status, extack))
 		return -EFAULT;
 	if (nla_put_u8(msg, DPLL_A_LOCK_STATUS, status))
 		return -EMSGSIZE;
@@ -77,11 +80,12 @@ static int
 dpll_msg_add_temp(struct sk_buff *msg, struct dpll_device *dpll,
 		  struct netlink_ext_ack *extack)
 {
+	const struct dpll_device_ops *ops = dpll_device_ops(dpll);
 	s32 temp;
 
-	if (!dpll->ops->temp_get)
+	if (!ops->temp_get)
 		return -EOPNOTSUPP;
-	if (dpll->ops->temp_get(dpll, &temp, extack))
+	if (ops->temp_get(dpll, &temp, extack))
 		return -EFAULT;
 	if (nla_put_s32(msg, DPLL_A_TEMP, temp))
 		return -EMSGSIZE;
@@ -680,6 +684,7 @@ int dpll_nl_pin_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 static int
 dpll_set_from_nlattr(struct dpll_device *dpll, struct genl_info *info)
 {
+	const struct dpll_device_ops *ops = dpll_device_ops(dpll);
 	struct nlattr *attr;
 	enum dpll_mode mode;
 	int rem, ret = 0;
@@ -690,7 +695,7 @@ dpll_set_from_nlattr(struct dpll_device *dpll, struct genl_info *info)
 		case DPLL_A_MODE:
 			mode = nla_get_u8(attr);
 
-			ret = dpll->ops->mode_set(dpll, mode, info->extack);
+			ret = ops->mode_set(dpll, mode, info->extack);
 			if (ret)
 				return ret;
 			break;

@@ -286,6 +286,7 @@ dpll_device_alloc(const u64 clock_id, u32 dev_driver_id, struct module *module)
 	if (!dpll)
 		return ERR_PTR(-ENOMEM);
 	refcount_set(&dpll->refcount, 1);
+	INIT_LIST_HEAD(&dpll->registration_list);
 	dpll->dev_driver_id = dev_driver_id;
 	dpll->clock_id = clock_id;
 	dpll->module = module;
@@ -354,11 +355,25 @@ void dpll_device_put(struct dpll_device *dpll)
 		WARN_ON_ONCE(!xa_empty(&dpll->pin_refs));
 		xa_destroy(&dpll->pin_refs);
 		xa_erase(&dpll_device_xa, dpll->id);
+		WARN_ON(!list_empty(&dpll->registration_list));
 		kfree(dpll);
 	}
 	mutex_unlock(&dpll_device_xa_lock);
 }
 EXPORT_SYMBOL_GPL(dpll_device_put);
+
+static struct dpll_device_registration *
+dpll_device_registration_find(struct dpll_device *dpll,
+			      const struct dpll_device_ops *ops, void *priv)
+{
+	struct dpll_device_registration *reg;
+
+	list_for_each_entry(reg, &dpll->registration_list, list) {
+		if (reg->ops == ops && reg->priv == priv)
+			return reg;
+	}
+	return NULL;
+}
 
 /**
  * dpll_device_register - register the dpll device in the subsystem
@@ -378,22 +393,42 @@ int dpll_device_register(struct dpll_device *dpll, enum dpll_type type,
 			 const struct dpll_device_ops *ops, void *priv,
 			 struct device *owner)
 {
+	struct dpll_device_registration *reg;
+	bool first_registration = false;
+
 	if (WARN_ON(!ops || !owner))
 		return -EINVAL;
 	if (WARN_ON(type <= DPLL_TYPE_UNSPEC || type > DPLL_TYPE_MAX))
 		return -EINVAL;
+
 	mutex_lock(&dpll_device_xa_lock);
-	if (ASSERT_DPLL_NOT_REGISTERED(dpll)) {
+	reg = dpll_device_registration_find(dpll, ops, priv);
+	if (reg) {
 		mutex_unlock(&dpll_device_xa_lock);
 		return -EEXIST;
 	}
+
+	reg = kzalloc(sizeof(*reg), GFP_KERNEL);
+	if (!reg) {
+		mutex_unlock(&dpll_device_xa_lock);
+		return -EEXIST;
+	}
+	reg->ops = ops;
+	reg->priv = priv;
+
 	dpll->dev.bus = owner->bus;
 	dpll->parent = owner;
 	dpll->type = type;
-	dpll->ops = ops;
 	dev_set_name(&dpll->dev, "%s/%llx/%d", module_name(dpll->module),
 		     dpll->clock_id, dpll->dev_driver_id);
-	dpll->priv = priv;
+
+	first_registration = list_empty(&dpll->registration_list);
+	list_add_tail(&reg->list, &dpll->registration_list);
+	if (!first_registration) {
+		mutex_unlock(&dpll_device_xa_lock);
+		return 0;
+	}
+
 	xa_set_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED);
 	mutex_unlock(&dpll_device_xa_lock);
 	dpll_notify_device_create(dpll);
@@ -405,14 +440,32 @@ EXPORT_SYMBOL_GPL(dpll_device_register);
 /**
  * dpll_device_unregister - deregister dpll device
  * @dpll: registered dpll pointer
+ * @ops: ops for a dpll device
+ * @priv: pointer to private information of owner
  *
  * Deregister device, make it unavailable for userspace.
  * Note: It does not free the memory
  */
-void dpll_device_unregister(struct dpll_device *dpll)
+void dpll_device_unregister(struct dpll_device *dpll,
+			    const struct dpll_device_ops *ops, void *priv)
 {
+	struct dpll_device_registration *reg;
+
 	mutex_lock(&dpll_device_xa_lock);
 	ASSERT_DPLL_REGISTERED(dpll);
+
+	reg = dpll_device_registration_find(dpll, ops, priv);
+	if (WARN_ON(!reg)) {
+		mutex_unlock(&dpll_device_xa_lock);
+		return;
+	}
+	list_del(&reg->list);
+	kfree(reg);
+
+	if (!list_empty(&dpll->registration_list)) {
+		mutex_unlock(&dpll_device_xa_lock);
+		return;
+	}
 	xa_clear_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED);
 	mutex_unlock(&dpll_device_xa_lock);
 	dpll_notify_device_delete(dpll);
@@ -752,6 +805,17 @@ struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, u32 idx)
 	return NULL;
 }
 
+static struct dpll_device_registration *
+dpll_device_registration_first(struct dpll_device *dpll)
+{
+	struct dpll_device_registration *reg;
+
+	reg = list_first_entry_or_null((struct list_head *) &dpll->registration_list,
+				       struct dpll_device_registration, list);
+	WARN_ON(!reg);
+	return reg;
+}
+
 /**
  * dpll_priv - get the dpll device private owner data
  * @dpll:	registered dpll pointer
@@ -760,9 +824,20 @@ struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, u32 idx)
  */
 void *dpll_priv(const struct dpll_device *dpll)
 {
-	return dpll->priv;
+	struct dpll_device_registration *reg;
+
+	reg = dpll_device_registration_first((struct dpll_device *) dpll);
+	return reg->priv;
 }
 EXPORT_SYMBOL_GPL(dpll_priv);
+
+const struct dpll_device_ops *dpll_device_ops(struct dpll_device *dpll)
+{
+	struct dpll_device_registration *reg;
+
+	reg = dpll_device_registration_first(dpll);
+	return reg->ops;
+}
 
 /**
  * dpll_pin_on_dpll_priv - get the dpll device private owner data
