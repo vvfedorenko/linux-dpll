@@ -20,9 +20,6 @@ int dpll_notify_device_create(struct dpll_device *dpll);
  */
 int dpll_notify_device_delete(struct dpll_device *dpll);
 
-int dpll_pin_notify(struct dpll_device *dpll, struct dpll_pin *pin,
-		    enum dplla attr);
-
 int dpll_pin_parent_notify(struct dpll_device *dpll, struct dpll_pin *pin,
 			   struct dpll_pin *parent, enum dplla attr);
 
