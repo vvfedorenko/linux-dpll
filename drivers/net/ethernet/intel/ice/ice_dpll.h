@@ -41,6 +41,8 @@ struct ice_dpll_pin {
  * @input_prio: priorities of each input
  * @dpll_state: current dpll sync state
  * @prev_dpll_state: last dpll sync state
+ * @active_source: pointer to active source pin
+ * @prev_source: pointer to previous active source pin
  */
 struct ice_dpll {
 	struct dpll_device *dpll;
@@ -53,6 +55,8 @@ struct ice_dpll {
 	u8 *input_prio;
 	enum ice_cgu_state dpll_state;
 	enum ice_cgu_state prev_dpll_state;
+	struct dpll_pin *active_source;
+	struct dpll_pin *prev_source;
 };
 
 /** ice_dplls - store info required for CCU (clock controlling unit)
@@ -81,6 +85,7 @@ struct ice_dplls {
 	u32 num_inputs;
 	u32 num_outputs;
 	int cgu_state_acq_err_num;
+	int lock_err_num;
 	u8 base_rclk_idx;
 	u64 clock_id;
 };

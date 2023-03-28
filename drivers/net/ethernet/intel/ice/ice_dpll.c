@@ -9,7 +9,7 @@
 
 #define CGU_STATE_ACQ_ERR_THRESHOLD	50
 #define ICE_DPLL_LOCK_TRIES		1000
-
+#define ICE_DPLL_PIN_IDX_INVALID	0xff
 /**
  * dpll_lock_status - map ice cgu states into dpll's subsystem lock status
  */
@@ -484,10 +484,28 @@ ice_dpll_pin_state_update(struct ice_pf *pf, struct ice_dpll_pin *pin,
 		ret = ice_aq_get_input_pin_cfg(&pf->hw, pin->idx, NULL, NULL,
 					       NULL, &pin->flags[0],
 					       &pin->freq, NULL);
-		if (!!(ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN & pin->flags[0]))
-			pin->state[0] = DPLL_PIN_STATE_CONNECTED;
-		else
-			pin->state[0] = DPLL_PIN_STATE_DISCONNECTED;
+		if (!!(ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN & pin->flags[0])) {
+			if (pin->pin) {
+				pin->state[pf->dplls.eec.dpll_idx] =
+					pin->pin == pf->dplls.eec.active_source ?
+					DPLL_PIN_STATE_CONNECTED :
+					DPLL_PIN_STATE_SELECTABLE;
+				pin->state[pf->dplls.pps.dpll_idx] =
+					pin->pin == pf->dplls.pps.active_source ?
+					DPLL_PIN_STATE_CONNECTED :
+					DPLL_PIN_STATE_SELECTABLE;
+			} else {
+				pin->state[pf->dplls.eec.dpll_idx] =
+					DPLL_PIN_STATE_SELECTABLE;
+				pin->state[pf->dplls.pps.dpll_idx] =
+					DPLL_PIN_STATE_SELECTABLE;
+			}
+		} else {
+			pin->state[pf->dplls.eec.dpll_idx] =
+				DPLL_PIN_STATE_DISCONNECTED;
+			pin->state[pf->dplls.pps.dpll_idx] =
+				DPLL_PIN_STATE_DISCONNECTED;
+		}
 	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
 		ret = ice_aq_get_output_pin_cfg(&pf->hw, pin->idx,
 						&pin->flags[0], NULL,
@@ -603,46 +621,6 @@ static int ice_dpll_lock_status_get(const struct dpll_device *dpll,
 }
 
 /**
- * ice_dpll_source_idx_get - get dpll's source index
- * @dpll: registered dpll pointer
- * @pin_idx: on success holds currently selected source pin index
- *
- * Dpll subsystem callback. Provides index of a source dpll is trying to lock
- * with.
- *
- * Return:
- * * 0 - success
- * * negative - failure
- */
-static int ice_dpll_source_idx_get(const struct dpll_device *dpll, u32 *pin_idx,
-				   struct netlink_ext_ack *extack)
-{
-	struct ice_pf *pf = dpll_priv(dpll);
-	struct ice_dpll *d;
-
-	if (!pf)
-		return -EINVAL;
-
-	if (ice_dpll_cb_lock(pf))
-		return -EBUSY;
-	d = ice_find_dpll(pf, dpll);
-	if (!d) {
-		ice_dpll_cb_unlock(pf);
-		return -EFAULT;
-	}
-	if (d->dpll_state == ICE_CGU_STATE_INVALID ||
-	    d->dpll_state == ICE_CGU_STATE_FREERUN)
-		*pin_idx = PIN_IDX_INVALID;
-	else
-		*pin_idx = (u32)d->source_idx;
-	ice_dpll_cb_unlock(pf);
-	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pf:%p d:%p, idx:%u\n",
-		__func__, dpll, pf, d, *pin_idx);
-
-	return 0;
-}
-
-/**
  * ice_dpll_mode_get - get dpll's working mode
  * @dpll: registered dpll pointer
  * @mode: on success holds current working mode of dpll
@@ -738,10 +716,17 @@ ice_dpll_pin_state_set(const struct dpll_device *dpll,
 	p = ice_find_pin(pf, pin, pin_type);
 	if (!p)
 		goto unlock;
-	if (state == DPLL_PIN_STATE_CONNECTED)
-		ret = ice_dpll_pin_enable(&pf->hw, p, pin_type);
-	else
-		ret = ice_dpll_pin_disable(&pf->hw, p, pin_type);
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+		if (state == DPLL_PIN_STATE_SELECTABLE)
+			ret = ice_dpll_pin_enable(&pf->hw, p, pin_type);
+		else if (state == DPLL_PIN_STATE_DISCONNECTED)
+			ret = ice_dpll_pin_disable(&pf->hw, p, pin_type);
+	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		if (state == DPLL_PIN_STATE_CONNECTED)
+			ret = ice_dpll_pin_enable(&pf->hw, p, pin_type);
+		else if (state == DPLL_PIN_STATE_DISCONNECTED)
+			ret = ice_dpll_pin_disable(&pf->hw, p, pin_type);
+	}
 	if (!ret)
 		ret = ice_dpll_pin_state_update(pf, p, pin_type);
 unlock:
@@ -818,6 +803,7 @@ ice_dpll_pin_state_get(const struct dpll_device *dpll,
 {
 	struct ice_pf *pf = dpll_pin_on_dpll_priv(dpll, pin);
 	struct ice_dpll_pin *p;
+	struct ice_dpll *d;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -830,13 +816,16 @@ ice_dpll_pin_state_get(const struct dpll_device *dpll,
 		NL_SET_ERR_MSG(extack, "pin not found");
 		goto unlock;
 	}
-	if ((pin_type == ICE_DPLL_PIN_TYPE_SOURCE &&
-	     !!(p->flags[0] & ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN)) ||
-	    (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT &&
-	     !!(p->flags[0] & ICE_AQC_SET_CGU_OUT_CFG_OUT_EN)))
-		*state = DPLL_PIN_STATE_CONNECTED;
-	else
-		*state = DPLL_PIN_STATE_DISCONNECTED;
+	d = ice_find_dpll(pf, dpll);
+	if (!d)
+		goto unlock;
+	ret = ice_dpll_pin_state_update(pf, p, pin_type);
+	if (ret)
+		goto unlock;
+	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE)
+		*state = p->state[d->dpll_idx];
+	else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT)
+		*state = p->state[0];
 	ret = 0;
 unlock:
 	ice_dpll_cb_unlock(pf);
@@ -1154,7 +1143,6 @@ static struct dpll_pin_ops ice_dpll_output_ops = {
 
 static struct dpll_device_ops ice_dpll_ops = {
 	.lock_status_get = ice_dpll_lock_status_get,
-	.source_pin_idx_get = ice_dpll_source_idx_get,
 	.mode_get = ice_dpll_mode_get,
 	.mode_supported = ice_dpll_mode_supported,
 };
@@ -1396,7 +1384,7 @@ put_eec:
 
 /**
  * ice_dpll_update_state - update dpll state
- * @hw: board private structure
+ * @pf: pf private structure
  * @d: pointer to queried dpll device
  *
  * Poll current state of dpll from hw and update ice_dpll struct.
@@ -1404,24 +1392,49 @@ put_eec:
  * * 0 - success
  * * negative - AQ failure
  */
-static int ice_dpll_update_state(struct ice_hw *hw, struct ice_dpll *d)
+static int ice_dpll_update_state(struct ice_pf *pf, struct ice_dpll *d, bool init)
 {
+	struct ice_dpll_pin *p;
 	int ret;
 
-	ret = ice_get_cgu_state(hw, d->dpll_idx, d->prev_dpll_state,
+	ret = ice_get_cgu_state(&pf->hw, d->dpll_idx, d->prev_dpll_state,
 				&d->source_idx, &d->ref_state, &d->eec_mode,
 				&d->phase_offset, &d->dpll_state);
 
-	dev_dbg(ice_pf_to_dev((struct ice_pf *)(hw->back)),
-		"update dpll=%d, src_idx:%u, state:%d, prev:%d\n",
-		d->dpll_idx, d->source_idx,
+	dev_dbg(ice_pf_to_dev(pf),
+		"update dpll=%d, prev_src_idx:%u, src_idx:%u, state:%d, prev:%d\n",
+		d->dpll_idx, d->prev_source_idx, d->source_idx,
 		d->dpll_state, d->prev_dpll_state);
-
-	if (ret)
-		dev_err(ice_pf_to_dev((struct ice_pf *)(hw->back)),
+	if (ret) {
+		dev_err(ice_pf_to_dev(pf),
 			"update dpll=%d state failed, ret=%d %s\n",
 			d->dpll_idx, ret,
-			ice_aq_str(hw->adminq.sq_last_status));
+			ice_aq_str(pf->hw.adminq.sq_last_status));
+		return ret;
+	}
+	if (init) {
+		if (d->dpll_state == ICE_CGU_STATE_LOCKED &&
+		    d->dpll_state == ICE_CGU_STATE_LOCKED_HO_ACQ)
+			d->active_source = pf->dplls.inputs[d->source_idx].pin;
+		p = &pf->dplls.inputs[d->source_idx];
+		return ice_dpll_pin_state_update(pf, p,
+						 ICE_DPLL_PIN_TYPE_SOURCE);
+	}
+	if (d->dpll_state == ICE_CGU_STATE_HOLDOVER ||
+	    d->dpll_state == ICE_CGU_STATE_FREERUN) {
+		d->active_source = NULL;
+		p = &pf->dplls.inputs[d->source_idx];
+		d->prev_source_idx = ICE_DPLL_PIN_IDX_INVALID;
+		d->source_idx = ICE_DPLL_PIN_IDX_INVALID;
+		ret = ice_dpll_pin_state_update(pf, p, ICE_DPLL_PIN_TYPE_SOURCE);
+	} else if (d->source_idx != d->prev_source_idx) {
+		p = &pf->dplls.inputs[d->prev_source_idx];
+		ice_dpll_pin_state_update(pf, p, ICE_DPLL_PIN_TYPE_SOURCE);
+		p = &pf->dplls.inputs[d->source_idx];
+		d->active_source = p->pin;
+		ice_dpll_pin_state_update(pf, p, ICE_DPLL_PIN_TYPE_SOURCE);
+		d->prev_source_idx = d->source_idx;
+	}
 
 	return ret;
 }
@@ -1438,9 +1451,11 @@ static void ice_dpll_notify_changes(struct ice_dpll *d)
 		d->prev_dpll_state = d->dpll_state;
 		dpll_device_notify(d->dpll, DPLL_A_LOCK_STATUS);
 	}
-	if (d->prev_source_idx != d->source_idx) {
-		d->prev_source_idx = d->source_idx;
-		dpll_device_notify(d->dpll, DPLL_A_SOURCE_PIN_IDX);
+	if (d->prev_source != d->active_source) {
+		d->prev_source = d->active_source;
+		if (d->active_source)
+			dpll_pin_notify(d->dpll, d->active_source,
+					DPLL_A_PIN_STATE);
 	}
 }
 
@@ -1460,11 +1475,14 @@ static void ice_dpll_periodic_work(struct kthread_work *work)
 
 	if (!test_bit(ICE_FLAG_DPLL, pf->flags))
 		return;
-	if (ice_dpll_cb_lock(pf))
-		return;
-	ret = ice_dpll_update_state(&pf->hw, de);
+	ret = ice_dpll_cb_lock(pf);
+	if (ret) {
+		d->lock_err_num++;
+		goto resched;
+	}
+	ret = ice_dpll_update_state(pf, de, false);
 	if (!ret)
-		ret = ice_dpll_update_state(&pf->hw, dp);
+		ret = ice_dpll_update_state(pf, dp, false);
 	if (ret) {
 		d->cgu_state_acq_err_num++;
 		/* stop rescheduling this worker */
@@ -1478,6 +1496,7 @@ static void ice_dpll_periodic_work(struct kthread_work *work)
 	ice_dpll_cb_unlock(pf);
 	ice_dpll_notify_changes(de);
 	ice_dpll_notify_changes(dp);
+resched:
 	/* Run twice a second or reschedule if update failed */
 	kthread_queue_delayed_work(d->kworker, &d->work,
 				   ret ? msecs_to_jiffies(10) :
@@ -1499,8 +1518,8 @@ static int ice_dpll_init_worker(struct ice_pf *pf)
 	struct ice_dplls *d = &pf->dplls;
 	struct kthread_worker *kworker;
 
-	ice_dpll_update_state(&pf->hw, &d->eec);
-	ice_dpll_update_state(&pf->hw, &d->pps);
+	ice_dpll_update_state(pf, &d->eec, true);
+	ice_dpll_update_state(pf, &d->pps, true);
 	kthread_init_delayed_work(&d->work, ice_dpll_periodic_work);
 	kworker = kthread_create_worker(0, "ice-dplls-%s",
 					dev_name(ice_pf_to_dev(pf)));
