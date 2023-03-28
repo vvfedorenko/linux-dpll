@@ -4411,7 +4411,7 @@ ptp_ocp_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 out_dpll:
 	for (i = 0; i < 4; i++) {
 		if (bp->sma[i].dpll_pin) {
-			dpll_pin_unregister(bp->dpll, bp->sma[i].dpll_pin);
+			dpll_pin_unregister(bp->dpll, bp->sma[i].dpll_pin, &dpll_pins_ops, bp);
 			dpll_pin_put(bp->sma[i].dpll_pin);
 		}
 	}
@@ -4434,7 +4434,7 @@ ptp_ocp_remove(struct pci_dev *pdev)
 
 	for (i = 0; i < 4; i++) {
 		if (bp->sma[i].dpll_pin) {
-			dpll_pin_unregister(bp->dpll, bp->sma[i].dpll_pin);
+			dpll_pin_unregister(bp->dpll, bp->sma[i].dpll_pin, &dpll_pins_ops, bp);
 			dpll_pin_put(bp->sma[i].dpll_pin);
 		}
 	}
