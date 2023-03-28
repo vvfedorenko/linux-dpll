@@ -262,6 +262,15 @@ dpll_xa_ref_dpll_find(struct xarray *xa_refs, const struct dpll_device *dpll)
 	return NULL;
 }
 
+struct dpll_pin_ref *dpll_xa_ref_dpll_first(struct xarray *xa_refs)
+{
+	struct dpll_pin_ref *ref;
+	unsigned long i = 0;
+
+	ref = xa_find(xa_refs, &i, ULONG_MAX, XA_PRESENT);
+	WARN_ON(!ref);
+	return ref;
+}
 
 /**
  * dpll_device_alloc - allocate the memory for dpll device
@@ -609,6 +618,9 @@ __dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
 		    const char *rclk_device_name)
 {
 	int ret;
+
+	if (WARN_ON(!ops))
+		return -EINVAL;
 
 	if (rclk_device_name && !pin->rclk_dev_name) {
 		pin->rclk_dev_name = kstrdup(rclk_device_name, GFP_KERNEL);
