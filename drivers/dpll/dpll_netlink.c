@@ -306,8 +306,9 @@ dpll_cmd_pin_fill_details(struct sk_buff *msg, struct dpll_pin *pin,
 {
 	int ret;
 
-	if (nla_put_u32(msg, DPLL_A_PIN_IDX, pin->dev_driver_id))
-		return -EMSGSIZE;
+	ret = dpll_msg_add_pin_handle(msg, pin);
+	if (ret)
+		return ret;
 	if (nla_put_string(msg, DPLL_A_PIN_LABEL, pin->prop.label))
 		return -EMSGSIZE;
 	if (nla_put_u8(msg, DPLL_A_PIN_TYPE, pin->prop.type))
@@ -326,6 +327,24 @@ dpll_cmd_pin_fill_details(struct sk_buff *msg, struct dpll_pin *pin,
 			return -EMSGSIZE;
 	return 0;
 }
+
+size_t dpll_msg_pin_handle_size(struct dpll_pin *pin)
+{
+	// TMP- THE HANDLE IS GOING TO CHANGE TO DRIVERNAME/CLOCKID/PIN_INDEX
+	// LEAVING ORIG HANDLE NOW AS PUT IN THE LAST RFC VERSION
+	return nla_total_size(4); /* DPLL_A_PIN_IDX */
+}
+EXPORT_SYMBOL_GPL(dpll_msg_pin_handle_size);
+
+int dpll_msg_add_pin_handle(struct sk_buff *msg, struct dpll_pin *pin)
+{
+	// TMP- THE HANDLE IS GOING TO CHANGE TO DRIVERNAME/CLOCKID/PIN_INDEX
+	// LEAVING ORIG HANDLE NOW AS PUT IN THE LAST RFC VERSION
+	if (nla_put_u32(msg, DPLL_A_PIN_IDX, pin->dev_driver_id))
+		return -EMSGSIZE;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(dpll_msg_add_pin_handle);
 
 static int
 dpll_cmd_pin_on_dpll_get(struct sk_buff *msg, struct dpll_pin *pin,
