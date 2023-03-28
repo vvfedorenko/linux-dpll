@@ -1194,7 +1194,8 @@ ice_dpll_release_rclk_pin(struct ice_pf *pf)
 		parent = pf->dplls.inputs[rclk->parent_idx[i]].pin;
 		if (!parent)
 			continue;
-		dpll_pin_on_pin_unregister(parent, rclk->pin);
+		dpll_pin_on_pin_unregister(parent, rclk->pin,
+					   &ice_dpll_rclk_ops, pf);
 	}
 	dpll_pin_put(rclk->pin);
 	rclk->pin = NULL;
@@ -1202,6 +1203,7 @@ ice_dpll_release_rclk_pin(struct ice_pf *pf)
 
 /**
  * ice_dpll_release_pins - release pin's from dplls registered in subsystem
+ * @pf: board private structure
  * @dpll_eec: dpll_eec dpll pointer
  * @dpll_pps: dpll_pps dpll pointer
  * @pins: pointer to pins array
@@ -1215,7 +1217,7 @@ ice_dpll_release_rclk_pin(struct ice_pf *pf)
  * * positive - number of errors encounterd on pin's deregistration.
  */
 static int
-ice_dpll_release_pins(struct dpll_device *dpll_eec,
+ice_dpll_release_pins(struct ice_pf *pf, struct dpll_device *dpll_eec,
 		      struct dpll_device *dpll_pps, struct ice_dpll_pin *pins,
 		      int count, bool cgu)
 {
@@ -1530,7 +1532,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 
 	mutex_lock(&pf->dplls.lock);
 	ice_dpll_release_rclk_pin(pf);
-	ret = ice_dpll_release_pins(de->dpll, dp->dpll, d->inputs,
+	ret = ice_dpll_release_pins(pf, de->dpll, dp->dpll, d->inputs,
 				    d->num_inputs, cgu);
 	mutex_unlock(&pf->dplls.lock);
 	if (ret)
@@ -1538,7 +1540,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 			 "source pins release dplls err=%d\n", ret);
 	if (cgu) {
 		mutex_lock(&pf->dplls.lock);
-		ret = ice_dpll_release_pins(de->dpll, dp->dpll, d->outputs,
+		ret = ice_dpll_release_pins(pf, de->dpll, dp->dpll, d->outputs,
 					    d->num_outputs, cgu);
 		mutex_unlock(&pf->dplls.lock);
 		if (ret)
