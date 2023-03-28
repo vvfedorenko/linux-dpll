@@ -100,6 +100,7 @@ struct dpll_pin_ref *
 dpll_xa_ref_pin_find(struct xarray *xa_refs, const struct dpll_pin *pin);
 struct dpll_pin_ref *
 dpll_xa_ref_dpll_find(struct xarray *xa_refs, const struct dpll_device *dpll);
+struct dpll_pin_ref *dpll_xa_ref_dpll_first(struct xarray *xa_refs);
 extern struct xarray dpll_device_xa;
 extern struct xarray dpll_pin_xa;
 extern struct mutex dpll_device_xa_lock;
