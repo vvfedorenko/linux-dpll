@@ -4438,7 +4438,7 @@ ptp_ocp_remove(struct pci_dev *pdev)
 			dpll_pin_put(bp->sma[i].dpll_pin);
 		}
 	}
-	dpll_device_unregister(bp->dpll);
+	dpll_device_unregister(bp->dpll, &dpll_ops, bp);
 	dpll_device_put(bp->dpll);
 	devlink_unregister(devlink);
 	ptp_ocp_detach(bp);
