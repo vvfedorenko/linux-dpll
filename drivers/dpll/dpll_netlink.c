@@ -174,47 +174,6 @@ static int
 dpll_msg_add_pin_parents(struct sk_buff *msg, struct dpll_pin *pin,
 			 struct netlink_ext_ack *extack)
 {
-	struct dpll_pin_ref *ref_parent;
-	enum dpll_pin_state state;
-	struct nlattr *nest;
-	unsigned long index;
-	int ret;
-
-	xa_for_each(&pin->parent_refs, index, ref_parent) {
-		const struct dpll_pin_ops *ops = dpll_pin_ops(ref_parent);
-
-		if (WARN_ON(!ops->state_on_pin_get))
-			return -EFAULT;
-		ret = ops->state_on_pin_get(pin, ref_parent->pin,
-					    &state, extack);
-		if (ret)
-			return -EFAULT;
-		nest = nla_nest_start(msg, DPLL_A_PIN_PARENT);
-		if (!nest)
-			return -EMSGSIZE;
-		if (nla_put_u32(msg, DPLL_A_PIN_PARENT_IDX,
-				ref_parent->pin->dev_driver_id)) {
-			ret = -EMSGSIZE;
-			goto nest_cancel;
-		}
-		if (nla_put_u8(msg, DPLL_A_PIN_STATE, state)) {
-			ret = -EMSGSIZE;
-			goto nest_cancel;
-		}
-		nla_nest_end(msg, nest);
-	}
-
-	return 0;
-
-nest_cancel:
-	nla_nest_cancel(msg, nest);
-	return ret;
-}
-
-static int
-dpll_msg_add_pins_on_pin(struct sk_buff *msg, struct dpll_pin *pin,
-			 struct netlink_ext_ack *extack)
-{
 	enum dpll_pin_state state;
 	struct dpll_pin_ref *ref;
 	struct nlattr *nest;
@@ -369,7 +328,7 @@ __dpll_cmd_pin_dump_one(struct sk_buff *msg, struct dpll_pin *pin,
 	ret = dpll_cmd_pin_fill_details(msg, pin, ref, extack);
 	if (!ret)
 		return ret;
-	ret = dpll_msg_add_pins_on_pin(msg, pin, extack);
+	ret = dpll_msg_add_pin_parents(msg, pin, extack);
 	if (ret)
 		return ret;
 	if (!xa_empty(&pin->dpll_refs) && dump_dpll) {
@@ -385,9 +344,7 @@ static int
 dpll_device_get_one(struct dpll_device *dpll, struct sk_buff *msg,
 		     struct netlink_ext_ack *extack)
 {
-	struct dpll_pin_ref *ref;
 	enum dpll_mode mode;
-	unsigned long i;
 	int ret;
 
 	ret = dpll_msg_add_dev_handle(msg, dpll);
@@ -411,20 +368,6 @@ dpll_device_get_one(struct dpll_device *dpll, struct sk_buff *msg,
 		return -EMSGSIZE;
 	if (nla_put_u8(msg, DPLL_A_TYPE, dpll->type))
 		return -EMSGSIZE;
-	xa_for_each(&dpll->pin_refs, i, ref) {
-		struct nlattr *nest = nla_nest_start(msg, DPLL_A_PIN);
-
-		if (!nest) {
-			ret = -EMSGSIZE;
-			break;
-		}
-		ret = dpll_cmd_pin_on_dpll_get(msg, ref->pin, dpll, extack);
-		if (ret) {
-			nla_nest_cancel(msg, nest);
-			break;
-		}
-		nla_nest_end(msg, nest);
-	}
 
 	return ret;
 }
@@ -624,8 +567,8 @@ int dpll_nl_pin_set_doit(struct sk_buff *skb, struct genl_info *info)
 int dpll_nl_pin_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct dpll_pin *pin = info->user_ptr[1];
-	struct nlattr *hdr, *nest;
 	struct sk_buff *msg;
+	struct nlattr *hdr;
 	int ret;
 
 	if (!pin)
@@ -637,15 +580,11 @@ int dpll_nl_pin_get_doit(struct sk_buff *skb, struct genl_info *info)
 				DPLL_CMD_PIN_GET);
 	if (!hdr)
 		return -EMSGSIZE;
-	nest = nla_nest_start(msg, DPLL_A_PIN);
-	if (!nest)
-		return -EMSGSIZE;
 	ret = __dpll_cmd_pin_dump_one(msg, pin, info->extack, true);
 	if (ret) {
 		nlmsg_free(msg);
 		return ret;
 	}
-	nla_nest_end(msg, nest);
 	genlmsg_end(msg, hdr);
 
 	return genlmsg_reply(msg, info);
@@ -653,8 +592,8 @@ int dpll_nl_pin_get_doit(struct sk_buff *skb, struct genl_info *info)
 
 int dpll_nl_pin_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 {
-	struct nlattr *hdr, *nest;
 	struct dpll_pin *pin;
+	struct nlattr *hdr;
 	unsigned long i;
 	int ret;
 
@@ -666,23 +605,20 @@ int dpll_nl_pin_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 	xa_for_each(&dpll_pin_xa, i, pin) {
 		if (xa_empty(&pin->dpll_refs))
 			continue;
-		nest = nla_nest_start(skb, DPLL_A_PIN);
-		if (!nest) {
+		hdr = genlmsg_put(skb, NETLINK_CB(cb->skb).portid, cb->nlh->nlmsg_seq,
+			  &dpll_nl_family, 0, DPLL_CMD_PIN_GET);
+		if (!hdr) {
 			ret = -EMSGSIZE;
 			break;
 		}
 		ret = __dpll_cmd_pin_dump_one(skb, pin, cb->extack, true);
 		if (ret) {
-			nla_nest_cancel(skb, nest);
+			genlmsg_cancel(skb, hdr);
 			break;
+		} else {
+			genlmsg_end(skb, hdr);
 		}
-		nla_nest_end(skb, nest);
 	}
-
-	if (ret)
-		genlmsg_cancel(skb, hdr);
-	else
-		genlmsg_end(skb, hdr);
 
 	return ret;
 }
@@ -723,8 +659,8 @@ int dpll_nl_device_set_doit(struct sk_buff *skb, struct genl_info *info)
 int dpll_nl_device_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct dpll_device *dpll = info->user_ptr[0];
-	struct nlattr *hdr, *nest;
 	struct sk_buff *msg;
+	struct nlattr *hdr;
 	int ret;
 
 	msg = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
@@ -735,13 +671,11 @@ int dpll_nl_device_get_doit(struct sk_buff *skb, struct genl_info *info)
 	if (!hdr)
 		return -EMSGSIZE;
 
-	nest = nla_nest_start(msg, DPLL_A_DEVICE);
 	ret = dpll_device_get_one(dpll, msg, info->extack);
 	if (ret) {
 		nlmsg_free(msg);
 		return ret;
 	}
-	nla_nest_end(msg, nest);
 	genlmsg_end(msg, hdr);
 
 	return genlmsg_reply(msg, info);
@@ -749,29 +683,24 @@ int dpll_nl_device_get_doit(struct sk_buff *skb, struct genl_info *info)
 
 int dpll_nl_device_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 {
-	struct nlattr *hdr, *nest;
 	struct dpll_device *dpll;
+	struct nlattr *hdr;
 	unsigned long i;
 	int ret;
 
-	hdr = genlmsg_put(skb, NETLINK_CB(cb->skb).portid, cb->nlh->nlmsg_seq,
-			  &dpll_nl_family, 0, DPLL_CMD_DEVICE_GET);
-	if (!hdr)
-		return -EMSGSIZE;
-
 	xa_for_each_marked(&dpll_device_xa, i, dpll, DPLL_REGISTERED) {
-		nest = nla_nest_start(skb, DPLL_A_DEVICE);
-		ret = dpll_msg_add_dev_handle(skb, dpll);
+		hdr = genlmsg_put(skb, NETLINK_CB(cb->skb).portid, cb->nlh->nlmsg_seq,
+			  &dpll_nl_family, 0, DPLL_CMD_DEVICE_GET);
+		if (!hdr)
+			return -EMSGSIZE;
+		ret = dpll_device_get_one(dpll, skb, cb->extack);
 		if (ret) {
-			nla_nest_cancel(skb, nest);
+			genlmsg_cancel(skb, hdr);
 			break;
+		} else {
+			genlmsg_end(skb, hdr);
 		}
-		nla_nest_end(skb, nest);
 	}
-	if (ret)
-		genlmsg_cancel(skb, hdr);
-	else
-		genlmsg_end(skb, hdr);
 
 	return ret;
 }
