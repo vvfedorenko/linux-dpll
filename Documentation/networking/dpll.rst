@@ -215,37 +215,8 @@ Netlink dump requests
 =====================
 
 The ``DEVICE_GET`` and ``PIN_GET`` commands are capable of dump type
-netlink requests. Possible response message attributes for netlink dump
-requests:
-
-  ==============================  =======================================
-  ``DEVICE_GET``                  command to dump dplls
-    ``DEVICE``                    attr nested type contatin a single
-                                  dpll device
-      ``ID``                      attr internal dpll device ID
-      ``DEV_NAME``                attr dpll device name
-      ``BUS_NAME``                attr dpll device bus name
-
-  ``PIN_GET``                     command to dump pins
-    ``PIN``                       attr nested type contains single pin
-      ``DEVICE``                  nest attr for each dpll device pin is
-                                  connected with
-        ``ID``                    attr internal dpll device ID
-        ``DEV_NAME``              attr dpll device name
-        ``BUS_NAME``              attr dpll device bus name
-      ``PIN_IDX``                 attr index of dumped pin (on dplls)
-      ``PIN_DESCRIPTION``         description of a pin provided by driver
-      ``PIN_TYPE``                attr value of pin type
-      ``PIN_FREQUENCY``           attr current frequency of a pin
-      ``PIN_FREQUENCY_SUPPORTED`` attr provides supported frequencies
-      ``PIN_RCLK_DEVICE``         attr name of a device, where pin
-                                  recovers clock signal from
-      ``PIN_DIRECTION``           attr direction of a pin
-      ``PIN_PARENT``              nest attr for each MUX-type parent,
-                                  that pin is connected with
-        ``PIN_PARENT_IDX``        attr index of a parent pin on the dpll
-                                  device
-        ``PIN_STATE``             attr state of a pin on parent pin
+netlink requests.In which case the response is in the same format as
+for their ``do`` request.
 
 
 Device level configuration pre-defined enums
@@ -292,7 +263,7 @@ Pin level configuration pre-defined enums
 =========================================
 
 For all below enum names used for configuration of pin use the
-``DPLL_PIN`` prefix.
+``DPLL_PIN_`` prefix.
 
 Values for ``DPLL_A_PIN_STATE`` attribute:
 
