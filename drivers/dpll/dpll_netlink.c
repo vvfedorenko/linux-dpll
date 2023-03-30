@@ -317,7 +317,7 @@ dpll_cmd_pin_on_dpll_get(struct sk_buff *msg, struct dpll_pin *pin,
 
 static int
 __dpll_cmd_pin_dump_one(struct sk_buff *msg, struct dpll_pin *pin,
-			struct netlink_ext_ack *extack, bool dump_dpll)
+			struct netlink_ext_ack *extack)
 {
 	struct dpll_pin_ref *ref;
 	int ret;
@@ -331,7 +331,7 @@ __dpll_cmd_pin_dump_one(struct sk_buff *msg, struct dpll_pin *pin,
 	ret = dpll_msg_add_pin_parents(msg, pin, extack);
 	if (ret)
 		return ret;
-	if (!xa_empty(&pin->dpll_refs) && dump_dpll) {
+	if (!xa_empty(&pin->dpll_refs)) {
 		ret = dpll_msg_add_pin_dplls(msg, pin, extack);
 		if (ret)
 			return ret;
@@ -580,7 +580,7 @@ int dpll_nl_pin_get_doit(struct sk_buff *skb, struct genl_info *info)
 				DPLL_CMD_PIN_GET);
 	if (!hdr)
 		return -EMSGSIZE;
-	ret = __dpll_cmd_pin_dump_one(msg, pin, info->extack, true);
+	ret = __dpll_cmd_pin_dump_one(msg, pin, info->extack);
 	if (ret) {
 		nlmsg_free(msg);
 		return ret;
@@ -611,7 +611,7 @@ int dpll_nl_pin_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 			ret = -EMSGSIZE;
 			break;
 		}
-		ret = __dpll_cmd_pin_dump_one(skb, pin, cb->extack, true);
+		ret = __dpll_cmd_pin_dump_one(skb, pin, cb->extack);
 		if (ret) {
 			genlmsg_cancel(skb, hdr);
 			break;
