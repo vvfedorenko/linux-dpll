@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: ((GPL-2.0 WITH Linux-syscall-note) OR BSD-3-Clause)
 /* Do not edit directly, auto-generated from: */
 /*	Documentation/netlink/specs/dpll.yaml */
 /* YNL-GEN kernel source */
@@ -54,7 +54,7 @@ static const struct nla_policy dpll_pin_set_nl_policy[DPLL_A_PIN_PARENT_IDX + 1]
 };
 
 /* Ops table for dpll */
-static const struct genl_split_ops dpll_nl_ops[6] = {
+static const struct genl_split_ops dpll_nl_ops[] = {
 	{
 		.cmd		= DPLL_CMD_DEVICE_GET,
 		.pre_doit	= dpll_pre_doit,

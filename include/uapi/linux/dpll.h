@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
+/* SPDX-License-Identifier: ((GPL-2.0 WITH Linux-syscall-note) OR BSD-3-Clause) */
 /* Do not edit directly, auto-generated from: */
 /*	Documentation/netlink/specs/dpll.yaml */
 /* YNL-GEN uapi header */
@@ -187,7 +187,7 @@ enum dplla {
 };
 
 enum {
-	DPLL_CMD_UNSPEC,
+	DPLL_CMD_UNSPEC = 1,
 	DPLL_CMD_DEVICE_GET,
 	DPLL_CMD_DEVICE_SET,
 	DPLL_CMD_PIN_GET,
