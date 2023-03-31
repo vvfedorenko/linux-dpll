@@ -326,7 +326,7 @@ __dpll_cmd_pin_dump_one(struct sk_buff *msg, struct dpll_pin *pin,
 	if (!ref)
 		return -EFAULT;
 	ret = dpll_cmd_pin_fill_details(msg, pin, ref, extack);
-	if (!ret)
+	if (ret)
 		return ret;
 	ret = dpll_msg_add_pin_parents(msg, pin, extack);
 	if (ret)
