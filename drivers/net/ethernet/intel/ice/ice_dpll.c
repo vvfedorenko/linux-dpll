@@ -1207,7 +1207,7 @@ ice_dpll_release_rclk_pin(struct ice_pf *pf)
 static int
 ice_dpll_release_pins(struct ice_pf *pf, struct dpll_device *dpll_eec,
 		      struct dpll_device *dpll_pps, struct ice_dpll_pin *pins,
-		      int count, bool cgu)
+		      int count, struct dpll_pin_ops *ops, bool cgu)
 {
 	int i;
 
@@ -1216,13 +1216,9 @@ ice_dpll_release_pins(struct ice_pf *pf, struct dpll_device *dpll_eec,
 
 		if (p && !IS_ERR_OR_NULL(p->pin)) {
 			if (cgu && dpll_eec)
-				dpll_pin_unregister(dpll_eec, p->pin,
-						    &ice_dpll_source_ops,
-						    pf);
+				dpll_pin_unregister(dpll_eec, p->pin, ops, pf);
 			if (cgu && dpll_pps) 
-				dpll_pin_unregister(dpll_pps, p->pin,
-						    &ice_dpll_source_ops,
-						    pf);
+				dpll_pin_unregister(dpll_pps, p->pin, ops, pf);
 			dpll_pin_put(p->pin);
 			p->pin = NULL;
 		}
@@ -1552,7 +1548,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 	mutex_lock(&pf->dplls.lock);
 	ice_dpll_release_rclk_pin(pf);
 	ret = ice_dpll_release_pins(pf, de->dpll, dp->dpll, d->inputs,
-				    d->num_inputs, cgu);
+				    d->num_inputs, &ice_dpll_source_ops, cgu);
 	mutex_unlock(&pf->dplls.lock);
 	if (ret)
 		dev_warn(ice_pf_to_dev(pf),
@@ -1560,7 +1556,8 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 	if (cgu) {
 		mutex_lock(&pf->dplls.lock);
 		ret = ice_dpll_release_pins(pf, de->dpll, dp->dpll, d->outputs,
-					    d->num_outputs, cgu);
+					    d->num_outputs,
+					    &ice_dpll_output_ops, cgu);
 		mutex_unlock(&pf->dplls.lock);
 		if (ret)
 			dev_warn(ice_pf_to_dev(pf),
