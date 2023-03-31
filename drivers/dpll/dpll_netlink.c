@@ -289,33 +289,6 @@ int dpll_msg_add_pin_handle(struct sk_buff *msg, struct dpll_pin *pin)
 EXPORT_SYMBOL_GPL(dpll_msg_add_pin_handle);
 
 static int
-dpll_cmd_pin_on_dpll_get(struct sk_buff *msg, struct dpll_pin *pin,
-			 struct dpll_device *dpll,
-			 struct netlink_ext_ack *extack)
-{
-	struct dpll_pin_ref *ref;
-	int ret;
-
-	ref = dpll_xa_ref_dpll_find(&pin->dpll_refs, dpll);
-	if (!ref)
-		return -EFAULT;
-	ret = dpll_cmd_pin_fill_details(msg, pin, ref, extack);
-	if (!ret)
-		return ret;
-	ret = dpll_msg_add_pin_prio(msg, pin, ref, extack);
-	if (ret && ret != -EOPNOTSUPP)
-		return ret;
-	ret = dpll_msg_add_pin_on_dpll_state(msg, pin, ref, extack);
-	if (ret && ret != -EOPNOTSUPP)
-		return ret;
-	ret = dpll_msg_add_pin_parents(msg, pin, extack);
-	if (ret)
-		return ret;
-
-	return 0;
-}
-
-static int
 __dpll_cmd_pin_dump_one(struct sk_buff *msg, struct dpll_pin *pin,
 			struct netlink_ext_ack *extack)
 {
