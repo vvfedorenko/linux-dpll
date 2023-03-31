@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- *  Copyright (c) 2021 Meta Platforms, Inc. and affiliates
+ *  Copyright (c) 2023 Meta Platforms, Inc. and affiliates
+ *  Copyright (c) 2023 Intel and affiliates
  */
 
 #ifndef __DPLL_H__
@@ -90,6 +91,10 @@ struct dpll_pin_frequency {
 	DPLL_PIN_FREQUENCY(DPLL_PIN_FREQUENCY_1_HZ)
 #define DPLL_PIN_FREQUENCY_10MHZ \
 	DPLL_PIN_FREQUENCY(DPLL_PIN_FREQUENCY_10_MHZ)
+#define DPLL_PIN_FREQUENCY_IRIG_B \
+	DPLL_PIN_FREQUENCY(DPLL_PIN_FREQUENCY_10_KHZ)
+#define DPLL_PIN_FREQUENCY_DCF77 \
+	DPLL_PIN_FREQUENCY(DPLL_PIN_FREQUENCY_77_5_KHZ)
 
 struct dpll_pin_properties {
 	const char *label;
