@@ -83,9 +83,8 @@ struct dpll_pin_registration {
  * struct dpll_pin_ref - structure for referencing either dpll or pins
  * @dpll:		pointer to a dpll
  * @pin:		pointer to a pin
- * @ops:		ops for a dpll pin
+ * @registration_list	list of ops and priv data registered with the ref
  * @refcount:		refcount
- * @priv:		pointer to private information of owner
  **/
 struct dpll_pin_ref {
 	union {
@@ -93,6 +92,7 @@ struct dpll_pin_ref {
 		struct dpll_pin *pin;
 	};
 	struct list_head registration_list;
+	refcount_t refcount;
 };
 
 const struct dpll_device_ops *dpll_device_ops(struct dpll_device *dpll);
