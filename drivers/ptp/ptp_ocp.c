@@ -265,6 +265,8 @@ enum ptp_ocp_sma_mode {
 static struct dpll_pin_frequency ptp_ocp_sma_freq[] = {
 	DPLL_PIN_FREQUENCY_1PPS,
 	DPLL_PIN_FREQUENCY_10MHZ,
+	DPLL_PIN_FREQUENCY_IRIG_B,
+	DPLL_PIN_FREQUENCY_DCF77,
 };
 
 struct ptp_ocp_sma_connector {
@@ -273,7 +275,8 @@ struct ptp_ocp_sma_connector {
 	bool	fixed_dir;
 	bool	disabled;
 	u8	default_fcn;
-	struct dpll_pin *dpll_pin;
+	struct dpll_pin 	   *dpll_pin;
+	struct dpll_pin_properties dpll_prop;
 };
 
 struct ocp_attr_group {
@@ -302,6 +305,7 @@ struct ptp_ocp_serial_port {
 
 #define OCP_BOARD_ID_LEN		13
 #define OCP_SERIAL_LEN			6
+#define OCP_SMA_NUM			4
 
 struct ptp_ocp {
 	struct pci_dev		*pdev;
@@ -358,7 +362,7 @@ struct ptp_ocp {
 	u32			ts_window_adjust;
 	u64			fw_cap;
 	struct ptp_ocp_signal	signal[4];
-	struct ptp_ocp_sma_connector sma[4];
+	struct ptp_ocp_sma_connector sma[OCP_SMA_NUM];
 	const struct ocp_sma_op *sma_op;
 	struct dpll_device *dpll;
 };
@@ -844,6 +848,7 @@ static DEFINE_IDR(ptp_ocp_idr);
 struct ocp_selector {
 	const char *name;
 	int value;
+	u64 frequency;
 };
 
 static const struct ocp_selector ptp_ocp_clock[] = {
@@ -864,31 +869,31 @@ static const struct ocp_selector ptp_ocp_clock[] = {
 #define SMA_SELECT_MASK		GENMASK(14, 0)
 
 static const struct ocp_selector ptp_ocp_sma_in[] = {
-	{ .name = "10Mhz",	.value = 0x0000 },
-	{ .name = "PPS1",	.value = 0x0001 },
-	{ .name = "PPS2",	.value = 0x0002 },
-	{ .name = "TS1",	.value = 0x0004 },
-	{ .name = "TS2",	.value = 0x0008 },
-	{ .name = "IRIG",	.value = 0x0010 },
-	{ .name = "DCF",	.value = 0x0020 },
-	{ .name = "TS3",	.value = 0x0040 },
-	{ .name = "TS4",	.value = 0x0080 },
-	{ .name = "FREQ1",	.value = 0x0100 },
-	{ .name = "FREQ2",	.value = 0x0200 },
-	{ .name = "FREQ3",	.value = 0x0400 },
-	{ .name = "FREQ4",	.value = 0x0800 },
-	{ .name = "None",	.value = SMA_DISABLE },
+	{ .name = "10Mhz",  .value = 0x0000,      .frequency = 10000000 },
+	{ .name = "PPS1",   .value = 0x0001,      .frequency = 1 },
+	{ .name = "PPS2",   .value = 0x0002,      .frequency = 1 },
+	{ .name = "TS1",    .value = 0x0004,      .frequency = 0 },
+	{ .name = "TS2",    .value = 0x0008,      .frequency = 0 },
+	{ .name = "IRIG",   .value = 0x0010,      .frequency = 10000 },
+	{ .name = "DCF",    .value = 0x0020,      .frequency = 77500 },
+	{ .name = "TS3",    .value = 0x0040,      .frequency = 0 },
+	{ .name = "TS4",    .value = 0x0080,      .frequency = 0 },
+	{ .name = "FREQ1",  .value = 0x0100,      .frequency = 0 },
+	{ .name = "FREQ2",  .value = 0x0200,      .frequency = 0 },
+	{ .name = "FREQ3",  .value = 0x0400,      .frequency = 0 },
+	{ .name = "FREQ4",  .value = 0x0800,      .frequency = 0 },
+	{ .name = "None",   .value = SMA_DISABLE, .frequency = 0 },
 	{ }
 };
 
 static const struct ocp_selector ptp_ocp_sma_out[] = {
-	{ .name = "10Mhz",	.value = 0x0000 },
-	{ .name = "PHC",	.value = 0x0001 },
-	{ .name = "MAC",	.value = 0x0002 },
-	{ .name = "GNSS1",	.value = 0x0004 },
-	{ .name = "GNSS2",	.value = 0x0008 },
-	{ .name = "IRIG",	.value = 0x0010 },
-	{ .name = "DCF",	.value = 0x0020 },
+	{ .name = "10Mhz",	.value = 0x0000,  .frequency = 10000000 },
+	{ .name = "PHC",	.value = 0x0001,  .frequency = 1 },
+	{ .name = "MAC",	.value = 0x0002,  .frequency = 1 },
+	{ .name = "GNSS1",	.value = 0x0004,  .frequency = 1 },
+	{ .name = "GNSS2",	.value = 0x0008,  .frequency = 1 },
+	{ .name = "IRIG",	.value = 0x0010,  .frequency = 10000 },
+	{ .name = "DCF",	.value = 0x0020,  .frequency = 77000 },
 	{ .name = "GEN1",	.value = 0x0040 },
 	{ .name = "GEN2",	.value = 0x0080 },
 	{ .name = "GEN3",	.value = 0x0100 },
@@ -899,15 +904,15 @@ static const struct ocp_selector ptp_ocp_sma_out[] = {
 };
 
 static const struct ocp_selector ptp_ocp_art_sma_in[] = {
-	{ .name = "PPS1",	.value = 0x0001 },
-	{ .name = "10Mhz",	.value = 0x0008 },
+	{ .name = "PPS1",	.value = 0x0001,  .frequency = 1 },
+	{ .name = "10Mhz",	.value = 0x0008,  .frequency = 1000000 },
 	{ }
 };
 
 static const struct ocp_selector ptp_ocp_art_sma_out[] = {
-	{ .name = "PHC",	.value = 0x0002 },
-	{ .name = "GNSS",	.value = 0x0004 },
-	{ .name = "10Mhz",	.value = 0x0010 },
+	{ .name = "PHC",	.value = 0x0002,  .frequency = 1 },
+	{ .name = "GNSS",	.value = 0x0004,  .frequency = 1 },
+	{ .name = "10Mhz",	.value = 0x0010,  .frequency = 10000000 },
 	{ }
 };
 
@@ -2291,22 +2296,34 @@ ptp_ocp_sma_fb_set_inputs(struct ptp_ocp *bp, int sma_nr, u32 val)
 static void
 ptp_ocp_sma_fb_init(struct ptp_ocp *bp)
 {
+	struct dpll_pin_properties prop = {
+		.label = NULL,
+		.type = DPLL_PIN_TYPE_EXT,
+		.capabilities = DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE,
+		.freq_supported_num = ARRAY_SIZE(ptp_ocp_sma_freq),
+		.freq_supported = ptp_ocp_sma_freq,
+		
+	};
 	u32 reg;
 	int i;
 
 	/* defaults */
+	for (i = 0; i < OCP_SMA_NUM; i++) {
+		bp->sma[i].default_fcn = i & 1;
+		bp->sma[i].dpll_prop = prop;
+		bp->sma[i].dpll_prop.label = bp->ptp_info.pin_config[i].name;
+	}
 	bp->sma[0].mode = SMA_MODE_IN;
 	bp->sma[1].mode = SMA_MODE_IN;
 	bp->sma[2].mode = SMA_MODE_OUT;
 	bp->sma[3].mode = SMA_MODE_OUT;
-	for (i = 0; i < 4; i++)
-		bp->sma[i].default_fcn = i & 1;
-
 	/* If no SMA1 map, the pin functions and directions are fixed. */
 	if (!bp->sma_map1) {
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < OCP_SMA_NUM; i++) {
 			bp->sma[i].fixed_fcn = true;
 			bp->sma[i].fixed_dir = true;
+			bp->sma[1].dpll_prop.capabilities &=
+				~DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE;
 		}
 		return;
 	}
@@ -2316,7 +2333,7 @@ ptp_ocp_sma_fb_init(struct ptp_ocp *bp)
 	 */
 	reg = ioread32(&bp->sma_map2->gpio2);
 	if (reg == 0xffffffff) {
-		for (i = 0; i < 4; i++)
+		for (i = 0; i < OCP_SMA_NUM; i++)
 			bp->sma[i].fixed_dir = true;
 	} else {
 		reg = ioread32(&bp->sma_map1->gpio1);
@@ -2338,7 +2355,7 @@ static const struct ocp_sma_op ocp_fb_sma_op = {
 };
 
 static int
-ptp_ocp_fb_set_pins(struct ptp_ocp *bp)
+ptp_ocp_set_pins(struct ptp_ocp *bp)
 {
 	struct ptp_pin_desc *config;
 	int i;
@@ -2405,16 +2422,16 @@ ptp_ocp_fb_board_init(struct ptp_ocp *bp, struct ocp_resource *r)
 
 	ptp_ocp_tod_init(bp);
 	ptp_ocp_nmea_out_init(bp);
-	ptp_ocp_sma_init(bp);
 	ptp_ocp_signal_init(bp);
 
 	err = ptp_ocp_attr_group_add(bp, fb_timecard_groups);
 	if (err)
 		return err;
 
-	err = ptp_ocp_fb_set_pins(bp);
+	err = ptp_ocp_set_pins(bp);
 	if (err)
 		return err;
+	ptp_ocp_sma_init(bp);
 
 	return ptp_ocp_init_clock(bp);
 }
@@ -2454,6 +2471,14 @@ ptp_ocp_register_resources(struct ptp_ocp *bp, kernel_ulong_t driver_data)
 static void
 ptp_ocp_art_sma_init(struct ptp_ocp *bp)
 {
+	struct dpll_pin_properties prop = {
+		.label = NULL,
+		.type = DPLL_PIN_TYPE_EXT,
+		.capabilities = 0,
+		.freq_supported_num = ARRAY_SIZE(ptp_ocp_sma_freq),
+		.freq_supported = ptp_ocp_sma_freq,
+		
+	};
 	u32 reg;
 	int i;
 
@@ -2468,16 +2493,16 @@ ptp_ocp_art_sma_init(struct ptp_ocp *bp)
 	bp->sma[2].default_fcn = 0x10;	/* OUT: 10Mhz */
 	bp->sma[3].default_fcn = 0x02;	/* OUT: PHC */
 
-	/* If no SMA map, the pin functions and directions are fixed. */
-	if (!bp->art_sma) {
-		for (i = 0; i < 4; i++) {
+
+	for (i = 0; i < OCP_SMA_NUM; i++) {
+		/* If no SMA map, the pin functions and directions are fixed. */
+		bp->sma[i].dpll_prop = prop;
+		bp->sma[i].dpll_prop.label = bp->ptp_info.pin_config[i].name;
+		if (!bp->art_sma) {
 			bp->sma[i].fixed_fcn = true;
 			bp->sma[i].fixed_dir = true;
+			continue;
 		}
-		return;
-	}
-
-	for (i = 0; i < 4; i++) {
 		reg = ioread32(&bp->art_sma->map[i].gpio);
 
 		switch (reg & 0xff) {
@@ -2488,9 +2513,13 @@ ptp_ocp_art_sma_init(struct ptp_ocp *bp)
 		case 1:
 		case 8:
 			bp->sma[i].mode = SMA_MODE_IN;
+			bp->sma[i].dpll_prop.capabilities = 
+				DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE;
 			break;
 		default:
 			bp->sma[i].mode = SMA_MODE_OUT;
+			bp->sma[i].dpll_prop.capabilities = 
+				DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE;
 			break;
 		}
 	}
@@ -2556,7 +2585,10 @@ ptp_ocp_art_board_init(struct ptp_ocp *bp, struct ocp_resource *r)
 
 	/* Enable MAC serial port during initialisation */
 	iowrite32(1, &bp->board_config->mro50_serial_activate);
-
+	
+	err = ptp_ocp_set_pins(bp);
+	if (err)
+		return err;
 	ptp_ocp_sma_init(bp);
 
 	err = ptp_ocp_attr_group_add(bp, art_timecard_groups);
@@ -4187,16 +4219,6 @@ ptp_ocp_detach(struct ptp_ocp *bp)
 	device_unregister(&bp->dev);
 }
 
-static int ptp_ocp_dpll_pin_to_sma(const struct ptp_ocp *bp, const struct dpll_pin *pin)
-{
-	int i;
-	for (i = 0; i < 4; i++) {
-		if (bp->sma[i].dpll_pin == pin)
-			return i;
-	}
-	return -1;
-}
-
 static int ptp_ocp_dpll_lock_status_get(const struct dpll_device *dpll,
 				    enum dpll_lock_status *status,
 				    struct netlink_ext_ack *extack)
@@ -4241,13 +4263,11 @@ static int ptp_ocp_dpll_direction_get(const struct dpll_pin *pin,
 				     enum dpll_pin_direction *direction,
 				     struct netlink_ext_ack *extack)
 {
-	struct ptp_ocp *bp = dpll_priv(dpll);
-	int sma_nr = ptp_ocp_dpll_pin_to_sma(bp, pin);
+	struct ptp_ocp_sma_connector *sma = dpll_pin_on_dpll_priv(dpll, pin);
 
-	if (sma_nr < 0)
-		return -EINVAL;
-
-	*direction = bp->sma[sma_nr].mode == SMA_MODE_IN ? DPLL_PIN_DIRECTION_SOURCE : DPLL_PIN_DIRECTION_OUTPUT;
+	*direction = sma->mode == SMA_MODE_IN ? 
+				  DPLL_PIN_DIRECTION_SOURCE :
+				  DPLL_PIN_DIRECTION_OUTPUT;
 	return 0;
 }
 
@@ -4256,13 +4276,15 @@ static int ptp_ocp_dpll_direction_set(const struct dpll_pin *pin,
 				     enum dpll_pin_direction direction,
 				     struct netlink_ext_ack *extack)
 {
-	enum ptp_ocp_sma_mode mode = direction == DPLL_PIN_DIRECTION_SOURCE ? SMA_MODE_IN : SMA_MODE_OUT;
+	struct ptp_ocp_sma_connector *sma = dpll_pin_on_dpll_priv(dpll, pin);
 	struct ptp_ocp *bp = dpll_priv(dpll);
-	int sma_nr = ptp_ocp_dpll_pin_to_sma(bp, pin);
+	enum ptp_ocp_sma_mode mode;
+	int sma_nr = (sma - bp->sma);
 
-	if (sma_nr < 0)
-		return -EINVAL;
-
+	if (sma->fixed_dir)
+		return -EOPNOTSUPP;
+	mode = direction == DPLL_PIN_DIRECTION_SOURCE ?
+			    SMA_MODE_IN : SMA_MODE_OUT;
 	return ptp_ocp_sma_store_val(bp, 0, mode, sma_nr);
 }
 
@@ -4270,14 +4292,20 @@ static int ptp_ocp_dpll_frequency_set(const struct dpll_pin *pin,
 			      const struct dpll_device *dpll,
 			      u64 frequency, struct netlink_ext_ack *extack)
 {
+	struct ptp_ocp_sma_connector *sma = dpll_pin_on_dpll_priv(dpll, pin);
 	struct ptp_ocp *bp = dpll_priv(dpll);
-	int sma_nr = ptp_ocp_dpll_pin_to_sma(bp, pin);
-	int val = frequency == 10000000 ? 0 : 1;
+	const struct ocp_selector *tbl;
+	int sma_nr = (sma - bp->sma);
+	int val, i;
 
-	if (sma_nr < 0)
-		return -EINVAL;
-
-	return ptp_ocp_sma_store_val(bp, val, bp->sma[sma_nr].mode, sma_nr);
+	if (sma->fixed_fcn)
+		return -EOPNOTSUPP;
+	
+	tbl = bp->sma_op->tbl[sma->mode];
+	for (i = 0; tbl[i].name; i++)
+		if (tbl[i].frequency == frequency)
+			return ptp_ocp_sma_store_val(bp, val, sma->mode, sma_nr);
+	return -EINVAL;
 }
 
 static int ptp_ocp_dpll_frequency_get(const struct dpll_pin *pin,
@@ -4285,19 +4313,22 @@ static int ptp_ocp_dpll_frequency_get(const struct dpll_pin *pin,
 			      u64 *frequency,
 			      struct netlink_ext_ack *extack)
 {
+	struct ptp_ocp_sma_connector *sma = dpll_pin_on_dpll_priv(dpll, pin);
 	struct ptp_ocp *bp = (struct ptp_ocp *)dpll_priv(dpll);
-	int sma_nr = ptp_ocp_dpll_pin_to_sma(bp, pin);
+	const struct ocp_selector *tbl;
+	int sma_nr = (sma - bp->sma);
 	u32 val;
-
-	if (sma_nr < 0)
-		return -EINVAL;
+	int i;
 
 	val = bp->sma_op->get(bp, sma_nr);
-	if (!val)
-		*frequency = 1000000;
-	else
-		*frequency = 1;
-	return 0;
+	tbl = bp->sma_op->tbl[sma->mode];
+	for (i = 0; tbl[i].name; i++)
+		if (val == tbl[i].value) {
+			*frequency = tbl[i].frequency;
+			return 0;
+		}
+
+	return -EINVAL;
 }
 
 const static struct dpll_device_ops dpll_ops = {
@@ -4317,16 +4348,7 @@ const static struct dpll_pin_ops dpll_pins_ops = {
 static int
 ptp_ocp_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
-	struct dpll_pin_properties prop = {
-		.label = NULL,
-		.type = DPLL_PIN_TYPE_EXT,
-		.capabilities = DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE,
-		.freq_supported_num = 2,
-		.freq_supported = ptp_ocp_sma_freq,
-		
-	};
 	struct devlink *devlink;
-	char *sma = "SMA0";
 	struct ptp_ocp *bp;
 	int err, i;
 	u64 clkid;
@@ -4391,16 +4413,12 @@ ptp_ocp_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (err)
 		goto out;
 
-	prop.label = sma;
-
-	for (i = 0; i < 4; i++) {
-		sma[3] = 0x31 + i;
-		bp->sma[i].dpll_pin = dpll_pin_get(clkid, i, THIS_MODULE, &prop);
-		if (IS_ERR_OR_NULL(bp->sma[i].dpll_pin)) {
-			bp->sma[i].dpll_pin = NULL;
+	for (i = 0; i < OCP_SMA_NUM; i++) {
+		bp->sma[i].dpll_pin = dpll_pin_get(clkid, i, THIS_MODULE, &bp->sma[i].dpll_prop);
+		if (IS_ERR(bp->sma[i].dpll_pin)) {
 			goto out_dpll;
 		}
-		err = dpll_pin_register(bp->dpll, bp->sma[i].dpll_pin, &dpll_pins_ops, bp, NULL);
+		err = dpll_pin_register(bp->dpll, bp->sma[i].dpll_pin, &dpll_pins_ops, &bp->sma[i], NULL);
 		if (err) {
 			dpll_pin_put(bp->sma[i].dpll_pin);
 			goto out_dpll;
@@ -4409,11 +4427,10 @@ ptp_ocp_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	return 0;
 out_dpll:
-	for (i = 0; i < 4; i++) {
-		if (bp->sma[i].dpll_pin) {
-			dpll_pin_unregister(bp->dpll, bp->sma[i].dpll_pin, &dpll_pins_ops, bp);
-			dpll_pin_put(bp->sma[i].dpll_pin);
-		}
+	while (i) {
+		--i;
+		dpll_pin_unregister(bp->dpll, bp->sma[i].dpll_pin, &dpll_pins_ops, &bp->sma[i]);
+		dpll_pin_put(bp->sma[i].dpll_pin);
 	}
 	dpll_device_put(bp->dpll);
 out:
@@ -4432,7 +4449,7 @@ ptp_ocp_remove(struct pci_dev *pdev)
 	struct devlink *devlink = priv_to_devlink(bp);
 	int i;
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < OCP_SMA_NUM; i++) {
 		if (bp->sma[i].dpll_pin) {
 			dpll_pin_unregister(bp->dpll, bp->sma[i].dpll_pin, &dpll_pins_ops, bp);
 			dpll_pin_put(bp->sma[i].dpll_pin);
