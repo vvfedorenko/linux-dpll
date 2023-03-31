@@ -110,8 +110,10 @@ dpll_xa_ref_pin_add(struct xarray *xa_pins, struct dpll_pin *pin,
 		if (ref->pin != pin)
 			continue;
 		reg = dpll_pin_registration_find(ref, ops, priv);
-		if (reg)
-			return -EEXIST;
+		if (reg) {
+			refcount_inc(&ref->refcount);
+			return 0;
+		}
 		ref_exists = true;
 		break;
 	}
@@ -127,6 +129,7 @@ dpll_xa_ref_pin_add(struct xarray *xa_pins, struct dpll_pin *pin,
 			kfree(ref);
 			return ret;
 		}
+		refcount_set(&ref->refcount, 1);
 	}
 
 	reg = kzalloc(sizeof(*reg), GFP_KERNEL);
@@ -137,7 +140,8 @@ dpll_xa_ref_pin_add(struct xarray *xa_pins, struct dpll_pin *pin,
 	}
 	reg->ops = ops;
 	reg->priv = priv;
-
+	if (ref_exists)
+		refcount_inc(&ref->refcount);
 	list_add_tail(&reg->list, &ref->registration_list);
 
 	return 0;
@@ -168,11 +172,13 @@ static int dpll_xa_ref_pin_del(struct xarray *xa_pins, struct dpll_pin *pin,
 		reg = dpll_pin_registration_find(ref, ops, priv);
 		if (WARN_ON(!reg))
 			return -EINVAL;
-		list_del(&reg->list);
-		kfree(reg);
-		xa_erase(xa_pins, i);
-		WARN_ON(!list_empty(&ref->registration_list));
-		kfree(ref);
+		if (refcount_dec_and_test(&ref->refcount)) {
+			list_del(&reg->list);
+			kfree(reg);
+			xa_erase(xa_pins, i);
+			WARN_ON(!list_empty(&ref->registration_list));
+			kfree(ref);
+		}
 		return 0;
 	}
 
@@ -233,8 +239,10 @@ dpll_xa_ref_dpll_add(struct xarray *xa_dplls, struct dpll_device *dpll,
 		if (ref->dpll != dpll)
 			continue;
 		reg = dpll_pin_registration_find(ref, ops, priv);
-		if (reg)
-			return -EEXIST;
+		if (reg) {
+			refcount_inc(&ref->refcount);
+			return 0;
+		}
 		ref_exists = true;
 		break;
 	}
@@ -250,6 +258,7 @@ dpll_xa_ref_dpll_add(struct xarray *xa_dplls, struct dpll_device *dpll,
 			kfree(ref);
 			return ret;
 		}
+		refcount_set(&ref->refcount, 1);
 	}
 
 	reg = kzalloc(sizeof(*reg), GFP_KERNEL);
@@ -260,7 +269,8 @@ dpll_xa_ref_dpll_add(struct xarray *xa_dplls, struct dpll_device *dpll,
 	}
 	reg->ops = ops;
 	reg->priv = priv;
-
+	if (ref_exists)
+		refcount_inc(&ref->refcount);
 	list_add_tail(&reg->list, &ref->registration_list);
 
 	return 0;
@@ -288,11 +298,13 @@ dpll_xa_ref_dpll_del(struct xarray *xa_dplls, struct dpll_device *dpll,
 		reg = dpll_pin_registration_find(ref, ops, priv);
 		if (WARN_ON(!reg))
 			return;
-		list_del(&reg->list);
-		kfree(reg);
-		xa_erase(xa_dplls, i);
-		WARN_ON(!list_empty(&ref->registration_list));
-		kfree(ref);
+		if (refcount_dec_and_test(&ref->refcount)) {
+			list_del(&reg->list);
+			kfree(reg);
+			xa_erase(xa_dplls, i);
+			WARN_ON(!list_empty(&ref->registration_list));
+			kfree(ref);
+		}
 		return;
 	}
 }
