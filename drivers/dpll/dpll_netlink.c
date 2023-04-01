@@ -688,7 +688,7 @@ int dpll_pre_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
 	    !(info->attrs[DPLL_A_BUS_NAME] && info->attrs[DPLL_A_DEV_NAME]))
 		return -EINVAL;
 
-	mutex_lock(&dpll_device_xa_lock);
+	mutex_lock(&dpll_xa_lock);
 	if (info->attrs[DPLL_A_ID]) {
 		u32 id = nla_get_u32(info->attrs[DPLL_A_ID]);
 
@@ -715,26 +715,26 @@ int dpll_pre_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
 
 	return 0;
 unlock:
-	mutex_unlock(&dpll_device_xa_lock);
+	mutex_unlock(&dpll_xa_lock);
 	return ret;
 }
 
 void dpll_post_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
 		    struct genl_info *info)
 {
-	mutex_unlock(&dpll_device_xa_lock);
+	mutex_unlock(&dpll_xa_lock);
 }
 
 int dpll_pre_dumpit(struct netlink_callback *cb)
 {
-	mutex_lock(&dpll_device_xa_lock);
+	mutex_lock(&dpll_xa_lock);
 
 	return 0;
 }
 
 int dpll_post_dumpit(struct netlink_callback *cb)
 {
-	mutex_unlock(&dpll_device_xa_lock);
+	mutex_unlock(&dpll_xa_lock);
 
 	return 0;
 }
@@ -753,42 +753,34 @@ int dpll_pin_pre_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
 		ret = -EINVAL;
 		goto unlock_dev;
 	}
-	mutex_lock(&dpll_pin_xa_lock);
 	pin = dpll_pin_get_by_idx(dpll,
 				  nla_get_u32(info->attrs[DPLL_A_PIN_IDX]));
 	if (!pin) {
 		ret = -ENODEV;
-		goto unlock_pin;
+		goto unlock_dev;
 	}
 	info->user_ptr[1] = pin;
 
 	return 0;
 
-unlock_pin:
-	mutex_unlock(&dpll_pin_xa_lock);
 unlock_dev:
-	mutex_unlock(&dpll_device_xa_lock);
+	mutex_unlock(&dpll_xa_lock);
 	return ret;
 }
 
 void dpll_pin_post_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
 			struct genl_info *info)
 {
-	mutex_unlock(&dpll_pin_xa_lock);
 	dpll_post_doit(ops, skb, info);
 }
 
 int dpll_pin_pre_dumpit(struct netlink_callback *cb)
 {
-	mutex_lock(&dpll_pin_xa_lock);
-
 	return dpll_pre_dumpit(cb);
 }
 
 int dpll_pin_post_dumpit(struct netlink_callback *cb)
 {
-	mutex_unlock(&dpll_pin_xa_lock);
-
 	return dpll_post_dumpit(cb);
 }
 
