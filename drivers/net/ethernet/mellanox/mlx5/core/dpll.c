@@ -202,7 +202,7 @@ static const struct dpll_pin_ops mlx5_dpll_pins_ops = {
 };
 
 static const struct dpll_pin_properties mlx5_dpll_pin_properties = {
-	.description = "n/a",
+	.label = "n/a",
 	.type = DPLL_PIN_TYPE_SYNCE_ETH_PORT,
 	.capabilities = DPLL_PIN_CAPS_STATE_CAN_CHANGE,
 };
@@ -324,14 +324,14 @@ static int mlx5_dpll_probe(struct auxiliary_device *adev,
 	auxiliary_set_drvdata(adev, mdpll);
 
 	/* Multiple mdev instances might share one DPLL device. */
-	mdpll->dpll = dpll_device_get(clock_id, 0, DPLL_TYPE_EEC, THIS_MODULE);
+	mdpll->dpll = dpll_device_get(clock_id, 0, THIS_MODULE);
 	if (IS_ERR(mdpll->dpll)) {
 		err = PTR_ERR(mdpll->dpll);
 		goto err_free_mdpll;
 	}
 
-	err = dpll_device_register(mdpll->dpll, &mlx5_dpll_device_ops,
-				   mdpll, &adev->dev);
+	err = dpll_device_register(mdpll->dpll, DPLL_TYPE_EEC,
+				   &mlx5_dpll_device_ops, mdpll, &adev->dev);
 	if (err)
 		goto err_put_dpll_device;
 
