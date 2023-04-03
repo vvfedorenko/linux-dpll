@@ -2302,7 +2302,7 @@ ptp_ocp_sma_fb_init(struct ptp_ocp *bp)
 		.capabilities = DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE,
 		.freq_supported_num = ARRAY_SIZE(ptp_ocp_sma_freq),
 		.freq_supported = ptp_ocp_sma_freq,
-		
+
 	};
 	u32 reg;
 	int i;
@@ -2477,7 +2477,7 @@ ptp_ocp_art_sma_init(struct ptp_ocp *bp)
 		.capabilities = 0,
 		.freq_supported_num = ARRAY_SIZE(ptp_ocp_sma_freq),
 		.freq_supported = ptp_ocp_sma_freq,
-		
+
 	};
 	u32 reg;
 	int i;
@@ -2513,12 +2513,12 @@ ptp_ocp_art_sma_init(struct ptp_ocp *bp)
 		case 1:
 		case 8:
 			bp->sma[i].mode = SMA_MODE_IN;
-			bp->sma[i].dpll_prop.capabilities = 
+			bp->sma[i].dpll_prop.capabilities =
 				DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE;
 			break;
 		default:
 			bp->sma[i].mode = SMA_MODE_OUT;
-			bp->sma[i].dpll_prop.capabilities = 
+			bp->sma[i].dpll_prop.capabilities =
 				DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE;
 			break;
 		}
@@ -2585,7 +2585,7 @@ ptp_ocp_art_board_init(struct ptp_ocp *bp, struct ocp_resource *r)
 
 	/* Enable MAC serial port during initialisation */
 	iowrite32(1, &bp->board_config->mro50_serial_activate);
-	
+
 	err = ptp_ocp_set_pins(bp);
 	if (err)
 		return err;
@@ -4220,10 +4220,11 @@ ptp_ocp_detach(struct ptp_ocp *bp)
 }
 
 static int ptp_ocp_dpll_lock_status_get(const struct dpll_device *dpll,
-				    enum dpll_lock_status *status,
-				    struct netlink_ext_ack *extack)
+					void *priv,
+				        enum dpll_lock_status *status,
+				        struct netlink_ext_ack *extack)
 {
-	struct ptp_ocp *bp = dpll_priv(dpll);
+	struct ptp_ocp *bp = priv;
 	int sync;
 
 	sync = ioread32(&bp->reg->status) & OCP_STATUS_IN_SYNC;
@@ -4233,9 +4234,10 @@ static int ptp_ocp_dpll_lock_status_get(const struct dpll_device *dpll,
 }
 
 static int ptp_ocp_dpll_source_idx_get(const struct dpll_device *dpll,
-				    u32 *idx, struct netlink_ext_ack *extack)
+				       void *priv, u32 *idx,
+				       struct netlink_ext_ack *extack)
 {
-	struct ptp_ocp *bp = dpll_priv(dpll);
+	struct ptp_ocp *bp = priv;
 
 	if (bp->pps_select) {
 		*idx = ioread32(&bp->pps_select->gpio1);
@@ -4244,40 +4246,44 @@ static int ptp_ocp_dpll_source_idx_get(const struct dpll_device *dpll,
 	return -EINVAL;
 }
 
-static int ptp_ocp_dpll_mode_get(const struct dpll_device *dpll,
-				    u32 *mode, struct netlink_ext_ack *extack)
+static int ptp_ocp_dpll_mode_get(const struct dpll_device *dpll, void *priv,
+				 u32 *mode, struct netlink_ext_ack *extack)
 {
 	*mode = DPLL_MODE_AUTOMATIC;
 	return 0;
 }
 
 static bool ptp_ocp_dpll_mode_supported(const struct dpll_device *dpll,
-				    const enum dpll_mode mode,
-				    struct netlink_ext_ack *extack)
+					void *priv, const enum dpll_mode mode,
+				        struct netlink_ext_ack *extack)
 {
 	return mode == DPLL_MODE_AUTOMATIC;
 }
 
 static int ptp_ocp_dpll_direction_get(const struct dpll_pin *pin,
-				     const struct dpll_device *dpll,
-				     enum dpll_pin_direction *direction,
-				     struct netlink_ext_ack *extack)
+				      void *pin_priv,
+				      const struct dpll_device *dpll,
+				      void *priv,
+				      enum dpll_pin_direction *direction,
+				      struct netlink_ext_ack *extack)
 {
-	struct ptp_ocp_sma_connector *sma = dpll_pin_on_dpll_priv(dpll, pin);
+	struct ptp_ocp_sma_connector *sma = pin_priv;
 
-	*direction = sma->mode == SMA_MODE_IN ? 
+	*direction = sma->mode == SMA_MODE_IN ?
 				  DPLL_PIN_DIRECTION_SOURCE :
 				  DPLL_PIN_DIRECTION_OUTPUT;
 	return 0;
 }
 
 static int ptp_ocp_dpll_direction_set(const struct dpll_pin *pin,
-				     const struct dpll_device *dpll,
-				     enum dpll_pin_direction direction,
-				     struct netlink_ext_ack *extack)
+				      void *pin_priv,
+				      const struct dpll_device *dpll,
+				      void *dpll_priv,
+				      enum dpll_pin_direction direction,
+				      struct netlink_ext_ack *extack)
 {
-	struct ptp_ocp_sma_connector *sma = dpll_pin_on_dpll_priv(dpll, pin);
-	struct ptp_ocp *bp = dpll_priv(dpll);
+	struct ptp_ocp_sma_connector *sma = pin_priv;
+	struct ptp_ocp *bp = dpll_priv;
 	enum ptp_ocp_sma_mode mode;
 	int sma_nr = (sma - bp->sma);
 
@@ -4289,18 +4295,20 @@ static int ptp_ocp_dpll_direction_set(const struct dpll_pin *pin,
 }
 
 static int ptp_ocp_dpll_frequency_set(const struct dpll_pin *pin,
-			      const struct dpll_device *dpll,
-			      u64 frequency, struct netlink_ext_ack *extack)
+				      void *pin_priv,
+			      	      const struct dpll_device *dpll,
+			      	      void *dpll_priv, u64 frequency,
+				      struct netlink_ext_ack *extack)
 {
-	struct ptp_ocp_sma_connector *sma = dpll_pin_on_dpll_priv(dpll, pin);
-	struct ptp_ocp *bp = dpll_priv(dpll);
+	struct ptp_ocp_sma_connector *sma = pin_priv;
+	struct ptp_ocp *bp = dpll_priv;
 	const struct ocp_selector *tbl;
 	int sma_nr = (sma - bp->sma);
 	int val, i;
 
 	if (sma->fixed_fcn)
 		return -EOPNOTSUPP;
-	
+
 	tbl = bp->sma_op->tbl[sma->mode];
 	for (i = 0; tbl[i].name; i++)
 		if (tbl[i].frequency == frequency)
@@ -4309,12 +4317,13 @@ static int ptp_ocp_dpll_frequency_set(const struct dpll_pin *pin,
 }
 
 static int ptp_ocp_dpll_frequency_get(const struct dpll_pin *pin,
-			      const struct dpll_device *dpll,
-			      u64 *frequency,
-			      struct netlink_ext_ack *extack)
+				      void *pin_priv,
+				      const struct dpll_device *dpll,
+				      void *dpll_priv, u64 *frequency,
+				      struct netlink_ext_ack *extack)
 {
-	struct ptp_ocp_sma_connector *sma = dpll_pin_on_dpll_priv(dpll, pin);
-	struct ptp_ocp *bp = (struct ptp_ocp *)dpll_priv(dpll);
+	struct ptp_ocp_sma_connector *sma = pin_priv;
+	struct ptp_ocp *bp = dpll_priv;
 	const struct ocp_selector *tbl;
 	int sma_nr = (sma - bp->sma);
 	u32 val;
