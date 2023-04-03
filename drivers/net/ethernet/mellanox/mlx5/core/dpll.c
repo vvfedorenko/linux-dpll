@@ -106,11 +106,12 @@ mlx5_dpll_lock_status_from_oper_status(enum mlx5_msees_oper_status oper_status)
 }
 
 static int mlx5_dpll_device_lock_status_get(const struct dpll_device *dpll,
+					    void *priv,
 					    enum dpll_lock_status *status,
 					    struct netlink_ext_ack *extack)
 {
-	struct mlx5_dpll *mdpll = dpll_priv(dpll);
 	enum mlx5_msees_oper_status oper_status;
+	struct mlx5_dpll *mdpll = priv;
 	int err;
 
 	err = mlx5_dpll_synce_status_get(mdpll->mdev, NULL, &oper_status);
@@ -122,6 +123,7 @@ static int mlx5_dpll_device_lock_status_get(const struct dpll_device *dpll,
 }
 
 static int mlx5_dpll_device_mode_get(const struct dpll_device *dpll,
+				     void *priv,
 				     u32 *mode, struct netlink_ext_ack *extack)
 {
 	*mode = DPLL_MODE_MANUAL;
@@ -129,6 +131,7 @@ static int mlx5_dpll_device_mode_get(const struct dpll_device *dpll,
 }
 
 static bool mlx5_dpll_device_mode_supported(const struct dpll_device *dpll,
+					    void *priv,
 					    enum dpll_mode mode,
 					    struct netlink_ext_ack *extack)
 {
@@ -142,7 +145,9 @@ static const struct dpll_device_ops mlx5_dpll_device_ops = {
 };
 
 static int mlx5_dpll_pin_direction_get(const struct dpll_pin *pin,
+				       void *pin_priv,
 				       const struct dpll_device *dpll,
+				       void *dpll_priv,
 				       enum dpll_pin_direction *direction,
 				       struct netlink_ext_ack *extack)
 {
@@ -158,12 +163,14 @@ mlx5_dpll_pin_state_from_admin_status(enum mlx5_msees_admin_status admin_status)
 }
 
 static int mlx5_dpll_state_on_dpll_get(const struct dpll_pin *pin,
+				       void *pin_priv,
 				       const struct dpll_device *dpll,
+				       void *dpll_priv,
 				       enum dpll_pin_state *state,
 				       struct netlink_ext_ack *extack)
 {
-	struct mlx5_dpll *mdpll = dpll_pin_on_dpll_priv(dpll, pin);
 	enum mlx5_msees_admin_status admin_status;
+	struct mlx5_dpll *mdpll = pin_priv;
 	int err;
 
 	err = mlx5_dpll_synce_status_get(mdpll->mdev, &admin_status, NULL);
@@ -174,11 +181,13 @@ static int mlx5_dpll_state_on_dpll_get(const struct dpll_pin *pin,
 }
 
 static int mlx5_dpll_state_on_dpll_set(const struct dpll_pin *pin,
+				       void *pin_priv,
 				       const struct dpll_device *dpll,
+				       void *dpll_priv,
 				       enum dpll_pin_state state,
 				       struct netlink_ext_ack *extack)
 {
-	struct mlx5_dpll *mdpll = dpll_pin_on_dpll_priv(dpll, pin);
+	struct mlx5_dpll *mdpll = pin_priv;
 
 	return mlx5_dpll_synce_status_set(mdpll->mdev,
 					  state == DPLL_PIN_STATE_CONNECTED ?
