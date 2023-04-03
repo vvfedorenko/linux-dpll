@@ -895,7 +895,7 @@ dpll_device_registration_first(struct dpll_device *dpll)
 
 /**
  * dpll_priv - get the dpll device private owner data
- * @dpll:	registered dpll pointer
+ * @dpll:      registered dpll pointer
  *
  * Return: pointer to the data
  */
@@ -906,7 +906,6 @@ void *dpll_priv(const struct dpll_device *dpll)
 	reg = dpll_device_registration_first((struct dpll_device *) dpll);
 	return reg->priv;
 }
-EXPORT_SYMBOL_GPL(dpll_priv);
 
 const struct dpll_device_ops *dpll_device_ops(struct dpll_device *dpll)
 {
@@ -929,8 +928,8 @@ dpll_pin_registration_first(struct dpll_pin_ref *ref)
 
 /**
  * dpll_pin_on_dpll_priv - get the dpll device private owner data
- * @dpll:	registered dpll pointer
- * @pin:	pointer to a pin
+ * @dpll:      registered dpll pointer
+ * @pin:       pointer to a pin
  *
  * Return: pointer to the data
  */
@@ -946,7 +945,6 @@ void *dpll_pin_on_dpll_priv(const struct dpll_device *dpll,
 	reg = dpll_pin_registration_first(ref);
 	return reg->priv;
 }
-EXPORT_SYMBOL_GPL(dpll_pin_on_dpll_priv);
 
 /**
  * dpll_pin_on_pin_priv - get the dpll pin private owner data
@@ -967,7 +965,6 @@ void *dpll_pin_on_pin_priv(const struct dpll_pin *parent,
 	reg = dpll_pin_registration_first(ref);
 	return reg->priv;
 }
-EXPORT_SYMBOL_GPL(dpll_pin_on_pin_priv);
 
 const struct dpll_pin_ops *dpll_pin_ops(struct dpll_pin_ref *ref)
 {

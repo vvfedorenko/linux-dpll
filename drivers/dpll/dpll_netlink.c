@@ -34,7 +34,7 @@ dpll_msg_add_mode(struct sk_buff *msg, struct dpll_device *dpll,
 
 	if (WARN_ON(!ops->mode_get))
 		return -EOPNOTSUPP;
-	if (ops->mode_get(dpll, &mode, extack))
+	if (ops->mode_get(dpll, dpll_priv(dpll), &mode, extack))
 		return -EFAULT;
 	if (nla_put_u8(msg, DPLL_A_MODE, mode))
 		return -EMSGSIZE;
@@ -51,7 +51,7 @@ dpll_msg_add_lock_status(struct sk_buff *msg, struct dpll_device *dpll,
 
 	if (WARN_ON(!ops->lock_status_get))
 		return -EOPNOTSUPP;
-	if (ops->lock_status_get(dpll, &status, extack))
+	if (ops->lock_status_get(dpll, dpll_priv(dpll), &status, extack))
 		return -EFAULT;
 	if (nla_put_u8(msg, DPLL_A_LOCK_STATUS, status))
 		return -EMSGSIZE;
@@ -68,7 +68,7 @@ dpll_msg_add_temp(struct sk_buff *msg, struct dpll_device *dpll,
 
 	if (!ops->temp_get)
 		return -EOPNOTSUPP;
-	if (ops->temp_get(dpll, &temp, extack))
+	if (ops->temp_get(dpll, dpll_priv(dpll), &temp, extack))
 		return -EFAULT;
 	if (nla_put_s32(msg, DPLL_A_TEMP, temp))
 		return -EMSGSIZE;
@@ -82,11 +82,13 @@ dpll_msg_add_pin_prio(struct sk_buff *msg, const struct dpll_pin *pin,
 		      struct netlink_ext_ack *extack)
 {
 	const struct dpll_pin_ops *ops = dpll_pin_ops(ref);
+	const struct dpll_device *dpll = ref->dpll;
 	u32 prio;
 
 	if (!ops->prio_get)
 		return -EOPNOTSUPP;
-	if (ops->prio_get(pin, ref->dpll, &prio, extack))
+	if (ops->prio_get(pin, dpll_pin_on_dpll_priv(dpll, pin), dpll,
+			  dpll_priv(dpll), &prio, extack))
 		return -EFAULT;
 	if (nla_put_u32(msg, DPLL_A_PIN_PRIO, prio))
 		return -EMSGSIZE;
@@ -100,11 +102,13 @@ dpll_msg_add_pin_on_dpll_state(struct sk_buff *msg, const struct dpll_pin *pin,
 			       struct netlink_ext_ack *extack)
 {
 	const struct dpll_pin_ops *ops = dpll_pin_ops(ref);
+	const struct dpll_device *dpll = ref->dpll;
 	enum dpll_pin_state state;
 
 	if (!ops->state_on_dpll_get)
 		return -EOPNOTSUPP;
-	if (ops->state_on_dpll_get(pin, ref->dpll, &state, extack))
+	if (ops->state_on_dpll_get(pin, dpll_pin_on_dpll_priv(dpll, pin), dpll,
+				   dpll_priv(dpll), &state, extack))
 		return -EFAULT;
 	if (nla_put_u8(msg, DPLL_A_PIN_STATE, state))
 		return -EMSGSIZE;
@@ -118,11 +122,13 @@ dpll_msg_add_pin_direction(struct sk_buff *msg, const struct dpll_pin *pin,
 			   struct netlink_ext_ack *extack)
 {
 	const struct dpll_pin_ops *ops = dpll_pin_ops(ref);
+	const struct dpll_device *dpll = ref->dpll;
 	enum dpll_pin_direction direction;
 
 	if (!ops->direction_get)
 		return -EOPNOTSUPP;
-	if (ops->direction_get(pin, ref->dpll, &direction, extack))
+	if (ops->direction_get(pin, dpll_pin_on_dpll_priv(dpll, pin), dpll,
+			       dpll_priv(dpll), &direction, extack))
 		return -EFAULT;
 	if (nla_put_u8(msg, DPLL_A_PIN_DIRECTION, direction))
 		return -EMSGSIZE;
@@ -136,13 +142,15 @@ dpll_msg_add_pin_freq(struct sk_buff *msg, const struct dpll_pin *pin,
 		      bool dump_freq_supported)
 {
 	const struct dpll_pin_ops *ops = dpll_pin_ops(ref);
+	const struct dpll_device *dpll = ref->dpll;
 	struct nlattr *nest;
 	u64 freq;
 	int fs;
 
 	if (!ops->frequency_get)
 		return -EOPNOTSUPP;
-	if (ops->frequency_get(pin, ref->dpll, &freq, extack))
+	if (ops->frequency_get(pin, dpll_pin_on_dpll_priv(dpll, pin), dpll,
+			       dpll_priv(dpll), &freq, extack))
 		return -EFAULT;
 	if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY, sizeof(freq), &freq, 0))
 		return -EMSGSIZE;
@@ -176,23 +184,27 @@ dpll_msg_add_pin_parents(struct sk_buff *msg, struct dpll_pin *pin,
 {
 	enum dpll_pin_state state;
 	struct dpll_pin_ref *ref;
+	struct dpll_pin *ppin;
 	struct nlattr *nest;
 	unsigned long index;
 	int ret;
 
 	xa_for_each(&pin->parent_refs, index, ref) {
 		const struct dpll_pin_ops *ops = dpll_pin_ops(ref);
+		ppin = ref->pin;
 
 		if (WARN_ON(!ops->state_on_pin_get))
 			return -EFAULT;
-		ret = ops->state_on_pin_get(pin, ref->pin, &state, extack);
+		ret = ops->state_on_pin_get(pin,
+					    dpll_pin_on_pin_priv(ppin, pin),
+					    ppin, &state, extack);
 		if (ret)
 			return -EFAULT;
 		nest = nla_nest_start(msg, DPLL_A_PIN_PARENT);
 		if (!nest)
 			return -EMSGSIZE;
 		if (nla_put_u32(msg, DPLL_A_PIN_PARENT_IDX,
-				ref->pin->dev_driver_id)) {
+				ppin->dev_driver_id)) {
 			ret = -EMSGSIZE;
 			goto nest_cancel;
 		}
@@ -370,11 +382,13 @@ dpll_pin_freq_set(struct dpll_pin *pin, struct nlattr *a,
 
 	xa_for_each(&pin->dpll_refs, i, ref) {
 		const struct dpll_pin_ops *ops = dpll_pin_ops(ref);
+		struct dpll_device *dpll = ref->dpll;
 
-		ret = ops->frequency_set(pin, ref->dpll, freq, extack);
+		ret = ops->frequency_set(pin, dpll_pin_on_dpll_priv(dpll, pin),
+					 dpll, dpll_priv(dpll), freq, extack);
 		if (ret)
 			return -EFAULT;
-		dpll_pin_notify(ref->dpll, pin, DPLL_A_PIN_FREQUENCY);
+		dpll_pin_notify(dpll, pin, DPLL_A_PIN_FREQUENCY);
 	}
 
 	return 0;
@@ -400,7 +414,8 @@ dpll_pin_on_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 	ops = dpll_pin_ops(ref);
 	if (!ops->state_on_pin_set)
 		return -EOPNOTSUPP;
-	if (ops->state_on_pin_set(pin, parent, state, extack))
+	if (ops->state_on_pin_set(pin, dpll_pin_on_pin_priv(parent, pin),
+				  parent, state, extack))
 		return -EFAULT;
 	dpll_pin_parent_notify(dpll, pin, parent, DPLL_A_PIN_STATE);
 
@@ -423,9 +438,10 @@ dpll_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 	ops = dpll_pin_ops(ref);
 	if (!ops->state_on_dpll_set)
 		return -EOPNOTSUPP;
-	if (ops->state_on_dpll_set(pin, ref->dpll, state, extack))
+	if (ops->state_on_dpll_set(pin, dpll_pin_on_dpll_priv(dpll, pin), dpll,
+				   dpll_priv(dpll), state, extack))
 		return -EINVAL;
-	dpll_pin_notify(ref->dpll, pin, DPLL_A_PIN_STATE);
+	dpll_pin_notify(dpll, pin, DPLL_A_PIN_STATE);
 
 	return 0;
 }
@@ -446,7 +462,8 @@ dpll_pin_prio_set(struct dpll_device *dpll, struct dpll_pin *pin,
 	ops = dpll_pin_ops(ref);
 	if (!ops->prio_set)
 		return -EOPNOTSUPP;
-	if (ops->prio_set(pin, dpll, prio, extack))
+	if (ops->prio_set(pin, dpll_pin_on_dpll_priv(dpll, pin), dpll,
+			  dpll_priv(dpll), prio, extack))
 		return -EINVAL;
 	dpll_pin_notify(dpll, pin, DPLL_A_PIN_PRIO);
 
@@ -466,10 +483,12 @@ dpll_pin_direction_set(struct dpll_pin *pin, struct nlattr *a,
 
 	xa_for_each(&pin->dpll_refs, i, ref) {
 		const struct dpll_pin_ops *ops = dpll_pin_ops(ref);
-
-		if (ops->direction_set(pin, ref->dpll, direction, extack))
+		struct dpll_device *dpll = ref->dpll;
+		if (ops->direction_set(pin, dpll_pin_on_dpll_priv(dpll, pin),
+				       dpll, dpll_priv(dpll), direction,
+				       extack))
 			return -EFAULT;
-		dpll_pin_notify(ref->dpll, pin, DPLL_A_PIN_DIRECTION);
+		dpll_pin_notify(dpll, pin, DPLL_A_PIN_DIRECTION);
 	}
 
 	return 0;
@@ -610,7 +629,8 @@ dpll_set_from_nlattr(struct dpll_device *dpll, struct genl_info *info)
 		case DPLL_A_MODE:
 			mode = nla_get_u8(attr);
 
-			ret = ops->mode_set(dpll, mode, info->extack);
+			ret = ops->mode_set(dpll, dpll_priv(dpll), mode,
+					    info->extack);
 			if (ret)
 				return ret;
 			break;
@@ -821,6 +841,7 @@ dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
 	case DPLL_A_PIN_STATE:
 		if (parent) {
 			const struct dpll_pin_ops *ops;
+			void *priv = dpll_pin_on_pin_priv(parent, pin);
 
 			ref = dpll_xa_ref_pin_find(&pin->parent_refs, parent);
 			if (!ref)
@@ -828,7 +849,8 @@ dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
 			ops = dpll_pin_ops(ref);
 			if (!ops->state_on_pin_get)
 				return -EOPNOTSUPP;
-			ret = ops->state_on_pin_get(pin, parent, &state, NULL);
+			ret = ops->state_on_pin_get(pin, priv, parent,
+						    &state, NULL);
 			if (ret)
 				return ret;
 			if (nla_put_u32(msg, DPLL_A_PIN_PARENT_IDX,

@@ -17,61 +17,63 @@ struct dpll_pin;
 #define PIN_IDX_INVALID		((u32)ULONG_MAX)
 
 struct dpll_device_ops {
-	int (*mode_get)(const struct dpll_device *dpll, enum dpll_mode *mode,
-			struct netlink_ext_ack *extack);
-	int (*mode_set)(const struct dpll_device *dpll,
+	int (*mode_get)(const struct dpll_device *dpll, void *dpll_priv,
+			enum dpll_mode *mode, struct netlink_ext_ack *extack);
+	int (*mode_set)(const struct dpll_device *dpll, void *dpll_priv,
 			const enum dpll_mode mode,
 			struct netlink_ext_ack *extack);
-	bool (*mode_supported)(const struct dpll_device *dpll,
+	bool (*mode_supported)(const struct dpll_device *dpll, void *dpll_priv,
 			       const enum dpll_mode mode,
 			       struct netlink_ext_ack *extack);
 	int (*source_pin_idx_get)(const struct dpll_device *dpll,
+				  void *dpll_priv,
 				  u32 *pin_idx,
 				  struct netlink_ext_ack *extack);
-	int (*lock_status_get)(const struct dpll_device *dpll,
+	int (*lock_status_get)(const struct dpll_device *dpll, void *dpll_priv,
 			       enum dpll_lock_status *status,
 			       struct netlink_ext_ack *extack);
-	int (*temp_get)(const struct dpll_device *dpll, s32 *temp,
-			struct netlink_ext_ack *extack);
+	int (*temp_get)(const struct dpll_device *dpll, void *dpll_priv,
+			s32 *temp, struct netlink_ext_ack *extack);
 };
 
 struct dpll_pin_ops {
-	int (*frequency_set)(const struct dpll_pin *pin,
-			     const struct dpll_device *dpll,
+	int (*frequency_set)(const struct dpll_pin *pin, void *pin_priv,
+			     const struct dpll_device *dpll, void *dpll_priv,
 			     const u64 frequency,
 			     struct netlink_ext_ack *extack);
-	int (*frequency_get)(const struct dpll_pin *pin,
-			     const struct dpll_device *dpll,
+	int (*frequency_get)(const struct dpll_pin *pin, void *pin_priv,
+			     const struct dpll_device *dpll, void *dpll_priv,
 			     u64 *frequency, struct netlink_ext_ack *extack);
-	int (*direction_set)(const struct dpll_pin *pin,
-			     const struct dpll_device *dpll,
+	int (*direction_set)(const struct dpll_pin *pin, void *pin_priv,
+			     const struct dpll_device *dpll, void *dpll_priv,
 			     const enum dpll_pin_direction direction,
 			     struct netlink_ext_ack *extack);
-	int (*direction_get)(const struct dpll_pin *pin,
-			     const struct dpll_device *dpll,
+	int (*direction_get)(const struct dpll_pin *pin, void *pin_priv,
+			     const struct dpll_device *dpll, void *dpll_priv,
 			     enum dpll_pin_direction *direction,
 			     struct netlink_ext_ack *extack);
-	int (*state_on_pin_get)(const struct dpll_pin *pin,
+	int (*state_on_pin_get)(const struct dpll_pin *pin, void *pin_priv,
 				const struct dpll_pin *parent_pin,
 				enum dpll_pin_state *state,
 				struct netlink_ext_ack *extack);
-	int (*state_on_dpll_get)(const struct dpll_pin *pin,
+	int (*state_on_dpll_get)(const struct dpll_pin *pin, void *pin_priv,
 				 const struct dpll_device *dpll,
-				 enum dpll_pin_state *state,
+				 void *dpll_priv, enum dpll_pin_state *state,
 				 struct netlink_ext_ack *extack);
-	int (*state_on_pin_set)(const struct dpll_pin *pin,
+	int (*state_on_pin_set)(const struct dpll_pin *pin, void *pin_priv,
 				const struct dpll_pin *parent_pin,
 				const enum dpll_pin_state state,
 				struct netlink_ext_ack *extack);
-	int (*state_on_dpll_set)(const struct dpll_pin *pin,
+	int (*state_on_dpll_set)(const struct dpll_pin *pin, void *pin_priv,
 				 const struct dpll_device *dpll,
+				 void *dpll_priv,
 				 const enum dpll_pin_state state,
 				 struct netlink_ext_ack *extack);
-	int (*prio_get)(const struct dpll_pin *pin,
-			const struct dpll_device *dpll,
+	int (*prio_get)(const struct dpll_pin *pin,  void *pin_priv,
+			const struct dpll_device *dpll,  void *dpll_priv,
 			u32 *prio, struct netlink_ext_ack *extack);
-	int (*prio_set)(const struct dpll_pin *pin,
-			const struct dpll_device *dpll,
+	int (*prio_set)(const struct dpll_pin *pin, void *pin_priv,
+			const struct dpll_device *dpll, void *dpll_priv,
 			const u32 prio, struct netlink_ext_ack *extack);
 };
 
@@ -170,35 +172,6 @@ int dpll_device_register(struct dpll_device *dpll, enum dpll_type type,
  */
 void dpll_device_unregister(struct dpll_device *dpll,
 			    const struct dpll_device_ops *ops, void *priv);
-
-/**
- * dpll_priv - get dpll private data
- * @dpll: pointer to dpll
- *
- * Obtain private data pointer passed to dpll subsystem when allocating
- * device with ``dpll_device_alloc(..)``
- */
-void *dpll_priv(const struct dpll_device *dpll);
-
-/**
- * dpll_pin_on_pin_priv - get pin on pin pair private data
- * @parent: pointer to a parent pin
- * @pin: pointer to a dpll_pin
- *
- * Obtain private pin data pointer passed to dpll subsystem when pin
- * was registered with parent pin.
- */
-void *dpll_pin_on_pin_priv(const struct dpll_pin *parent, const struct dpll_pin *pin);
-
-/**
- * dpll_pin_on_dpll_priv - get pin on dpll pair private data
- * @dpll: pointer to dpll
- * @pin: pointer to a dpll_pin
- *
- * Obtain private pin-dpll pair data pointer passed to dpll subsystem when pin
- * was registered with a dpll.
- */
-void *dpll_pin_on_dpll_priv(const struct dpll_device *dpll, const struct dpll_pin *pin);
 
 /**
  * dpll_pin_get - get reference or create new pin object
