@@ -102,7 +102,6 @@ dpll_xa_ref_pin_add(struct xarray *xa_pins, struct dpll_pin *pin,
 	struct dpll_pin_ref *ref;
 	bool ref_exists = false;
 	unsigned long i;
-	u32 idx;
 	int ret;
 
 	xa_for_each(xa_pins, i, ref) {
@@ -123,7 +122,7 @@ dpll_xa_ref_pin_add(struct xarray *xa_pins, struct dpll_pin *pin,
 			return -ENOMEM;
 		ref->pin = pin;
 		INIT_LIST_HEAD(&ref->registration_list);
-		ret = xa_alloc(xa_pins, &idx, ref, xa_limit_16b, GFP_KERNEL);
+		ret = xa_insert(xa_pins, pin->pin_idx, ref, GFP_KERNEL);
 		if (ret) {
 			kfree(ref);
 			return ret;
@@ -185,31 +184,6 @@ static int dpll_xa_ref_pin_del(struct xarray *xa_pins, struct dpll_pin *pin,
 }
 
 /**
- * dpll_xa_ref_pin_find - find pin reference on xarray
- * @xa_pins: dpll_pin_ref xarray holding pins
- * @pin: pointer to a pin
- *
- * Search for pin reference struct of a given pin on given xarray.
- *
- * Return:
- * * pin reference struct pointer on success
- * * NULL - reference to a pin was not found
- */
-struct dpll_pin_ref *
-dpll_xa_ref_pin_find(struct xarray *xa_pins, const struct dpll_pin *pin)
-{
-	struct dpll_pin_ref *ref;
-	unsigned long i;
-
-	xa_for_each(xa_pins, i, ref) {
-		if (ref->pin == pin)
-			return ref;
-	}
-
-	return NULL;
-}
-
-/**
  * dpll_xa_ref_dpll_add - add dpll reference to a given xarray
  * @xa_dplls: dpll_pin_ref xarray holding dplls
  * @dpll: dpll being added
@@ -231,7 +205,6 @@ dpll_xa_ref_dpll_add(struct xarray *xa_dplls, struct dpll_device *dpll,
 	struct dpll_pin_ref *ref;
 	bool ref_exists = false;
 	unsigned long i;
-	u32 idx;
 	int ret;
 
 	xa_for_each(xa_dplls, i, ref) {
@@ -252,7 +225,7 @@ dpll_xa_ref_dpll_add(struct xarray *xa_dplls, struct dpll_device *dpll,
 			return -ENOMEM;
 		ref->dpll = dpll;
 		INIT_LIST_HEAD(&ref->registration_list);
-		ret = xa_alloc(xa_dplls, &idx, ref, xa_limit_16b, GFP_KERNEL);
+		ret = xa_insert(xa_dplls, dpll->device_idx, ref, GFP_KERNEL);
 		if (ret) {
 			kfree(ref);
 			return ret;
@@ -346,7 +319,7 @@ struct dpll_pin_ref *dpll_xa_ref_dpll_first(struct xarray *xa_refs)
 /**
  * dpll_device_alloc - allocate the memory for dpll device
  * @clock_id: clock_id of creator
- * @dev_driver_id: id given by dev driver
+ * @device_idx: id given by dev driver
  * @module: reference to registering module
  *
  * Allocates memory and initialize dpll device, hold its reference on global
@@ -357,7 +330,7 @@ struct dpll_pin_ref *dpll_xa_ref_dpll_first(struct xarray *xa_refs)
  * * ERR_PTR(X) - failed allocation
  */
 static struct dpll_device *
-dpll_device_alloc(const u64 clock_id, u32 dev_driver_id, struct module *module)
+dpll_device_alloc(const u64 clock_id, u32 device_idx, struct module *module)
 {
 	struct dpll_device *dpll;
 	int ret;
@@ -367,11 +340,11 @@ dpll_device_alloc(const u64 clock_id, u32 dev_driver_id, struct module *module)
 		return ERR_PTR(-ENOMEM);
 	refcount_set(&dpll->refcount, 1);
 	INIT_LIST_HEAD(&dpll->registration_list);
-	dpll->dev_driver_id = dev_driver_id;
+	dpll->device_idx = device_idx;
 	dpll->clock_id = clock_id;
 	dpll->module = module;
-	ret = xa_alloc(&dpll_device_xa, &dpll->id, dpll,
-		       xa_limit_16b, GFP_KERNEL);
+	ret = xa_alloc(&dpll_device_xa, &dpll->id, dpll, xa_limit_16b,
+		       GFP_KERNEL);
 	if (ret) {
 		kfree(dpll);
 		return ERR_PTR(ret);
@@ -384,7 +357,7 @@ dpll_device_alloc(const u64 clock_id, u32 dev_driver_id, struct module *module)
 /**
  * dpll_device_get - find existing or create new dpll device
  * @clock_id: clock_id of creator
- * @dev_driver_id: id given by dev driver
+ * @device_idx: idx given by device driver
  * @module: reference to registering module
  *
  * Get existing object of a dpll device, unique for given arguments.
@@ -395,7 +368,7 @@ dpll_device_alloc(const u64 clock_id, u32 dev_driver_id, struct module *module)
  * * ERR_PTR of an error
  */
 struct dpll_device *
-dpll_device_get(u64 clock_id, u32 dev_driver_id, struct module *module)
+dpll_device_get(u64 clock_id, u32 device_idx, struct module *module)
 {
 	struct dpll_device *dpll, *ret = NULL;
 	unsigned long index;
@@ -403,7 +376,7 @@ dpll_device_get(u64 clock_id, u32 dev_driver_id, struct module *module)
 	mutex_lock(&dpll_xa_lock);
 	xa_for_each(&dpll_device_xa, index, dpll) {
 		if (dpll->clock_id == clock_id &&
-		    dpll->dev_driver_id == dev_driver_id &&
+		    dpll->device_idx == device_idx &&
 		    dpll->module == module) {
 			ret = dpll;
 			refcount_inc(&ret->refcount);
@@ -411,7 +384,7 @@ dpll_device_get(u64 clock_id, u32 dev_driver_id, struct module *module)
 		}
 	}
 	if (!ret)
-		ret = dpll_device_alloc(clock_id, dev_driver_id, module);
+		ret = dpll_device_alloc(clock_id, device_idx, module);
 	mutex_unlock(&dpll_xa_lock);
 
 	return ret;
@@ -500,7 +473,7 @@ int dpll_device_register(struct dpll_device *dpll, enum dpll_type type,
 	dpll->parent = owner;
 	dpll->type = type;
 	dev_set_name(&dpll->dev, "%s/%llx/%d", module_name(dpll->module),
-		     dpll->clock_id, dpll->dev_driver_id);
+		     dpll->clock_id, dpll->device_idx);
 
 	first_registration = list_empty(&dpll->registration_list);
 	list_add_tail(&reg->list, &dpll->registration_list);
@@ -555,7 +528,7 @@ EXPORT_SYMBOL_GPL(dpll_device_unregister);
 /**
  * dpll_pin_alloc - allocate the memory for dpll pin
  * @clock_id: clock_id of creator
- * @dev_driver_id: id given by dev driver
+ * @pin_idx: idx given by dev driver
  * @module: reference to registering module
  * @prop: dpll pin properties
  *
@@ -564,7 +537,7 @@ EXPORT_SYMBOL_GPL(dpll_device_unregister);
  * ERR_PTR of an error
  */
 static struct dpll_pin *
-dpll_pin_alloc(u64 clock_id, u8 dev_driver_id, struct module *module,
+dpll_pin_alloc(u64 clock_id, u8 pin_idx, struct module *module,
 	       const struct dpll_pin_properties *prop)
 {
 	struct dpll_pin *pin;
@@ -573,7 +546,7 @@ dpll_pin_alloc(u64 clock_id, u8 dev_driver_id, struct module *module,
 	pin = kzalloc(sizeof(*pin), GFP_KERNEL);
 	if (!pin)
 		return ERR_PTR(-ENOMEM);
-	pin->dev_driver_id = dev_driver_id;
+	pin->pin_idx = pin_idx;
 	pin->clock_id = clock_id;
 	pin->module = module;
 	refcount_set(&pin->refcount, 1);
@@ -606,8 +579,7 @@ dpll_pin_alloc(u64 clock_id, u8 dev_driver_id, struct module *module,
 	}
 	xa_init_flags(&pin->dpll_refs, XA_FLAGS_ALLOC);
 	xa_init_flags(&pin->parent_refs, XA_FLAGS_ALLOC);
-	ret = xa_alloc(&dpll_pin_xa, &pin->idx, pin,
-		       xa_limit_16b, GFP_KERNEL);
+	ret = xa_alloc(&dpll_pin_xa, &pin->id, pin, xa_limit_16b, GFP_KERNEL);
 	if (ret)
 		goto err;
 	return pin;
@@ -623,7 +595,7 @@ err:
 /**
  * dpll_pin_get - find existing or create new dpll pin
  * @clock_id: clock_id of creator
- * @dev_driver_id: id given by dev driver
+ * @pin_idx: idx given by dev driver
  * @module: reference to registering module
  * @prop: dpll pin properties
  *
@@ -635,7 +607,7 @@ err:
  * * ERR_PTR of an error
  */
 struct dpll_pin *
-dpll_pin_get(u64 clock_id, u32 dev_driver_id, struct module *module,
+dpll_pin_get(u64 clock_id, u32 pin_idx, struct module *module,
 	     const struct dpll_pin_properties *prop)
 {
 	struct dpll_pin *pos, *ret = NULL;
@@ -643,7 +615,7 @@ dpll_pin_get(u64 clock_id, u32 dev_driver_id, struct module *module,
 
 	xa_for_each(&dpll_pin_xa, i, pos) {
 		if (pos->clock_id == clock_id &&
-		    pos->dev_driver_id == dev_driver_id &&
+		    pos->pin_idx == pin_idx &&
 		    pos->module == module) {
 			ret = pos;
 			refcount_inc(&ret->refcount);
@@ -651,7 +623,7 @@ dpll_pin_get(u64 clock_id, u32 dev_driver_id, struct module *module,
 		}
 	}
 	if (!ret)
-		ret = dpll_pin_alloc(clock_id, dev_driver_id, module, prop);
+		ret = dpll_pin_alloc(clock_id, pin_idx, module, prop);
 
 	return ret;
 }
@@ -670,7 +642,7 @@ void dpll_pin_put(struct dpll_pin *pin)
 	if (refcount_dec_and_test(&pin->refcount)) {
 		xa_destroy(&pin->dpll_refs);
 		xa_destroy(&pin->parent_refs);
-		xa_erase(&dpll_pin_xa, pin->idx);
+		xa_erase(&dpll_pin_xa, pin->id);
 		kfree(pin->prop.label);
 		kfree(pin->prop.freq_supported);
 		kfree(pin->rclk_dev_name);
@@ -858,30 +830,6 @@ void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin,
 }
 EXPORT_SYMBOL_GPL(dpll_pin_on_pin_unregister);
 
-/**
- * dpll_pin_get_by_idx - find a pin ref on dpll by pin index
- * @dpll: dpll device pointer
- * @idx: index of pin
- *
- * Find a reference to a pin registered with given dpll and return its pointer.
- *
- * Return:
- * * valid pointer if pin was found
- * * NULL if not found
- */
-struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, u32 idx)
-{
-	struct dpll_pin_ref *pos;
-	unsigned long i;
-
-	xa_for_each(&dpll->pin_refs, i, pos) {
-		if (pos && pos->pin && pos->pin->dev_driver_id == idx)
-			return pos->pin;
-	}
-
-	return NULL;
-}
-
 static struct dpll_device_registration *
 dpll_device_registration_first(struct dpll_device *dpll)
 {
@@ -939,7 +887,7 @@ void *dpll_pin_on_dpll_priv(const struct dpll_device *dpll,
 	struct dpll_pin_registration *reg;
 	struct dpll_pin_ref *ref;
 
-	ref = dpll_xa_ref_pin_find((struct xarray *)&dpll->pin_refs, pin);
+	ref = xa_load((struct xarray *)&dpll->pin_refs, pin->pin_idx);
 	if (!ref)
 		return NULL;
 	reg = dpll_pin_registration_first(ref);
@@ -959,7 +907,7 @@ void *dpll_pin_on_pin_priv(const struct dpll_pin *parent,
 	struct dpll_pin_registration *reg;
 	struct dpll_pin_ref *ref;
 
-	ref = dpll_xa_ref_pin_find((struct xarray *)&pin->parent_refs, parent);
+	ref = xa_load((struct xarray *)&pin->parent_refs, parent->pin_idx);
 	if (!ref)
 		return NULL;
 	reg = dpll_pin_registration_first(ref);

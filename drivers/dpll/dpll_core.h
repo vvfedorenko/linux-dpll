@@ -37,7 +37,7 @@ struct dpll_device_registration {
  **/
 struct dpll_device {
 	u32 id;
-	u32 dev_driver_id;
+	u32 device_idx;
 	u64 clock_id;
 	struct module *module;
 	struct device dev;
@@ -62,8 +62,8 @@ struct dpll_device {
  * @refcount:		refcount
  **/
 struct dpll_pin {
-	u32 idx;
-	u32 dev_driver_id;
+	u32 id;
+	u32 pin_idx;
 	u64 clock_id;
 	struct module *module;
 	struct xarray dpll_refs;
@@ -106,11 +106,6 @@ struct dpll_device *dpll_device_get_by_id(int id);
 struct dpll_device *dpll_device_get_by_name(const char *bus_name,
 					    const char *dev_name);
 const struct dpll_pin_ops *dpll_pin_ops(struct dpll_pin_ref *ref);
-struct dpll_pin *dpll_pin_get_by_idx(struct dpll_device *dpll, u32 idx);
-struct dpll_pin_ref *
-dpll_xa_ref_pin_find(struct xarray *xa_refs, const struct dpll_pin *pin);
-struct dpll_pin_ref *
-dpll_xa_ref_dpll_find(struct xarray *xa_refs, const struct dpll_device *dpll);
 struct dpll_pin_ref *dpll_xa_ref_dpll_first(struct xarray *xa_refs);
 extern struct xarray dpll_device_xa;
 extern struct xarray dpll_pin_xa;

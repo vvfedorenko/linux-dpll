@@ -203,8 +203,7 @@ dpll_msg_add_pin_parents(struct sk_buff *msg, struct dpll_pin *pin,
 		nest = nla_nest_start(msg, DPLL_A_PIN_PARENT);
 		if (!nest)
 			return -EMSGSIZE;
-		if (nla_put_u32(msg, DPLL_A_PIN_PARENT_IDX,
-				ppin->dev_driver_id)) {
+		if (nla_put_u32(msg, DPLL_A_PIN_PARENT_IDX, ppin->pin_idx)) {
 			ret = -EMSGSIZE;
 			goto nest_cancel;
 		}
@@ -294,7 +293,7 @@ int dpll_msg_add_pin_handle(struct sk_buff *msg, struct dpll_pin *pin)
 {
 	// TMP- THE HANDLE IS GOING TO CHANGE TO DRIVERNAME/CLOCKID/PIN_INDEX
 	// LEAVING ORIG HANDLE NOW AS PUT IN THE LAST RFC VERSION
-	if (nla_put_u32(msg, DPLL_A_PIN_IDX, pin->dev_driver_id))
+	if (nla_put_u32(msg, DPLL_A_PIN_IDX, pin->pin_idx))
 		return -EMSGSIZE;
 	return 0;
 }
@@ -400,24 +399,27 @@ dpll_pin_on_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 			  struct netlink_ext_ack *extack)
 {
 	const struct dpll_pin_ops *ops;
-	struct dpll_pin_ref *ref;
-	struct dpll_pin *parent;
+	struct dpll_pin_ref *pin_ref, *parent_ref;
 
 	if (!(DPLL_PIN_CAPS_STATE_CAN_CHANGE & pin->prop.capabilities))
 		return -EOPNOTSUPP;
-	parent = dpll_pin_get_by_idx(dpll, parent_idx);
-	if (!parent)
+	parent_ref = xa_load(&pin->parent_refs, parent_idx);
+	       //	dpll_pin_get_by_idx(dpll, parent_idx);
+	if (!parent_ref)
 		return -EINVAL;
-	ref = dpll_xa_ref_pin_find(&pin->parent_refs, parent);
-	if (!ref)
+	pin_ref = xa_load(&dpll->pin_refs, pin->pin_idx);
+	if (!pin_ref)
 		return -EINVAL;
-	ops = dpll_pin_ops(ref);
+	ops = dpll_pin_ops(pin_ref);
 	if (!ops->state_on_pin_set)
 		return -EOPNOTSUPP;
-	if (ops->state_on_pin_set(pin, dpll_pin_on_pin_priv(parent, pin),
-				  parent, state, extack))
+	if (ops->state_on_pin_set(pin_ref->pin,
+				  dpll_pin_on_pin_priv(parent_ref->pin,
+						       pin_ref->pin),
+				  parent_ref->pin, state, extack))
 		return -EFAULT;
-	dpll_pin_parent_notify(dpll, pin, parent, DPLL_A_PIN_STATE);
+	dpll_pin_parent_notify(dpll, pin_ref->pin, parent_ref->pin,
+			       DPLL_A_PIN_STATE);
 
 	return 0;
 }
@@ -432,7 +434,7 @@ dpll_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 
 	if (!(DPLL_PIN_CAPS_STATE_CAN_CHANGE & pin->prop.capabilities))
 		return -EOPNOTSUPP;
-	ref = dpll_xa_ref_dpll_find(&pin->dpll_refs, dpll);
+	ref = xa_load(&pin->dpll_refs, dpll->device_idx);
 	if (!ref)
 		return -EFAULT;
 	ops = dpll_pin_ops(ref);
@@ -456,7 +458,7 @@ dpll_pin_prio_set(struct dpll_device *dpll, struct dpll_pin *pin,
 
 	if (!(DPLL_PIN_CAPS_PRIORITY_CAN_CHANGE & pin->prop.capabilities))
 		return -EOPNOTSUPP;
-	ref = dpll_xa_ref_dpll_find(&pin->dpll_refs, dpll);
+	ref = xa_load(&pin->dpll_refs, dpll->device_idx);
 	if (!ref)
 		return -EFAULT;
 	ops = dpll_pin_ops(ref);
@@ -763,8 +765,8 @@ int dpll_pin_pre_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
 		      struct genl_info *info)
 {
 	int ret = dpll_pre_doit(ops, skb, info);
+	struct dpll_pin_ref *pin_ref;
 	struct dpll_device *dpll;
-	struct dpll_pin *pin;
 
 	if (ret)
 		return ret;
@@ -773,13 +775,13 @@ int dpll_pin_pre_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
 		ret = -EINVAL;
 		goto unlock_dev;
 	}
-	pin = dpll_pin_get_by_idx(dpll,
-				  nla_get_u32(info->attrs[DPLL_A_PIN_IDX]));
-	if (!pin) {
+	pin_ref = xa_load(&dpll->pin_refs,
+			  nla_get_u32(info->attrs[DPLL_A_PIN_IDX]));
+	if (!pin_ref) {
 		ret = -ENODEV;
 		goto unlock_dev;
 	}
-	info->user_ptr[1] = pin;
+	info->user_ptr[1] = pin_ref->pin;
 
 	return 0;
 
@@ -815,7 +817,7 @@ dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
 
 	if (ret)
 		return ret;
-	if (pin && nla_put_u32(msg, DPLL_A_PIN_IDX, pin->dev_driver_id))
+	if (pin && nla_put_u32(msg, DPLL_A_PIN_IDX, pin->pin_idx))
 		return -EMSGSIZE;
 
 	switch (attr) {
@@ -829,11 +831,13 @@ dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
 		ret = dpll_msg_add_temp(msg, dpll, NULL);
 		break;
 	case DPLL_A_PIN_FREQUENCY:
-		ref = dpll_xa_ref_dpll_find(&pin->dpll_refs, dpll);
+		ref = xa_load(&pin->dpll_refs, dpll->device_idx);
+		if (!ref)
+			return -EFAULT;
 		ret = dpll_msg_add_pin_freq(msg, pin, ref, NULL, false);
 		break;
 	case DPLL_A_PIN_PRIO:
-		ref = dpll_xa_ref_dpll_find(&pin->dpll_refs, dpll);
+		ref = xa_load(&pin->dpll_refs, dpll->device_idx);
 		if (!ref)
 			return -EFAULT;
 		ret = dpll_msg_add_pin_prio(msg, pin, ref, NULL);
@@ -843,7 +847,7 @@ dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
 			const struct dpll_pin_ops *ops;
 			void *priv = dpll_pin_on_pin_priv(parent, pin);
 
-			ref = dpll_xa_ref_pin_find(&pin->parent_refs, parent);
+			ref = xa_load(&pin->parent_refs, parent->pin_idx);
 			if (!ref)
 				return -EFAULT;
 			ops = dpll_pin_ops(ref);
@@ -854,10 +858,10 @@ dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
 			if (ret)
 				return ret;
 			if (nla_put_u32(msg, DPLL_A_PIN_PARENT_IDX,
-					parent->dev_driver_id))
+					parent->pin_idx))
 				return -EMSGSIZE;
 		} else {
-			ref = dpll_xa_ref_dpll_find(&pin->dpll_refs, dpll);
+			ref = xa_load(&pin->dpll_refs, dpll->device_idx);
 			if (!ref)
 				return -EFAULT;
 			ret = dpll_msg_add_pin_on_dpll_state(msg, pin, ref,
