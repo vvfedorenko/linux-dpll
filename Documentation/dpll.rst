@@ -355,11 +355,12 @@ For different instances of a device driver requiring to find already
 registered dpll (i.e. to connect its pins to it) use ``dpll_device_get``
 to obtain proper dpll device pointer.
 
-The name of dpll device is generated based on registerer provided device
-struct pointer and dev_driver_id value.
-Name is in format: ``%s_%u`` witch arguments:
-``dev_name(struct device *)`` - syscall on parent device struct
-``dev_driver_idx``            - registerer given id
+The name of dpll device is generated based on registerer provided module
+struct pointer, clock_id and device_idx values.
+Name is in format: ``%s/%llx/%d`` where arguments are as follows:
+``module_name(dpll->module)`` - syscall on parent module struct pointer
+``dpll->clock_id``            - registerer given clock id
+``dpll->device_idx``          - registerer given device id
 
 Notifications of adding or removing dpll devices are created within
 subsystem itself.
