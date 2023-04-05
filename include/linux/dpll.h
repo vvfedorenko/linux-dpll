@@ -14,8 +14,6 @@
 struct dpll_device;
 struct dpll_pin;
 
-#define PIN_IDX_INVALID		((u32)ULONG_MAX)
-
 struct dpll_device_ops {
 	int (*mode_get)(const struct dpll_device *dpll, void *dpll_priv,
 			enum dpll_mode *mode, struct netlink_ext_ack *extack);
