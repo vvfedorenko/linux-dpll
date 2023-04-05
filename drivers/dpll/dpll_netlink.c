@@ -501,9 +501,10 @@ dpll_pin_set_from_nlattr(struct dpll_device *dpll,
 			 struct dpll_pin *pin, struct genl_info *info)
 {
 	enum dpll_pin_state state = DPLL_PIN_STATE_UNSPEC;
-	u32 parent_idx = PIN_IDX_INVALID;
+	bool parent_present = false;
 	int rem, ret = -EINVAL;
 	struct nlattr *a;
+	u32 parent_idx;
 
 	nla_for_each_attr(a, genlmsg_data(info->genlhdr),
 			  genlmsg_len(info->genlhdr), rem) {
@@ -524,6 +525,7 @@ dpll_pin_set_from_nlattr(struct dpll_device *dpll,
 				return ret;
 			break;
 		case DPLL_A_PIN_PARENT_IDX:
+			parent_present = true;
 			parent_idx = nla_get_u32(a);
 			break;
 		case DPLL_A_PIN_STATE:
@@ -534,7 +536,7 @@ dpll_pin_set_from_nlattr(struct dpll_device *dpll,
 		}
 	}
 	if (state != DPLL_PIN_STATE_UNSPEC) {
-		if (parent_idx == PIN_IDX_INVALID) {
+		if (!parent_present) {
 			ret = dpll_pin_state_set(dpll, pin, state,
 						 info->extack);
 			if (ret)
