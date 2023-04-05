@@ -75,7 +75,7 @@ Shared pins
 A single pin object can be registered to multiple dpll devices.
 Then there are two groups of configuration knobs:
 1) Set on a pin - the configuration affects all dpll devices pin is
-   registered to. (i.e. PIN_FREQUENCY, PIN_DIRECTION),
+   registered to. (i.e. ``PIN_FREQUENCY``, ``PIN_DIRECTION``),
 2) Set on a pin-dpll tuple - the configuration affects only selected
    dpll device. (i.e. PIN_PRIO, PIN_STATE).
 
@@ -143,8 +143,8 @@ space and each device should be registered by it's driver.
 All netlink commands require ``GENL_ADMIN_PERM``. This is to prevent
 any spamming/D.o.S. from unauthorized userspace applications.
 
-List of command with possible attributes
-========================================
+List of netlink commands with possible attributes
+=================================================
 
 All constants identifying command types use ``DPLL_CMD_`` prefix and
 suffix according to command purpose. All attributes use ``DPLL_A_``
@@ -207,7 +207,6 @@ prefix and suffix according to attribute purpose:
     ``PIN_FREQUENCY``           attr frequency to be set
     ``PIN_PRIO``                attr pin priority to be set
     ``PIN_STATE``               attr pin state to be set
-    ``PIN_PRIO``                attr pin priority to be set
     ``PIN_PARENT_IDX``          attr if provided state is to be set with
                                 parent pin instead of with dpll device
 
@@ -215,8 +214,30 @@ Netlink dump requests
 =====================
 
 The ``DEVICE_GET`` and ``PIN_GET`` commands are capable of dump type
-netlink requests.In which case the response is in the same format as
+netlink requests, in which case the response is in the same format as
 for their ``do`` request.
+
+
+SET commands format
+===================
+
+``DEVICE_SET`` - to target a dpll device, the user provides either a
+``ID`` or both ``BUS_NAME`` and ``DEV_NAME``, as well as parameter being
+configured (``DPLL_A_MODE``).
+
+``PIN_SET`` - to target a pin user has to provide a ``PIN_IDX``, but
+pin does not exist on its own, thus a dpll device must be also targeted
+with either a ``ID`` or both ``BUS_NAME`` and ``DEV_NAME`` to which
+pin being configured was registered with. Also configured pin parameters
+must be added.
+If ``PIN_DIRECTION`` or ``PIN_FREQUENCY`` are configured, this affects
+all the dpll device they are connected.
+If ``PIN_PRIO`` or ``PIN_STATE`` are configured, this affects only
+the dpll device being targeted.
+If valid ``PIN_PARENT_IDX`` is provided, the set command shall affect
+the configuration between a pin and it's parent, which is a
+``PIN_STATE``.
+In general it is possible to configure multiple parameters at once.
 
 
 Device level configuration pre-defined enums
