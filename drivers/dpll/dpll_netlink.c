@@ -12,6 +12,15 @@
 #include "dpll_nl.h"
 #include <uapi/linux/dpll.h>
 
+struct dpll_dump_ctx {
+	unsigned long idx;
+};
+
+static struct dpll_dump_ctx *dpll_dump_context(struct netlink_callback *cb)
+{
+	return (struct dpll_dump_ctx *)cb->ctx;
+}
+
 static int
 dpll_msg_add_dev_handle(struct sk_buff *msg, struct dpll_device *dpll)
 {
@@ -326,7 +335,7 @@ __dpll_cmd_pin_dump_one(struct sk_buff *msg, struct dpll_pin *pin,
 
 static int
 dpll_device_get_one(struct dpll_device *dpll, struct sk_buff *msg,
-		     struct netlink_ext_ack *extack)
+		    struct netlink_ext_ack *extack)
 {
 	enum dpll_mode mode;
 	int ret;
@@ -588,21 +597,19 @@ int dpll_nl_pin_get_doit(struct sk_buff *skb, struct genl_info *info)
 
 int dpll_nl_pin_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 {
+	struct dpll_dump_ctx *ctx = dpll_dump_context(cb);
 	struct dpll_pin *pin;
 	struct nlattr *hdr;
 	unsigned long i;
-	int ret;
+	int ret = 0;
 
-	hdr = genlmsg_put(skb, NETLINK_CB(cb->skb).portid, cb->nlh->nlmsg_seq,
-			  &dpll_nl_family, 0, DPLL_CMD_PIN_GET);
-	if (!hdr)
-		return -EMSGSIZE;
-
-	xa_for_each(&dpll_pin_xa, i, pin) {
+	xa_for_each_start(&dpll_pin_xa, i, pin, ctx->idx) {
 		if (xa_empty(&pin->dpll_refs))
 			continue;
-		hdr = genlmsg_put(skb, NETLINK_CB(cb->skb).portid, cb->nlh->nlmsg_seq,
-			  &dpll_nl_family, 0, DPLL_CMD_PIN_GET);
+		hdr = genlmsg_put(skb, NETLINK_CB(cb->skb).portid,
+				  cb->nlh->nlmsg_seq,
+				  &dpll_nl_family, NLM_F_MULTI,
+				  DPLL_CMD_PIN_GET);
 		if (!hdr) {
 			ret = -EMSGSIZE;
 			break;
@@ -615,7 +622,10 @@ int dpll_nl_pin_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 			genlmsg_end(skb, hdr);
 		}
 	}
-
+	if (ret == -EMSGSIZE) {
+		ctx->idx = i;
+		return skb->len;
+	}
 	return ret;
 }
 
@@ -680,16 +690,22 @@ int dpll_nl_device_get_doit(struct sk_buff *skb, struct genl_info *info)
 
 int dpll_nl_device_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 {
+	struct dpll_dump_ctx *ctx = dpll_dump_context(cb);
 	struct dpll_device *dpll;
 	struct nlattr *hdr;
 	unsigned long i;
-	int ret;
+	int ret = 0;
 
-	xa_for_each_marked(&dpll_device_xa, i, dpll, DPLL_REGISTERED) {
-		hdr = genlmsg_put(skb, NETLINK_CB(cb->skb).portid, cb->nlh->nlmsg_seq,
-			  &dpll_nl_family, 0, DPLL_CMD_DEVICE_GET);
-		if (!hdr)
-			return -EMSGSIZE;
+	xa_for_each_start(&dpll_device_xa, i, dpll, ctx->idx) {
+		if (!xa_get_mark(&dpll_device_xa, i, DPLL_REGISTERED))
+			continue;
+		hdr = genlmsg_put(skb, NETLINK_CB(cb->skb).portid,
+				  cb->nlh->nlmsg_seq, &dpll_nl_family,
+				  NLM_F_MULTI, DPLL_CMD_DEVICE_GET);
+		if (!hdr) {
+			ret = -EMSGSIZE;
+			break;
+		}
 		ret = dpll_device_get_one(dpll, skb, cb->extack);
 		if (ret) {
 			genlmsg_cancel(skb, hdr);
@@ -698,7 +714,10 @@ int dpll_nl_device_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 			genlmsg_end(skb, hdr);
 		}
 	}
-
+	if (ret == -EMSGSIZE) {
+		ctx->idx = i;
+		return skb->len;
+	}
 	return ret;
 }
 
