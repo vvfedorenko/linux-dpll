@@ -193,6 +193,33 @@ ice_info_pending_netlist_build(struct ice_pf __always_unused *pf,
 		snprintf(ctx->buf, sizeof(ctx->buf), "0x%08x", netlist->hash);
 }
 
+static void ice_info_cgu_id(struct ice_pf *pf, struct ice_info_ctx *ctx)
+{
+	if (ice_is_feature_supported(pf, ICE_F_CGU)) {
+		struct ice_hw *hw = &pf->hw;
+
+		snprintf(ctx->buf, sizeof(ctx->buf), "%u", hw->cgu.id);
+	}
+}
+
+static void ice_info_cgu_fw_version(struct ice_pf *pf, struct ice_info_ctx *ctx)
+{
+	if (ice_is_feature_supported(pf, ICE_F_CGU)) {
+		struct ice_hw *hw = &pf->hw;
+
+		snprintf(ctx->buf, sizeof(ctx->buf), "%u", hw->cgu.fw_ver);
+	}
+}
+
+static void ice_info_cgu_fw_build(struct ice_pf *pf, struct ice_info_ctx *ctx)
+{
+	if (ice_is_feature_supported(pf, ICE_F_CGU)) {
+		struct ice_hw *hw = &pf->hw;
+
+		snprintf(ctx->buf, sizeof(ctx->buf), "0x%x", hw->cgu.cfg_ver);
+	}
+}
+
 #define fixed(key, getter) { ICE_VERSION_FIXED, key, getter, NULL }
 #define running(key, getter) { ICE_VERSION_RUNNING, key, getter, NULL }
 #define stored(key, getter, fallback) { ICE_VERSION_STORED, key, getter, fallback }
@@ -224,6 +251,7 @@ static const struct ice_devlink_version {
 	void (*fallback)(struct ice_pf *pf, struct ice_info_ctx *ctx);
 } ice_devlink_versions[] = {
 	fixed(DEVLINK_INFO_VERSION_GENERIC_BOARD_ID, ice_info_pba),
+	fixed("cgu.id", ice_info_cgu_id),
 	running(DEVLINK_INFO_VERSION_GENERIC_FW_MGMT, ice_info_fw_mgmt),
 	running("fw.mgmt.api", ice_info_fw_api),
 	running("fw.mgmt.build", ice_info_fw_build),
@@ -235,6 +263,8 @@ static const struct ice_devlink_version {
 	running("fw.app.bundle_id", ice_info_ddp_pkg_bundle_id),
 	combined("fw.netlist", ice_info_netlist_ver, ice_info_pending_netlist_ver),
 	combined("fw.netlist.build", ice_info_netlist_build, ice_info_pending_netlist_build),
+	running("fw.cgu", ice_info_cgu_fw_version),
+	running("fw.cgu.build", ice_info_cgu_fw_build),
 };
 
 /**

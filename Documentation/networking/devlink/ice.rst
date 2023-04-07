@@ -23,6 +23,11 @@ The ``ice`` driver reports the following versions
       - fixed
       - K65390-000
       - The Product Board Assembly (PBA) identifier of the board.
+    * - ``cgu.id``
+      - fixed
+      - 8032
+      - The Clock Generation Unit (CGU) hardware version identifier on the
+        board.
     * - ``fw.mgmt``
       - running
       - 2.1.7
@@ -89,6 +94,15 @@ The ``ice`` driver reports the following versions
       - running
       - 0xee16ced7
       - The first 4 bytes of the hash of the netlist module contents.
+    * - ``fw.cgu``
+      - running
+      - 6021
+      - Version of Clock Generation Unit (CGU) firmware.
+    * - ``fw.cgu.build``
+      - running
+      - 0x1030001
+      - Version of Clock Generation Unit (CGU) firmware configuration build.
+
 
 Flash Update
 ============

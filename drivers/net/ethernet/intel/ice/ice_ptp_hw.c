@@ -3481,13 +3481,13 @@ bool ice_is_cgu_present(struct ice_hw *hw)
 	if (!ice_find_netlist_node(hw, ICE_AQC_LINK_TOPO_NODE_TYPE_CLK_CTRL,
 				   ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032,
 				   NULL)) {
-		hw->cgu_part_number = ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032;
+		hw->cgu.part_number = ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032;
 		return true;
 	} else if (!ice_find_netlist_node(hw,
 					  ICE_AQC_LINK_TOPO_NODE_TYPE_CLK_CTRL,
 					  ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384,
 					  NULL)) {
-		hw->cgu_part_number = ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384;
+		hw->cgu.part_number = ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384;
 		return true;
 	}
 
@@ -3507,7 +3507,7 @@ ice_cgu_get_pin_desc_e823(struct ice_hw *hw, bool input, int *size)
 {
 	static const struct ice_cgu_pin_desc *t;
 
-	if (hw->cgu_part_number ==
+	if (hw->cgu.part_number ==
 	    ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032) {
 		if (input) {
 			t = ice_e823_zl_cgu_inputs;
@@ -3516,7 +3516,7 @@ ice_cgu_get_pin_desc_e823(struct ice_hw *hw, bool input, int *size)
 			t = ice_e823_zl_cgu_outputs;
 			*size = ARRAY_SIZE(ice_e823_zl_cgu_outputs);
 		}
-	} else if (hw->cgu_part_number ==
+	} else if (hw->cgu.part_number ==
 		   ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384) {
 		if (input) {
 			t = ice_e823_si_cgu_inputs;
@@ -3778,10 +3778,10 @@ int ice_get_cgu_rclk_pin_info(struct ice_hw *hw, u8 *base_idx, u8 *pin_num)
 	case ICE_DEV_ID_E823C_SGMII:
 		*pin_num = ICE_E822_RCLK_PINS_NUM;
 		ret = 0;
-		if (hw->cgu_part_number ==
+		if (hw->cgu.part_number ==
 		    ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032)
 			*base_idx = ZL_REF1P;
-		else if (hw->cgu_part_number ==
+		else if (hw->cgu.part_number ==
 			 ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384)
 			*base_idx = SI_REF1P;
 		else

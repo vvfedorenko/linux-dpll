@@ -820,6 +820,13 @@ struct ice_mbx_data {
 	u16 async_watermark_val;
 };
 
+struct ice_cgu_info {
+	u32 id;
+	u32 cfg_ver;
+	u32 fw_ver;
+	u8 part_number;
+};
+
 /* Port hardware description */
 struct ice_hw {
 	u8 __iomem *hw_addr;
@@ -963,7 +970,7 @@ struct ice_hw {
 	DECLARE_BITMAP(hw_ptype, ICE_FLOW_PTYPE_MAX);
 	u8 dvm_ena;
 	u16 io_expander_handle;
-	u8 cgu_part_number;
+	struct ice_cgu_info cgu;
 };
 
 /* Statistics collected by each port, VSI, VEB, and S-channel */

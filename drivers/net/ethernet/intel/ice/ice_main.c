@@ -4822,8 +4822,11 @@ static void ice_init_features(struct ice_pf *pf)
 		ice_gnss_init(pf);
 
 	if (ice_is_feature_supported(pf, ICE_F_CGU) ||
-	    ice_is_feature_supported(pf, ICE_F_PHY_RCLK))
+	    ice_is_feature_supported(pf, ICE_F_PHY_RCLK)) {
+		ice_aq_get_cgu_info(&pf->hw, &pf->hw.cgu.id,
+				    &pf->hw.cgu.cfg_ver, &pf->hw.cgu.fw_ver);
 		ice_dpll_init(pf);
+	}
 
 	/* Note: Flow director init failure is non-fatal to load */
 	if (ice_init_fdir(pf))
