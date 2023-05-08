@@ -13,7 +13,6 @@
  * enum dpll_mode - working-modes a dpll can support, differentiate if and how
  *   dpll selects one of its sources to syntonize with it, valid values for
  *   DPLL_A_MODE attribute
- * @DPLL_MODE_UNSPEC: unspecified value
  * @DPLL_MODE_MANUAL: source can be only selected by sending a request to dpll
  * @DPLL_MODE_AUTOMATIC: highest prio, valid source, auto selected by dpll
  * @DPLL_MODE_HOLDOVER: dpll forced into holdover mode
@@ -21,8 +20,7 @@
  * @DPLL_MODE_NCO: dpll driven by Numerically Controlled Oscillator
  */
 enum dpll_mode {
-	DPLL_MODE_UNSPEC,
-	DPLL_MODE_MANUAL,
+	DPLL_MODE_MANUAL = 1,
 	DPLL_MODE_AUTOMATIC,
 	DPLL_MODE_HOLDOVER,
 	DPLL_MODE_FREERUN,
@@ -35,7 +33,6 @@ enum dpll_mode {
 /**
  * enum dpll_lock_status - provides information of dpll device lock status,
  *   valid values for DPLL_A_LOCK_STATUS attribute
- * @DPLL_LOCK_STATUS_UNSPEC: unspecified value
  * @DPLL_LOCK_STATUS_UNLOCKED: dpll was not yet locked to any valid source (or
  *   is in one of modes: DPLL_MODE_FREERUN, DPLL_MODE_NCO)
  * @DPLL_LOCK_STATUS_CALIBRATING: dpll is trying to lock to a valid signal
@@ -44,8 +41,7 @@ enum dpll_mode {
  *   was forced by selecting DPLL_MODE_HOLDOVER mode
  */
 enum dpll_lock_status {
-	DPLL_LOCK_STATUS_UNSPEC,
-	DPLL_LOCK_STATUS_UNLOCKED,
+	DPLL_LOCK_STATUS_UNLOCKED = 1,
 	DPLL_LOCK_STATUS_CALIBRATING,
 	DPLL_LOCK_STATUS_LOCKED,
 	DPLL_LOCK_STATUS_HOLDOVER,
@@ -58,13 +54,11 @@ enum dpll_lock_status {
 
 /**
  * enum dpll_type - type of dpll, valid values for DPLL_A_TYPE attribute
- * @DPLL_TYPE_UNSPEC: unspecified value
  * @DPLL_TYPE_PPS: dpll produces Pulse-Per-Second signal
  * @DPLL_TYPE_EEC: dpll drives the Ethernet Equipment Clock
  */
 enum dpll_type {
-	DPLL_TYPE_UNSPEC,
-	DPLL_TYPE_PPS,
+	DPLL_TYPE_PPS = 1,
 	DPLL_TYPE_EEC,
 
 	__DPLL_TYPE_MAX,
@@ -74,7 +68,6 @@ enum dpll_type {
 /**
  * enum dpll_pin_type - defines possible types of a pin, valid values for
  *   DPLL_A_PIN_TYPE attribute
- * @DPLL_PIN_TYPE_UNSPEC: unspecified value
  * @DPLL_PIN_TYPE_MUX: aggregates another layer of selectable pins
  * @DPLL_PIN_TYPE_EXT: external source
  * @DPLL_PIN_TYPE_SYNCE_ETH_PORT: ethernet port PHY's recovered clock
@@ -82,8 +75,7 @@ enum dpll_type {
  * @DPLL_PIN_TYPE_GNSS: GNSS recovered clock
  */
 enum dpll_pin_type {
-	DPLL_PIN_TYPE_UNSPEC,
-	DPLL_PIN_TYPE_MUX,
+	DPLL_PIN_TYPE_MUX = 1,
 	DPLL_PIN_TYPE_EXT,
 	DPLL_PIN_TYPE_SYNCE_ETH_PORT,
 	DPLL_PIN_TYPE_INT_OSCILLATOR,
@@ -96,13 +88,11 @@ enum dpll_pin_type {
 /**
  * enum dpll_pin_direction - defines possible direction of a pin, valid values
  *   for DPLL_A_PIN_DIRECTION attribute
- * @DPLL_PIN_DIRECTION_UNSPEC: unspecified value
  * @DPLL_PIN_DIRECTION_SOURCE: pin used as a source of a signal
  * @DPLL_PIN_DIRECTION_OUTPUT: pin used to output the signal
  */
 enum dpll_pin_direction {
-	DPLL_PIN_DIRECTION_UNSPEC,
-	DPLL_PIN_DIRECTION_SOURCE,
+	DPLL_PIN_DIRECTION_SOURCE = 1,
 	DPLL_PIN_DIRECTION_OUTPUT,
 
 	__DPLL_PIN_DIRECTION_MAX,
@@ -111,21 +101,17 @@ enum dpll_pin_direction {
 
 #define DPLL_PIN_FREQUENCY_1_HZ		1
 #define DPLL_PIN_FREQUENCY_10_MHZ	10000000
-#define DPLL_PIN_FREQUENCY_10_KHZ	10000
-#define DPLL_PIN_FREQUENCY_77_5_KHZ	77500
 
 /**
  * enum dpll_pin_state - defines possible states of a pin, valid values for
  *   DPLL_A_PIN_STATE attribute
- * @DPLL_PIN_STATE_UNSPEC: unspecified value
  * @DPLL_PIN_STATE_CONNECTED: pin connected, active source of phase locked loop
  * @DPLL_PIN_STATE_DISCONNECTED: pin disconnected, not considered as a valid
  *   source
  * @DPLL_PIN_STATE_SELECTABLE: pin enabled for automatic source selection
  */
 enum dpll_pin_state {
-	DPLL_PIN_STATE_UNSPEC,
-	DPLL_PIN_STATE_CONNECTED,
+	DPLL_PIN_STATE_CONNECTED = 1,
 	DPLL_PIN_STATE_DISCONNECTED,
 	DPLL_PIN_STATE_SELECTABLE,
 
@@ -145,15 +131,13 @@ enum dpll_pin_caps {
 
 /**
  * enum dpll_event - events of dpll generic netlink family
- * @DPLL_EVENT_UNSPEC: invalid event type
  * @DPLL_EVENT_DEVICE_CREATE: dpll device created
  * @DPLL_EVENT_DEVICE_DELETE: dpll device deleted
  * @DPLL_EVENT_DEVICE_CHANGE: attribute of dpll device or pin changed, reason
  *   is to be found with an attribute type (DPLL_A_*) received with the event
  */
 enum dpll_event {
-	DPLL_EVENT_UNSPEC,
-	DPLL_EVENT_DEVICE_CREATE,
+	DPLL_EVENT_DEVICE_CREATE = 1,
 	DPLL_EVENT_DEVICE_DELETE,
 	DPLL_EVENT_DEVICE_CHANGE,
 };
@@ -189,8 +173,7 @@ enum dplla {
 };
 
 enum {
-	DPLL_CMD_UNSPEC = 1,
-	DPLL_CMD_DEVICE_GET,
+	DPLL_CMD_DEVICE_GET = 1,
 	DPLL_CMD_DEVICE_SET,
 	DPLL_CMD_PIN_GET,
 	DPLL_CMD_PIN_SET,

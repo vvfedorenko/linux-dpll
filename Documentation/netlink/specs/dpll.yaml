@@ -14,11 +14,9 @@ definitions:
       attribute
     entries:
       -
-        name: unspec
-        doc: unspecified value
-      -
         name: manual
         doc: source can be only selected by sending a request to dpll
+        value: 1
       -
         name: automatic
         doc: highest prio, valid source, auto selected by dpll
@@ -40,13 +38,11 @@ definitions:
       DPLL_A_LOCK_STATUS attribute
     entries:
       -
-        name: unspec
-        doc: unspecified value
-      -
         name: unlocked
         doc: |
           dpll was not yet locked to any valid source (or is in one of
           modes: DPLL_MODE_FREERUN, DPLL_MODE_NCO)
+        value: 1
       -
         name: calibrating
         doc: dpll is trying to lock to a valid signal
@@ -76,11 +72,9 @@ definitions:
     doc: type of dpll, valid values for DPLL_A_TYPE attribute
     entries:
       -
-        name: unspec
-        doc: unspecified value
-      -
         name: pps
         doc: dpll produces Pulse-Per-Second signal
+        value: 1
       -
         name: eec
         doc: dpll drives the Ethernet Equipment Clock
@@ -93,11 +87,9 @@ definitions:
       attribute
     entries:
       -
-        name: unspec
-        doc: unspecified value
-      -
         name: mux
         doc: aggregates another layer of selectable pins
+        value: 1
       -
         name: ext
         doc: external source
@@ -119,11 +111,9 @@ definitions:
       DPLL_A_PIN_DIRECTION attribute
     entries:
       -
-        name: unspec
-        doc: unspecified value
-      -
         name: source
         doc: pin used as a source of a signal
+        value: 1
       -
         name: output
         doc: pin used to output the signal
@@ -144,11 +134,9 @@ definitions:
       DPLL_A_PIN_STATE attribute
     entries:
       -
-        name: unspec
-        doc: unspecified value
-      -
         name: connected
         doc: pin connected, active source of phase locked loop
+        value: 1
       -
         name: disconnected
         doc: pin disconnected, not considered as a valid source
@@ -175,11 +163,9 @@ definitions:
     doc: events of dpll generic netlink family
     entries:
       -
-        name: unspec
-        doc: invalid event type
-      -
         name: device-create
         doc: dpll device created
+        value: 1
       -
         name: device-delete
         doc: dpll device deleted
@@ -358,13 +344,10 @@ attribute-sets:
 operations:
   list:
     -
-      name: unspec
-      doc: unused
-
-    -
       name: device-get
       doc: |
         Get list of DPLL devices (dump) or attributes of a single dpll device
+      value: 1
       attribute-set: dpll
       flags: [ admin-perm ]
 
