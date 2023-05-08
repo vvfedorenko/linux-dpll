@@ -124,6 +124,14 @@ definitions:
     value: 1
   -
     type: const
+    name: pin-frequency-10-khz
+    value: 10000
+  -
+    type: const
+    name: pin-frequency-77_5-khz
+    value: 77500
+  -
+    type: const
     name: pin-frequency-10-mhz
     value: 10000000
   -
