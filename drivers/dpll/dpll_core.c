@@ -451,7 +451,7 @@ int dpll_device_register(struct dpll_device *dpll, enum dpll_type type,
 
 	if (WARN_ON(!ops || !owner))
 		return -EINVAL;
-	if (WARN_ON(type <= DPLL_TYPE_UNSPEC || type > DPLL_TYPE_MAX))
+	if (WARN_ON(type < DPLL_TYPE_PPS || type > DPLL_TYPE_MAX))
 		return -EINVAL;
 
 	mutex_lock(&dpll_xa_lock);
@@ -559,7 +559,7 @@ dpll_pin_alloc(u64 clock_id, u8 pin_idx, struct module *module,
 		ret = -ENOMEM;
 		goto err;
 	}
-	if (WARN_ON(prop->type <= DPLL_PIN_TYPE_UNSPEC ||
+	if (WARN_ON(prop->type < DPLL_PIN_TYPE_MUX ||
 		    prop->type > DPLL_PIN_TYPE_MAX)) {
 		ret = -EINVAL;
 		goto err;

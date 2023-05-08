@@ -353,7 +353,7 @@ dpll_device_get_one(struct dpll_device *dpll, struct sk_buff *msg,
 	ret = dpll_msg_add_mode(msg, dpll, extack);
 	if (ret)
 		return ret;
-	for (mode = DPLL_MODE_UNSPEC + 1; mode <= DPLL_MODE_MAX; mode++)
+	for (mode = DPLL_MODE_MANUAL; mode <= DPLL_MODE_MAX; mode++)
 		if (test_bit(mode, &dpll->mode_supported_mask))
 			if (nla_put_s32(msg, DPLL_A_MODE_SUPPORTED, mode))
 				return -EMSGSIZE;
@@ -511,7 +511,7 @@ static int
 dpll_pin_set_from_nlattr(struct dpll_device *dpll,
 			 struct dpll_pin *pin, struct genl_info *info)
 {
-	enum dpll_pin_state state = DPLL_PIN_STATE_UNSPEC;
+	enum dpll_pin_state state = 0;
 	bool parent_present = false;
 	int rem, ret = -EINVAL;
 	struct nlattr *a;
@@ -546,7 +546,7 @@ dpll_pin_set_from_nlattr(struct dpll_device *dpll,
 			break;
 		}
 	}
-	if (state != DPLL_PIN_STATE_UNSPEC) {
+	if (state) {
 		if (!parent_present) {
 			ret = dpll_pin_state_set(dpll, pin, state,
 						 info->extack);
