@@ -16,7 +16,7 @@
  * @DPLL_MODE_MANUAL: source can be only selected by sending a request to dpll
  * @DPLL_MODE_AUTOMATIC: highest prio, valid source, auto selected by dpll
  * @DPLL_MODE_HOLDOVER: dpll forced into holdover mode
- * @DPLL_MODE_FREERUN: dpll driven on system clk, no holdover available
+ * @DPLL_MODE_FREERUN: dpll driven on system clk
  * @DPLL_MODE_NCO: dpll driven by Numerically Controlled Oscillator
  */
 enum dpll_mode {
@@ -38,7 +38,10 @@ enum dpll_mode {
  * @DPLL_LOCK_STATUS_CALIBRATING: dpll is trying to lock to a valid signal
  * @DPLL_LOCK_STATUS_LOCKED: dpll is locked
  * @DPLL_LOCK_STATUS_HOLDOVER: dpll is in holdover state - lost a valid lock or
- *   was forced by selecting DPLL_MODE_HOLDOVER mode
+ *   was forced by selecting DPLL_MODE_HOLDOVER mode (latter possible only when
+ *   dpll lock-state was already DPLL_LOCK_STATUS_LOCKED, if it was not, the
+ *   dpll's lock-status will remain DPLL_LOCK_STATUS_UNLOCKED even if user
+ *   requests DPLL_MODE_HOLDOVER)
  */
 enum dpll_lock_status {
 	DPLL_LOCK_STATUS_UNLOCKED = 1,

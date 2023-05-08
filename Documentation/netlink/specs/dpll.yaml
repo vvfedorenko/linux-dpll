@@ -25,7 +25,7 @@ definitions:
         doc: dpll forced into holdover mode
       -
         name: freerun
-        doc: dpll driven on system clk, no holdover available
+        doc: dpll driven on system clk
       -
         name: nco
         doc: dpll driven by Numerically Controlled Oscillator
@@ -52,8 +52,12 @@ definitions:
       -
         name: holdover
         doc: |
-          dpll is in holdover state - lost a valid lock or was forced by
-          selecting DPLL_MODE_HOLDOVER mode
+          dpll is in holdover state - lost a valid lock or was forced
+          by selecting DPLL_MODE_HOLDOVER mode (latter possible only
+          when dpll lock-state was already DPLL_LOCK_STATUS_LOCKED,
+          if dpll lock-state was not DPLL_LOCK_STATUS_LOCKED, the
+          dpll's lock-state shall remain DPLL_LOCK_STATUS_UNLOCKED
+          even if DPLL_MODE_HOLDOVER was requested)
     render-max: true
   -
     type: const
@@ -63,7 +67,7 @@ definitions:
       temperature divider allowing userspace to calculate the
       temperature as float with single digit precision.
       Value of (DPLL_A_TEMP / DPLL_TEMP_DIVIDER) is integer part of
-      tempearture value.
+      temperature value.
       Value of (DPLL_A_TEMP % DPLL_TEMP_DIVIDER) is fractional part of
       temperature value.
   -
