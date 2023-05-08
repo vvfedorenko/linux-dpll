@@ -266,6 +266,12 @@ class TypeScalar(Type):
         elif 'enum' in self.attr:
             enum = self.family.consts[self.attr['enum']]
             cnt = len(enum['entries'])
+            i = cnt - 1
+            while i >= 0:
+                if 'value' in enum['entries'][i]:
+                    cnt = enum['entries'][i]['value'] + cnt - i
+                    break;
+                i = i - 1
             return f"NLA_POLICY_MAX({policy}, {cnt - 1})"
         return super()._attr_policy(policy)
 
