@@ -62,10 +62,10 @@ definitions:
   -
     type: const
     name: temp-divider
-    value: 10
+    value: 1000
     doc: |
       temperature divider allowing userspace to calculate the
-      temperature as float with single digit precision.
+      temperature as float with three digit decimal precision.
       Value of (DPLL_A_TEMP / DPLL_TEMP_DIVIDER) is integer part of
       temperature value.
       Value of (DPLL_A_TEMP % DPLL_TEMP_DIVIDER) is fractional part of
