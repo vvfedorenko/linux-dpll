@@ -148,8 +148,7 @@ enum dpll_event {
 };
 
 enum dplla {
-	DPLL_A_DEVICE = 1,
-	DPLL_A_ID,
+	DPLL_A_ID = 1,
 	DPLL_A_DEV_NAME,
 	DPLL_A_BUS_NAME,
 	DPLL_A_MODE,
@@ -172,6 +171,7 @@ enum dplla {
 	DPLL_A_PIN_PARENT_IDX,
 	DPLL_A_PIN_RCLK_DEVICE,
 	DPLL_A_PIN_DPLL_CAPS,
+	DPLL_A_DEVICE,
 
 	__DPLL_A_MAX,
 	DPLL_A_MAX = (__DPLL_A_MAX - 1)
