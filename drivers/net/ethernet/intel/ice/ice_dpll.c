@@ -410,13 +410,17 @@ static int
 ice_dpll_pin_enable(struct ice_hw *hw, struct ice_dpll_pin *pin,
 		    const enum ice_dpll_pin_type pin_type)
 {
-	u8 flags = pin->flags[0];
+	u8 flags = 0;
 	int ret;
 
 	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
-		flags |= ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN;
+		if (pin->flags[0] & ICE_AQC_GET_CGU_IN_CFG_FLG2_ESYNC_EN)
+			flags |= ICE_AQC_SET_CGU_IN_CFG_FLG2_ESYNC_EN;
+		flags |= ICE_AQC_SET_CGU_IN_CFG_FLG2_INPUT_EN;
 		ret = ice_aq_set_input_pin_cfg(hw, pin->idx, 0, flags, 0, 0);
 	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		if (pin->flags[0] & ICE_AQC_GET_CGU_OUT_CFG_ESYNC_EN)
+			flags |= ICE_AQC_SET_CGU_OUT_CFG_ESYNC_EN;
 		flags |= ICE_AQC_SET_CGU_OUT_CFG_OUT_EN;
 		ret = ice_aq_set_output_pin_cfg(hw, pin->idx, flags, 0, 0, 0);
 	}
@@ -425,8 +429,6 @@ ice_dpll_pin_enable(struct ice_hw *hw, struct ice_dpll_pin *pin,
 			"err:%d %s failed to enable %s pin:%u\n",
 			ret, ice_aq_str(hw->adminq.sq_last_status),
 			pin_type_name[pin_type], pin->idx);
-	else
-		pin->flags[0] = flags;
 
 	return ret;
 }
@@ -447,14 +449,16 @@ static int
 ice_dpll_pin_disable(struct ice_hw *hw, struct ice_dpll_pin *pin,
 		     enum ice_dpll_pin_type pin_type)
 {
-	u8 flags = pin->flags[0];
+	u8 flags = 0;
 	int ret;
 
 	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
-		flags &= ~(ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN);
+		if (pin->flags[0] & ICE_AQC_GET_CGU_IN_CFG_FLG2_ESYNC_EN)
+			flags |= ICE_AQC_SET_CGU_IN_CFG_FLG2_ESYNC_EN;
 		ret = ice_aq_set_input_pin_cfg(hw, pin->idx, 0, flags, 0, 0);
 	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
-		flags &= ~(ICE_AQC_SET_CGU_OUT_CFG_OUT_EN);
+		if (pin->flags[0] & ICE_AQC_GET_CGU_OUT_CFG_ESYNC_EN)
+			flags |= ICE_AQC_SET_CGU_OUT_CFG_ESYNC_EN;
 		ret = ice_aq_set_output_pin_cfg(hw, pin->idx, flags, 0, 0, 0);
 	}
 	if (ret)
@@ -462,8 +466,6 @@ ice_dpll_pin_disable(struct ice_hw *hw, struct ice_dpll_pin *pin,
 			"err:%d %s failed to disable %s pin:%u\n",
 			ret, ice_aq_str(hw->adminq.sq_last_status),
 			pin_type_name[pin_type], pin->idx);
-	else
-		pin->flags[0] = flags;
 
 	return ret;
 }
