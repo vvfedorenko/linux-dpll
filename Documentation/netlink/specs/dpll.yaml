@@ -287,7 +287,6 @@ attribute-sets:
       -
         name: id
         type: u32
-        value: 2
       -
         name: dev-name
         type: string
@@ -320,7 +319,6 @@ attribute-sets:
       -
         name: pin-prio
         type: u32
-        value: 19
       -
         name: pin-state
         type: u8
@@ -332,12 +330,10 @@ attribute-sets:
       -
         name: pin-state
         type: u8
-        value: 20
         enum: pin-state
       -
         name: pin-parent-idx
         type: u32
-        value: 22
       -
         name: pin-rclk-device
         type: string
@@ -348,7 +344,6 @@ attribute-sets:
       -
         name: pin-frequency-min
         type: u64
-        value: 17
       -
         name: pin-frequency-max
         type: u64
