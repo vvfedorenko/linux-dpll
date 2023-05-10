@@ -1121,10 +1121,8 @@ static int ice_dpll_rclk_state_on_pin_set(const struct dpll_pin *pin,
 	if (hw_idx == ICE_DPLL_PIN_IDX_INVALID)
 		goto unlock;
 
-	if ((enable && !!(p->flags[hw_idx] &
-			 ICE_AQC_GET_PHY_REC_CLK_OUT_OUT_EN)) ||
-	    (!enable && !(p->flags[hw_idx] &
-			  ICE_AQC_GET_PHY_REC_CLK_OUT_OUT_EN))) {
+	if ((enable && p->state[hw_idx] == DPLL_PIN_STATE_CONNECTED) ||
+	    (!enable && p->state[hw_idx] == DPLL_PIN_STATE_DISCONNECTED)) {
 		ret = -EINVAL;
 		goto unlock;
 	}
@@ -1184,11 +1182,7 @@ static int ice_dpll_rclk_state_on_pin_get(const struct dpll_pin *pin,
 	if (ret)
 		goto unlock;
 
-	if (!!(p->flags[hw_idx] &
-	    ICE_AQC_GET_PHY_REC_CLK_OUT_OUT_EN))
-		*state = DPLL_PIN_STATE_CONNECTED;
-	else
-		*state = DPLL_PIN_STATE_DISCONNECTED;
+	*state = p->state[hw_idx];
 	ret = 0;
 unlock:
 	ice_dpll_cb_unlock(pf);
