@@ -53,7 +53,7 @@ enum dpll_lock_status {
 	DPLL_LOCK_STATUS_MAX = (__DPLL_LOCK_STATUS_MAX - 1)
 };
 
-#define DPLL_TEMP_DIVIDER	10
+#define DPLL_TEMP_DIVIDER	1000
 
 /**
  * enum dpll_type - type of dpll, valid values for DPLL_A_TYPE attribute
