@@ -261,7 +261,7 @@ Values for ``DPLL_A_LOCK_STATUS`` attribute:
 Values for ``DPLL_A_MODE`` attribute:
 
   =================== ================================================
-  ``MODE_FORCED``     source pin is force-selected by setting pin
+  ``MODE_MANUAL``     source pin is manually selected by setting pin
                       state to ``DPLL_PIN_STATE_CONNECTED`` on a dpll
   ``MODE_AUTOMATIC``  source pin is auto selected according to
                       configured pin priorities and source signal
