@@ -281,49 +281,6 @@ attribute-sets:
         multi-attr: true
         nested-attributes: device
   -
-    name: device
-    subset-of: dpll
-    attributes:
-      -
-        name: id
-        type: u32
-      -
-        name: dev-name
-        type: string
-      -
-        name: bus-name
-        type: string
-      -
-        name: mode
-        type: u8
-        enum: mode
-      -
-        name: mode-supported
-        type: u8
-        enum: mode
-        multi-attr: true
-      -
-        name: lock-status
-        type: u8
-        enum: lock-status
-      -
-        name: temp
-        type: s32
-      -
-        name: clock-id
-        type: u64
-      -
-        name: type
-        type: u8
-        enum: type
-      -
-        name: pin-prio
-        type: u32
-      -
-        name: pin-state
-        type: u8
-        enum: pin-state
-  -
     name: pin-parent
     subset-of: dpll
     attributes:
@@ -347,6 +304,26 @@ attribute-sets:
       -
         name: pin-frequency-max
         type: u64
+  -
+    name: device
+    subset-of: dpll
+    attributes:
+      -
+        name: id
+        type: u32
+      -
+        name: dev-name
+        type: string
+      -
+        name: bus-name
+        type: string
+      -
+        name: pin-prio
+        type: u32
+      -
+        name: pin-state
+        type: u8
+        enum: pin-state
 
 operations:
   list:
@@ -366,16 +343,22 @@ operations:
             - id
             - bus-name
             - dev-name
-        reply:
+        reply: &dev-attrs
           attributes:
-            - device
+            - id
+            - dev-name
+            - bus-name
+            - mode
+            - mode-supported
+            - lock-status
+            - temp
+            - clock-id
+            - type
 
       dump:
         pre: dpll-pre-dumpit
         post: dpll-post-dumpit
-        reply:
-          attributes:
-            - device
+        reply: *dev-attrs
 
     -
       name: device-set
