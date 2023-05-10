@@ -287,7 +287,6 @@ attribute-sets:
       -
         name: pin-state
         type: u8
-        enum: pin-state
       -
         name: pin-parent-idx
         type: u32
@@ -323,7 +322,6 @@ attribute-sets:
       -
         name: pin-state
         type: u8
-        enum: pin-state
 
 operations:
   list:
