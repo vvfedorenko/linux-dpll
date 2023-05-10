@@ -194,14 +194,9 @@ attribute-sets:
     enum-name: dplla
     attributes:
       -
-        name: device
-        type: nest
-        value: 1
-        multi-attr: true
-        nested-attributes: device
-      -
         name: id
         type: u32
+        value: 1
       -
         name: dev-name
         type: string
@@ -280,6 +275,11 @@ attribute-sets:
       -
         name: pin-dpll-caps
         type: u32
+      -
+        name: device
+        type: nest
+        multi-attr: true
+        nested-attributes: device
   -
     name: device
     subset-of: dpll
