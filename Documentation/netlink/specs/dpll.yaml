@@ -322,6 +322,9 @@ attribute-sets:
       -
         name: pin-state
         type: u8
+      -
+        name: pin-direction
+        type: u8
 
 operations:
   list:
@@ -398,7 +401,6 @@ operations:
             - pin-idx
             - pin-label
             - pin-type
-            - pin-direction
             - pin-frequency
             - pin-frequency-supported
             - pin-parent
