@@ -253,6 +253,9 @@ dpll_msg_add_pin_dplls(struct sk_buff *msg, struct dpll_pin *pin,
 		ret = dpll_msg_add_pin_prio(msg, pin, ref, extack);
 		if (ret && ret != -EOPNOTSUPP)
 			goto nest_cancel;
+		ret = dpll_msg_add_pin_direction(msg, pin, ref, extack);
+		if (ret)
+			goto nest_cancel;
 		nla_nest_end(msg, attr);
 	}
 
@@ -278,9 +281,6 @@ dpll_cmd_pin_fill_details(struct sk_buff *msg, struct dpll_pin *pin,
 		return -EMSGSIZE;
 	if (nla_put_u32(msg, DPLL_A_PIN_DPLL_CAPS, pin->prop.capabilities))
 		return -EMSGSIZE;
-	ret = dpll_msg_add_pin_direction(msg, pin, ref, extack);
-	if (ret)
-		return ret;
 	ret = dpll_msg_add_pin_freq(msg, pin, ref, extack, true);
 	if (ret && ret != -EOPNOTSUPP)
 		return ret;
