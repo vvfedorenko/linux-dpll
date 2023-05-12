@@ -62,9 +62,6 @@ ice_find_pin_idx(struct ice_pf *pf, const struct dpll_pin *pin,
 	struct ice_dpll_pin *pins;
 	int pin_num, i;
 
-	if (!pin || !pf)
-		return ICE_DPLL_PIN_IDX_INVALID;
-
 	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
 		pins = pf->dplls.inputs;
 		pin_num = pf->dplls.num_inputs;
