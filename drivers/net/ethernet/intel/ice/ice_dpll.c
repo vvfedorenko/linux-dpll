@@ -202,7 +202,7 @@ ice_dpll_pin_freq_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
 		break;
 	}
 	if (ret) {
-		dev_dbg(ice_pf_to_dev(pf),
+		dev_err(ice_pf_to_dev(pf),
 			"err:%d %s failed to set pin freq:%u on pin:%u\n",
 			ret, ice_aq_str(pf->hw.adminq.sq_last_status),
 			freq, pin->idx);
@@ -435,7 +435,7 @@ ice_dpll_pin_enable(struct ice_hw *hw, struct ice_dpll_pin *pin,
 		break;
 	}
 	if (ret)
-		dev_dbg(ice_pf_to_dev((struct ice_pf *)(hw->back)),
+		dev_err(ice_pf_to_dev((struct ice_pf *)(hw->back)),
 			"err:%d %s failed to enable %s pin:%u\n",
 			ret, ice_aq_str(hw->adminq.sq_last_status),
 			pin_type_name[pin_type], pin->idx);
@@ -477,7 +477,7 @@ ice_dpll_pin_disable(struct ice_hw *hw, struct ice_dpll_pin *pin,
 		break;
 	}
 	if (ret)
-		dev_dbg(ice_pf_to_dev((struct ice_pf *)(hw->back)),
+		dev_err(ice_pf_to_dev((struct ice_pf *)(hw->back)),
 			"err:%d %s failed to disable %s pin:%u\n",
 			ret, ice_aq_str(hw->adminq.sq_last_status),
 			pin_type_name[pin_type], pin->idx);
@@ -609,7 +609,7 @@ ice_dpll_hw_source_prio_set(struct ice_pf *pf, struct ice_dpll *dpll,
 	ret = ice_aq_set_cgu_ref_prio(&pf->hw, dpll->dpll_idx, pin->idx,
 				      (u8)prio);
 	if (ret)
-		dev_dbg(ice_pf_to_dev(pf),
+		dev_err(ice_pf_to_dev(pf),
 			"err:%d %s failed to set pin prio:%u on pin:%u\n",
 			ret, ice_aq_str(pf->hw.adminq.sq_last_status),
 			prio, pin->idx);
