@@ -62,13 +62,16 @@ ice_find_pin_idx(struct ice_pf *pf, const struct dpll_pin *pin,
 	struct ice_dpll_pin *pins;
 	int pin_num, i;
 
-	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+	switch (pin_type) {
+	case ICE_DPLL_PIN_TYPE_SOURCE:
 		pins = pf->dplls.inputs;
 		pin_num = pf->dplls.num_inputs;
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		break;
+	case ICE_DPLL_PIN_TYPE_OUTPUT:
 		pins = pf->dplls.outputs;
 		pin_num = pf->dplls.num_outputs;
-	} else {
+		break;
+	default:
 		return ICE_DPLL_PIN_IDX_INVALID;
 	}
 
@@ -137,22 +140,24 @@ static struct ice_dpll_pin
 
 {
 	struct ice_dpll_pin *pins;
-	int pin_num, i;
+	int pin_num = 0, i;
 
 	if (!pin || !pf)
 		return NULL;
 
-	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+	switch (pin_type) {
+	case ICE_DPLL_PIN_TYPE_SOURCE:
 		pins = pf->dplls.inputs;
 		pin_num = pf->dplls.num_inputs;
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		break;
+	case ICE_DPLL_PIN_TYPE_OUTPUT:
 		pins = pf->dplls.outputs;
 		pin_num = pf->dplls.num_outputs;
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_RCLK_SOURCE) {
-		if (pin == pf->dplls.rclk.pin)
-			return &pf->dplls.rclk;
-	} else {
-		return NULL;
+		break;
+	case ICE_DPLL_PIN_TYPE_RCLK_SOURCE:
+		return &pf->dplls.rclk;
+	default:
+		break;
 	}
 
 	for (i = 0; i < pin_num; i++)
@@ -179,21 +184,23 @@ static int
 ice_dpll_pin_freq_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
 		      const enum ice_dpll_pin_type pin_type, const u32 freq)
 {
+	int ret = -EINVAL;
 	u8 flags;
-	int ret;
 
-	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+	switch (pin_type) {
+	case ICE_DPLL_PIN_TYPE_SOURCE:
 		flags = ICE_AQC_SET_CGU_IN_CFG_FLG1_UPDATE_FREQ;
 		ret = ice_aq_set_input_pin_cfg(&pf->hw, pin->idx, flags,
 					       pin->flags[0], freq, 0);
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
-		flags = pin->flags[0] | ICE_AQC_SET_CGU_OUT_CFG_UPDATE_FREQ;
+		break;
+	case ICE_DPLL_PIN_TYPE_OUTPUT:
+		flags = ICE_AQC_SET_CGU_OUT_CFG_UPDATE_FREQ;
 		ret = ice_aq_set_output_pin_cfg(&pf->hw, pin->idx, flags,
 						0, freq, 0);
-	} else {
-		ret = -EINVAL;
+		break;
+	default:
+		break;
 	}
-
 	if (ret) {
 		dev_dbg(ice_pf_to_dev(pf),
 			"err:%d %s failed to set pin freq:%u on pin:%u\n",
@@ -408,19 +415,24 @@ static int
 ice_dpll_pin_enable(struct ice_hw *hw, struct ice_dpll_pin *pin,
 		    const enum ice_dpll_pin_type pin_type)
 {
+	int ret = -EINVAL;
 	u8 flags = 0;
-	int ret;
 
-	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+	switch (pin_type) {
+	case ICE_DPLL_PIN_TYPE_SOURCE:
 		if (pin->flags[0] & ICE_AQC_GET_CGU_IN_CFG_FLG2_ESYNC_EN)
 			flags |= ICE_AQC_SET_CGU_IN_CFG_FLG2_ESYNC_EN;
 		flags |= ICE_AQC_SET_CGU_IN_CFG_FLG2_INPUT_EN;
 		ret = ice_aq_set_input_pin_cfg(hw, pin->idx, 0, flags, 0, 0);
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		break;
+	case ICE_DPLL_PIN_TYPE_OUTPUT:
 		if (pin->flags[0] & ICE_AQC_GET_CGU_OUT_CFG_ESYNC_EN)
 			flags |= ICE_AQC_SET_CGU_OUT_CFG_ESYNC_EN;
 		flags |= ICE_AQC_SET_CGU_OUT_CFG_OUT_EN;
 		ret = ice_aq_set_output_pin_cfg(hw, pin->idx, flags, 0, 0, 0);
+		break;
+	default:
+		break;
 	}
 	if (ret)
 		dev_dbg(ice_pf_to_dev((struct ice_pf *)(hw->back)),
@@ -447,17 +459,22 @@ static int
 ice_dpll_pin_disable(struct ice_hw *hw, struct ice_dpll_pin *pin,
 		     enum ice_dpll_pin_type pin_type)
 {
+	int ret = -EINVAL;
 	u8 flags = 0;
-	int ret;
 
-	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+	switch (pin_type) {
+	case ICE_DPLL_PIN_TYPE_SOURCE:
 		if (pin->flags[0] & ICE_AQC_GET_CGU_IN_CFG_FLG2_ESYNC_EN)
 			flags |= ICE_AQC_SET_CGU_IN_CFG_FLG2_ESYNC_EN;
 		ret = ice_aq_set_input_pin_cfg(hw, pin->idx, 0, flags, 0, 0);
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		break;
+	case ICE_DPLL_PIN_TYPE_OUTPUT:
 		if (pin->flags[0] & ICE_AQC_GET_CGU_OUT_CFG_ESYNC_EN)
 			flags |= ICE_AQC_SET_CGU_OUT_CFG_ESYNC_EN;
 		ret = ice_aq_set_output_pin_cfg(hw, pin->idx, flags, 0, 0, 0);
+		break;
+	default:
+		break;
 	}
 	if (ret)
 		dev_dbg(ice_pf_to_dev((struct ice_pf *)(hw->back)),
@@ -486,9 +503,10 @@ int
 ice_dpll_pin_state_update(struct ice_pf *pf, struct ice_dpll_pin *pin,
 			  const enum ice_dpll_pin_type pin_type)
 {
-	int ret;
+	int ret = -EINVAL;
 
-	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+	switch (pin_type) {
+	case ICE_DPLL_PIN_TYPE_SOURCE:
 		ret = ice_aq_get_input_pin_cfg(&pf->hw, pin->idx, NULL, NULL,
 					       NULL, &pin->flags[0],
 					       &pin->freq, NULL);
@@ -514,7 +532,8 @@ ice_dpll_pin_state_update(struct ice_pf *pf, struct ice_dpll_pin *pin,
 			pin->state[pf->dplls.pps.dpll_idx] =
 				DPLL_PIN_STATE_DISCONNECTED;
 		}
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		break;
+	case ICE_DPLL_PIN_TYPE_OUTPUT:
 		ret = ice_aq_get_output_pin_cfg(&pf->hw, pin->idx,
 						&pin->flags[0], NULL,
 						&pin->freq, NULL);
@@ -522,7 +541,8 @@ ice_dpll_pin_state_update(struct ice_pf *pf, struct ice_dpll_pin *pin,
 			pin->state[0] = DPLL_PIN_STATE_CONNECTED;
 		else
 			pin->state[0] = DPLL_PIN_STATE_DISCONNECTED;
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_RCLK_SOURCE) {
+		break;
+	case ICE_DPLL_PIN_TYPE_RCLK_SOURCE:
 		u8 parent, port_num = ICE_AQC_SET_PHY_REC_CLK_OUT_CURR_PORT;
 
 		for (parent = 0; parent < pf->dplls.rclk.num_parents;
@@ -540,6 +560,9 @@ ice_dpll_pin_state_update(struct ice_pf *pf, struct ice_dpll_pin *pin,
 				pin->state[parent] =
 					DPLL_PIN_STATE_DISCONNECTED;
 		}
+		break;
+	default:
+		break;
 	}
 
 	return ret;
@@ -740,16 +763,21 @@ ice_dpll_pin_state_set(const struct dpll_device *dpll,
 	p = ice_find_pin(pf, pin, pin_type);
 	if (!p)
 		goto unlock;
-	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+	switch (pin_type) {
+	case ICE_DPLL_PIN_TYPE_SOURCE:
 		if (state == DPLL_PIN_STATE_SELECTABLE)
 			ret = ice_dpll_pin_enable(&pf->hw, p, pin_type);
 		else if (state == DPLL_PIN_STATE_DISCONNECTED)
 			ret = ice_dpll_pin_disable(&pf->hw, p, pin_type);
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		break;
+	case ICE_DPLL_PIN_TYPE_OUTPUT:
 		if (state == DPLL_PIN_STATE_CONNECTED)
 			ret = ice_dpll_pin_enable(&pf->hw, p, pin_type);
 		else if (state == DPLL_PIN_STATE_DISCONNECTED)
 			ret = ice_dpll_pin_disable(&pf->hw, p, pin_type);
+		break;
+	default:
+		break;
 	}
 	if (!ret)
 		ret = ice_dpll_pin_state_update(pf, p, pin_type);
@@ -1710,16 +1738,19 @@ ice_dpll_init_direct_pins(struct ice_pf *pf, enum ice_dpll_pin_type pin_type)
 	u8 freq_supp_num;
 	bool input;
 
-	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE) {
+	switch (pin_type) {
+	case ICE_DPLL_PIN_TYPE_SOURCE:
 		pins = pf->dplls.inputs;
 		num_pins = pf->dplls.num_inputs;
 		input = true;
-	} else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT) {
+		break;
+	case ICE_DPLL_PIN_TYPE_OUTPUT:
 		pins = pf->dplls.outputs;
 		num_pins = pf->dplls.num_outputs;
 		input = false;
-	} else {
-		return -EINVAL;
+		break;
+	default:
+		return ret;
 	}
 
 	for (i = 0; i < num_pins; i++) {
@@ -1788,14 +1819,16 @@ static int ice_dpll_init_rclk_pin(struct ice_pf *pf)
 static int ice_dpll_init_pins(struct ice_pf *pf,
 			      const enum ice_dpll_pin_type pin_type)
 {
-	if (pin_type == ICE_DPLL_PIN_TYPE_SOURCE)
+	switch (pin_type) {
+	case ICE_DPLL_PIN_TYPE_SOURCE:
 		return ice_dpll_init_direct_pins(pf, pin_type);
-	else if (pin_type == ICE_DPLL_PIN_TYPE_OUTPUT)
+	case ICE_DPLL_PIN_TYPE_OUTPUT:
 		return ice_dpll_init_direct_pins(pf, pin_type);
-	else if (pin_type == ICE_DPLL_PIN_TYPE_RCLK_SOURCE)
+	case ICE_DPLL_PIN_TYPE_RCLK_SOURCE:
 		return ice_dpll_init_rclk_pin(pf);
-	else
+	default:
 		return -EINVAL;
+	}
 }
 
 /**
