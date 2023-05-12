@@ -5,7 +5,6 @@
 #include "ice_lib.h"
 #include "ice_trace.h"
 #include <linux/dpll.h>
-#include <uapi/linux/dpll.h>
 
 #define ICE_CGU_STATE_ACQ_ERR_THRESHOLD	50
 #define ICE_DPLL_LOCK_TRIES		1000
