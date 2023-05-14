@@ -121,53 +121,6 @@ static void ice_dpll_cb_unlock(struct ice_pf *pf)
 }
 
 /**
- * ice_find_pin - find ice_dpll_pin on a pf
- * @pf: private board structure
- * @pin: kernel's dpll_pin pointer to be searched for
- * @pin_type: type of pins to be searched for
- *
- * Find and return internal ice pin info pointer holding data of given dpll
- * subsystem pin pointer.
- *
- * Return:
- * * valid 'struct ice_dpll_pin'-type pointer - if given 'pin' pointer was
- * found in pf internal pin data.
- * * NULL - if pin was not found.
- */
-static struct ice_dpll_pin
-*ice_find_pin(struct ice_pf *pf, const struct dpll_pin *pin,
-	      enum ice_dpll_pin_type pin_type)
-
-{
-	struct ice_dpll_pin *pins;
-	int pin_num = 0, i;
-
-	if (!pin || !pf)
-		return NULL;
-
-	switch (pin_type) {
-	case ICE_DPLL_PIN_TYPE_SOURCE:
-		pins = pf->dplls.inputs;
-		pin_num = pf->dplls.num_inputs;
-		break;
-	case ICE_DPLL_PIN_TYPE_OUTPUT:
-		pins = pf->dplls.outputs;
-		pin_num = pf->dplls.num_outputs;
-		break;
-	case ICE_DPLL_PIN_TYPE_RCLK_SOURCE:
-		return &pf->dplls.rclk;
-	default:
-		break;
-	}
-
-	for (i = 0; i < pin_num; i++)
-		if (pin == pins[i].pin)
-			return &pins[i];
-
-	return NULL;
-}
-
-/**
  * ice_dpll_pin_freq_set - set pin's frequency
  * @pf: private board structure
  * @pin: pointer to a pin
@@ -206,11 +159,12 @@ ice_dpll_pin_freq_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
 			"err:%d %s failed to set pin freq:%u on pin:%u\n",
 			ret, ice_aq_str(pf->hw.adminq.sq_last_status),
 			freq, pin->idx);
+		return ret;
 	} else {
 		pin->freq = freq;
 	}
 
-	return ret;
+	return 0;
 }
 
 /**
@@ -235,8 +189,8 @@ ice_dpll_frequency_set(const struct dpll_pin *pin, void *pin_priv,
 		       struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
-	struct ice_pf *pf = pin_priv;
-	struct ice_dpll_pin *p;
+	struct ice_dpll_pin *p = pin_priv;
+	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -244,17 +198,10 @@ ice_dpll_frequency_set(const struct dpll_pin *pin, void *pin_priv,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	p = ice_find_pin(pf, pin, pin_type);
-	if (!p) {
-		NL_SET_ERR_MSG(extack, "pin not found");
-		goto unlock;
-	}
-
 	ret = ice_dpll_pin_freq_set(pf, p, pin_type, frequency);
+	ice_dpll_cb_unlock(pf);
 	if (ret)
 		NL_SET_ERR_MSG_FMT(extack, "freq not set, err:%d", ret);
-unlock:
-	ice_dpll_cb_unlock(pf);
 
 	return ret;
 }
@@ -329,8 +276,8 @@ ice_dpll_frequency_get(const struct dpll_pin *pin, void *pin_priv,
 		       struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
-	struct ice_pf *pf = pin_priv;
-	struct ice_dpll_pin *p;
+	struct ice_dpll_pin *p = pin_priv;
+	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -338,17 +285,10 @@ ice_dpll_frequency_get(const struct dpll_pin *pin, void *pin_priv,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	p = ice_find_pin(pf, pin, pin_type);
-	if (!p) {
-		NL_SET_ERR_MSG(extack, "pin not found");
-		goto unlock;
-	}
-	*frequency = (u64)(p->freq);
-	ret = 0;
-unlock:
+	*frequency = p->freq;
 	ice_dpll_cb_unlock(pf);
 
-	return ret;
+	return 0;
 }
 
 /**
@@ -634,23 +574,21 @@ static int ice_dpll_lock_status_get(const struct dpll_device *dpll, void *priv,
 				    enum dpll_lock_status *status,
 				    struct netlink_ext_ack *extack)
 {
-	struct ice_pf *pf = priv;
-	struct ice_dpll *d;
-	int ret;
+	struct ice_dpll *d = priv;
+	struct ice_pf *pf = d->pf;
+	int ret = -EINVAL;
 
 	if (!pf)
-		return -EINVAL;
+		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	d = ice_find_dpll(pf, dpll);
-	if (!d)
-		return -EFAULT;
-	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pf:%p\n", __func__, dpll, pf);
 	*status = ice_dpll_status[d->dpll_state];
 	ice_dpll_cb_unlock(pf);
+	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pf:%p, ret:%d\n", __func__,
+		dpll, pf, ret);
 
-	return 0;
+	return ret;
 }
 
 /**
@@ -670,19 +608,11 @@ static int ice_dpll_mode_get(const struct dpll_device *dpll, void *priv,
 			     enum dpll_mode *mode,
 			     struct netlink_ext_ack *extack)
 {
-	struct ice_pf *pf = priv;
-	struct ice_dpll *d;
-	int ret;
+	struct ice_dpll *d = priv;
+	struct ice_pf *pf = d->pf;
 
 	if (!pf)
 		return -EINVAL;
-	ret = ice_dpll_cb_lock(pf);
-	if (ret)
-		return ret;
-	d = ice_find_dpll(pf, dpll);
-	ice_dpll_cb_unlock(pf);
-	if (!d)
-		return -EFAULT;
 	*mode = DPLL_MODE_AUTOMATIC;
 
 	return 0;
@@ -706,22 +636,10 @@ static bool ice_dpll_mode_supported(const struct dpll_device *dpll, void *priv,
 				    const enum dpll_mode mode,
 				    struct netlink_ext_ack *extack)
 {
-	struct ice_pf *pf = priv;
-	struct ice_dpll *d;
-	int ret;
+	struct ice_dpll *d = priv;
+	struct ice_pf *pf = d->pf;
 
 	if (!pf)
-		return false;
-	ret = ice_dpll_cb_lock(pf);
-	if (ret) {
-		NL_SET_ERR_MSG_FMT(extack,
-				   "verifing dpll supported mode=%d failed, err=%d",
-				   mode, ret);
-		return false;
-	}
-	d = ice_find_dpll(pf, dpll);
-	ice_dpll_cb_unlock(pf);
-	if (!d)
 		return false;
 	if (mode == DPLL_MODE_AUTOMATIC)
 		return true;
@@ -751,8 +669,8 @@ ice_dpll_pin_state_set(const struct dpll_device *dpll,
 		       struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
-	struct ice_pf *pf = pin_priv;
-	struct ice_dpll_pin *p;
+	struct ice_dpll_pin *p = pin_priv;
+	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -760,9 +678,6 @@ ice_dpll_pin_state_set(const struct dpll_device *dpll,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	p = ice_find_pin(pf, pin, pin_type);
-	if (!p)
-		goto unlock;
 	switch (pin_type) {
 	case ICE_DPLL_PIN_TYPE_SOURCE:
 		if (state == DPLL_PIN_STATE_SELECTABLE)
@@ -781,7 +696,6 @@ ice_dpll_pin_state_set(const struct dpll_device *dpll,
 	}
 	if (!ret)
 		ret = ice_dpll_pin_state_update(pf, p, pin_type);
-unlock:
 	ice_dpll_cb_unlock(pf);
 	dev_dbg(ice_pf_to_dev(pf),
 		"%s: dpll:%p, pin:%p, p:%p pf:%p state: %d ret:%d\n",
@@ -864,22 +778,16 @@ ice_dpll_pin_state_get(const struct dpll_device *dpll,
 		       struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
-	struct ice_pf *pf = pin_priv;
-	struct ice_dpll_pin *p;
+	struct ice_dpll_pin *p = pin_priv;
+	struct ice_pf *pf = p->pf;
 	struct ice_dpll *d;
 	int ret = -EINVAL;
 
 	if (!pf)
 		return ret;
-
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	p = ice_find_pin(pf, pin, pin_type);
-	if (!p) {
-		NL_SET_ERR_MSG(extack, "pin not found");
-		goto unlock;
-	}
 	d = ice_find_dpll(pf, dpll);
 	if (!d)
 		goto unlock;
@@ -972,9 +880,9 @@ static int ice_dpll_source_prio_get(const struct dpll_pin *pin, void *pin_priv,
 				    void *dpll_priv, u32 *prio,
 				    struct netlink_ext_ack *extack)
 {
-	struct ice_pf *pf = pin_priv;
-	struct ice_dpll *d = NULL;
-	struct ice_dpll_pin *p;
+	struct ice_dpll_pin *p = pin_priv;
+	struct ice_dpll *d = dpll_priv;
+	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -983,24 +891,12 @@ static int ice_dpll_source_prio_get(const struct dpll_pin *pin, void *pin_priv,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	p = ice_find_pin(pf, pin, ICE_DPLL_PIN_TYPE_SOURCE);
-	if (!p) {
-		NL_SET_ERR_MSG(extack, "pin not found");
-		goto unlock;
-	}
-	d = ice_find_dpll(pf, dpll);
-	if (!d) {
-		NL_SET_ERR_MSG(extack, "dpll not found");
-		goto unlock;
-	}
 	*prio = d->input_prio[p->idx];
-	ret = 0;
-unlock:
 	ice_dpll_cb_unlock(pf);
 	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pin:%p, pf:%p ret:%d\n",
 		__func__, dpll, pin, pf, ret);
 
-	return ret;
+	return 0;
 }
 
 /**
@@ -1023,9 +919,9 @@ static int ice_dpll_source_prio_set(const struct dpll_pin *pin, void *pin_priv,
 				    void *dpll_priv, u32 prio,
 				    struct netlink_ext_ack *extack)
 {
-	struct ice_pf *pf = pin_priv;
-	struct ice_dpll *d = NULL;
-	struct ice_dpll_pin *p;
+	struct ice_dpll_pin *p = pin_priv;
+	struct ice_dpll *d = dpll_priv;
+	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -1039,20 +935,9 @@ static int ice_dpll_source_prio_set(const struct dpll_pin *pin, void *pin_priv,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	p = ice_find_pin(pf, pin, ICE_DPLL_PIN_TYPE_SOURCE);
-	if (!p) {
-		NL_SET_ERR_MSG(extack, "pin not found");
-		goto unlock;
-	}
-	d = ice_find_dpll(pf, dpll);
-	if (!d) {
-		NL_SET_ERR_MSG(extack, "dpll not found");
-		goto unlock;
-	}
 	ret = ice_dpll_hw_source_prio_set(pf, d, p, prio);
 	if (ret)
 		NL_SET_ERR_MSG_FMT(extack, "unable to set prio: %d", ret);
-unlock:
 	ice_dpll_cb_unlock(pf);
 	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pin:%p, pf:%p ret:%d\n",
 		__func__, dpll, pin, pf, ret);
@@ -1087,7 +972,7 @@ static int ice_dpll_source_direction(const struct dpll_pin *pin,
 }
 
 /**
- * ice_dpll_source_direction - callback for get output pin direction
+ * ice_dpll_output_direction - callback for get output pin direction
  * @pin: pointer to a pin
  * @pin_priv: private data pointer passed on pin registration
  * @dpll: registered dpll pointer
@@ -1135,8 +1020,8 @@ static int ice_dpll_rclk_state_on_pin_set(const struct dpll_pin *pin,
 {
 	bool enable = state == DPLL_PIN_STATE_CONNECTED ? true : false;
 	u32 parent_idx, hw_idx = ICE_DPLL_PIN_IDX_INVALID, i;
-	struct ice_pf *pf = pin_priv;
-	struct ice_dpll_pin *p;
+	struct ice_dpll_pin *p = pin_priv;
+	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -1144,11 +1029,6 @@ static int ice_dpll_rclk_state_on_pin_set(const struct dpll_pin *pin,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	p = ice_find_pin(pf, pin, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
-	if (!p) {
-		ret = -EFAULT;
-		goto unlock;
-	}
 	parent_idx = ice_find_pin_idx(pf, parent_pin,
 				      ICE_DPLL_PIN_TYPE_SOURCE);
 	if (parent_idx == ICE_DPLL_PIN_IDX_INVALID) {
@@ -1196,9 +1076,9 @@ static int ice_dpll_rclk_state_on_pin_get(const struct dpll_pin *pin,
 					  enum dpll_pin_state *state,
 					  struct netlink_ext_ack *extack)
 {
-	struct ice_pf *pf = pin_priv;
 	u32 parent_idx, hw_idx = ICE_DPLL_PIN_IDX_INVALID, i;
-	struct ice_dpll_pin *p;
+	struct ice_dpll_pin *p = pin_priv;
+	struct ice_pf *pf = p->pf;
 	int ret = -EFAULT;
 
 	if (!pf)
@@ -1206,9 +1086,6 @@ static int ice_dpll_rclk_state_on_pin_get(const struct dpll_pin *pin,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	p = ice_find_pin(pf, pin, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
-	if (!p)
-		goto unlock;
 	parent_idx = ice_find_pin_idx(pf, parent_pin,
 				      ICE_DPLL_PIN_TYPE_SOURCE);
 	if (parent_idx == ICE_DPLL_PIN_IDX_INVALID)
@@ -1299,7 +1176,7 @@ ice_dpll_release_rclk_pin(struct ice_pf *pf)
 		if (!parent)
 			continue;
 		dpll_pin_on_pin_unregister(parent, rclk->pin,
-					   &ice_dpll_rclk_ops, pf);
+					   &ice_dpll_rclk_ops, rclk);
 	}
 	dpll_pin_put(rclk->pin);
 	rclk->pin = NULL;
@@ -1330,9 +1207,9 @@ ice_dpll_release_pins(struct ice_pf *pf, struct dpll_device *dpll_eec,
 
 		if (p && !IS_ERR_OR_NULL(p->pin)) {
 			if (cgu && dpll_eec)
-				dpll_pin_unregister(dpll_eec, p->pin, ops, pf);
+				dpll_pin_unregister(dpll_eec, p->pin, ops, p);
 			if (cgu && dpll_pps)
-				dpll_pin_unregister(dpll_pps, p->pin, ops, pf);
+				dpll_pin_unregister(dpll_pps, p->pin, ops, p);
 			dpll_pin_put(p->pin);
 			p->pin = NULL;
 		}
@@ -1367,15 +1244,16 @@ static int ice_dpll_register_pins(struct ice_pf *pf, bool cgu)
 			pins[i].pin = NULL;
 			return -ENOMEM;
 		}
+		pins[i].pf = pf;
 		if (cgu) {
 			ret = dpll_pin_register(pf->dplls.eec.dpll,
 						pins[i].pin,
-						ops, pf, NULL);
+						ops, &pins[i], NULL);
 			if (ret)
 				return ret;
 			ret = dpll_pin_register(pf->dplls.pps.dpll,
 						pins[i].pin,
-						ops, pf, NULL);
+						ops, &pins[i], NULL);
 			if (ret)
 				return ret;
 		}
@@ -1391,12 +1269,13 @@ static int ice_dpll_register_pins(struct ice_pf *pf, bool cgu)
 				pins[i].pin = NULL;
 				return -ENOMEM;
 			}
+			pins[i].pf = pf;
 			ret = dpll_pin_register(pf->dplls.eec.dpll, pins[i].pin,
-						ops, pf, NULL);
+						ops, &pins[i], NULL);
 			if (ret)
 				return ret;
 			ret = dpll_pin_register(pf->dplls.pps.dpll, pins[i].pin,
-						ops, pf, NULL);
+						ops, &pins[i], NULL);
 			if (ret)
 				return ret;
 		}
@@ -1409,12 +1288,13 @@ static int ice_dpll_register_pins(struct ice_pf *pf, bool cgu)
 		return -ENOMEM;
 	}
 	ops = &ice_dpll_rclk_ops;
+	pf->dplls.rclk.pf = pf;
 	for (i = 0; i < pf->dplls.rclk.num_parents; i++) {
 		struct dpll_pin *parent =
 			pf->dplls.inputs[pf->dplls.rclk.parent_idx[i]].pin;
 
 		ret = dpll_pin_on_pin_register(parent, pf->dplls.rclk.pin,
-					       ops, pf, dev);
+					       ops, &pf->dplls.rclk, dev);
 		if (ret)
 			return ret;
 	}
@@ -1450,30 +1330,31 @@ static void ice_generate_clock_id(struct ice_pf *pf, u64 *clock_id)
 static int ice_dpll_init_dplls(struct ice_pf *pf, bool cgu)
 {
 	struct device *dev = ice_pf_to_dev(pf);
+	struct ice_dpll *de = &pf->dplls.eec;
+	struct ice_dpll *dp = &pf->dplls.pps;
 	int ret = -ENOMEM;
 	u64 clock_id;
 
 	ice_generate_clock_id(pf, &clock_id);
-	pf->dplls.eec.dpll = dpll_device_get(clock_id, pf->dplls.eec.dpll_idx,
-					     THIS_MODULE);
-	if (!pf->dplls.eec.dpll) {
+	de->dpll = dpll_device_get(clock_id, de->dpll_idx, THIS_MODULE);
+	if (!de->dpll) {
 		dev_err(ice_pf_to_dev(pf), "dpll_device_get failed (eec)\n");
 		return ret;
 	}
-	pf->dplls.pps.dpll = dpll_device_get(clock_id, pf->dplls.pps.dpll_idx,
-					     THIS_MODULE);
-	if (!pf->dplls.pps.dpll) {
+	de->pf = pf;
+	dp->dpll = dpll_device_get(clock_id, dp->dpll_idx, THIS_MODULE);
+	if (!dp->dpll) {
 		dev_err(ice_pf_to_dev(pf), "dpll_device_get failed (pps)\n");
 		goto put_eec;
 	}
-
+	dp->pf = pf;
 	if (cgu) {
-		ret = dpll_device_register(pf->dplls.eec.dpll, DPLL_TYPE_EEC,
-					   &ice_dpll_ops, pf, dev);
+		ret = dpll_device_register(de->dpll, DPLL_TYPE_EEC,
+					   &ice_dpll_ops, de, dev);
 		if (ret)
 			goto put_pps;
-		ret = dpll_device_register(pf->dplls.pps.dpll, DPLL_TYPE_PPS,
-					   &ice_dpll_ops, pf, dev);
+		ret = dpll_device_register(dp->dpll, DPLL_TYPE_PPS,
+					   &ice_dpll_ops, dp, dev);
 		if (ret)
 			goto put_pps;
 	}
@@ -1481,11 +1362,11 @@ static int ice_dpll_init_dplls(struct ice_pf *pf, bool cgu)
 	return 0;
 
 put_pps:
-	dpll_device_put(pf->dplls.pps.dpll);
-	pf->dplls.pps.dpll = NULL;
+	dpll_device_put(dp->dpll);
+	dp->dpll = NULL;
 put_eec:
-	dpll_device_put(pf->dplls.eec.dpll);
-	pf->dplls.eec.dpll = NULL;
+	dpll_device_put(de->dpll);
+	de->dpll = NULL;
 
 	return ret;
 }
@@ -1672,7 +1553,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 	if (dp->dpll) {
 		mutex_lock(&pf->dplls.lock);
 		if (cgu)
-			dpll_device_unregister(dp->dpll, &ice_dpll_ops, pf);
+			dpll_device_unregister(dp->dpll, &ice_dpll_ops, dp);
 		dpll_device_put(dp->dpll);
 		mutex_unlock(&pf->dplls.lock);
 		dev_dbg(ice_pf_to_dev(pf), "PPS dpll removed\n");
@@ -1681,7 +1562,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 	if (de->dpll) {
 		mutex_lock(&pf->dplls.lock);
 		if (cgu)
-			dpll_device_unregister(de->dpll, &ice_dpll_ops, pf);
+			dpll_device_unregister(de->dpll, &ice_dpll_ops, de);
 		dpll_device_put(de->dpll);
 		mutex_unlock(&pf->dplls.lock);
 		dev_dbg(ice_pf_to_dev(pf), "EEC dpll removed\n");
