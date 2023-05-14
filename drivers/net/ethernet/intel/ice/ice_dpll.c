@@ -226,7 +226,7 @@ ice_dpll_source_frequency_set(const struct dpll_pin *pin, void *pin_priv,
 			      const struct dpll_device *dpll, void *dpll_priv,
 			      u64 frequency, struct netlink_ext_ack *extack)
 {
-	return ice_dpll_frequency_set(pin, pin_priv, dpll, (u32)frequency, extack,
+	return ice_dpll_frequency_set(pin, pin_priv, dpll, frequency, extack,
 				      ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
@@ -450,7 +450,7 @@ ice_dpll_pin_state_update(struct ice_pf *pf, struct ice_dpll_pin *pin,
 		ret = ice_aq_get_input_pin_cfg(&pf->hw, pin->idx, NULL, NULL,
 					       NULL, &pin->flags[0],
 					       &pin->freq, NULL);
-		if (!!(ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN & pin->flags[0])) {
+		if (ICE_AQC_GET_CGU_IN_CFG_FLG2_INPUT_EN & pin->flags[0]) {
 			if (pin->pin) {
 				pin->state[pf->dplls.eec.dpll_idx] =
 					pin->pin == pf->dplls.eec.active_source ?
@@ -477,7 +477,7 @@ ice_dpll_pin_state_update(struct ice_pf *pf, struct ice_dpll_pin *pin,
 		ret = ice_aq_get_output_pin_cfg(&pf->hw, pin->idx,
 						&pin->flags[0], NULL,
 						&pin->freq, NULL);
-		if (!!(ICE_AQC_SET_CGU_OUT_CFG_OUT_EN & pin->flags[0]))
+		if (ICE_AQC_SET_CGU_OUT_CFG_OUT_EN & pin->flags[0])
 			pin->state[0] = DPLL_PIN_STATE_CONNECTED;
 		else
 			pin->state[0] = DPLL_PIN_STATE_DISCONNECTED;
@@ -493,8 +493,8 @@ ice_dpll_pin_state_update(struct ice_pf *pf, struct ice_dpll_pin *pin,
 							 &pin->freq);
 			if (ret)
 				return ret;
-			if (!!(ICE_AQC_GET_PHY_REC_CLK_OUT_OUT_EN &
-			       pin->flags[parent]))
+			if (ICE_AQC_GET_PHY_REC_CLK_OUT_OUT_EN &
+			    pin->flags[parent])
 				pin->state[parent] = DPLL_PIN_STATE_CONNECTED;
 			else
 				pin->state[parent] =
