@@ -201,7 +201,7 @@ ice_dpll_frequency_set(const struct dpll_pin *pin, void *pin_priv,
 	ret = ice_dpll_pin_freq_set(pf, p, pin_type, frequency);
 	ice_dpll_cb_unlock(pf);
 	if (ret)
-		NL_SET_ERR_MSG_FMT(extack, "freq not set, err:%d", ret);
+		NL_SET_ERR_MSG(extack, "frequency was not set");
 
 	return ret;
 }
@@ -928,7 +928,8 @@ static int ice_dpll_source_prio_set(const struct dpll_pin *pin, void *pin_priv,
 		return ret;
 
 	if (prio > ICE_DPLL_PRIO_MAX) {
-		NL_SET_ERR_MSG(extack, "prio out of range");
+		NL_SET_ERR_MSG_FMT(extack, "prio out of supported range 0-%d",
+				   ICE_DPLL_PRIO_MAX);
 		return ret;
 	}
 
@@ -937,7 +938,7 @@ static int ice_dpll_source_prio_set(const struct dpll_pin *pin, void *pin_priv,
 		return ret;
 	ret = ice_dpll_hw_source_prio_set(pf, d, p, prio);
 	if (ret)
-		NL_SET_ERR_MSG_FMT(extack, "unable to set prio: %d", ret);
+		NL_SET_ERR_MSG_FMT(extack, "unable to set prio: %u", prio);
 	ice_dpll_cb_unlock(pf);
 	dev_dbg(ice_pf_to_dev(pf), "%s: dpll:%p, pin:%p, pf:%p ret:%d\n",
 		__func__, dpll, pin, pf, ret);
