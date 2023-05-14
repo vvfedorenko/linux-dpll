@@ -665,7 +665,7 @@ static bool ice_dpll_mode_supported(const struct dpll_device *dpll, void *priv,
 static int
 ice_dpll_pin_state_set(const struct dpll_device *dpll,
 		       const struct dpll_pin *pin, void *pin_priv,
-		       const enum dpll_pin_state state,
+		       bool enable,
 		       struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
@@ -678,28 +678,17 @@ ice_dpll_pin_state_set(const struct dpll_device *dpll,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	switch (pin_type) {
-	case ICE_DPLL_PIN_TYPE_SOURCE:
-		if (state == DPLL_PIN_STATE_SELECTABLE)
-			ret = ice_dpll_pin_enable(&pf->hw, p, pin_type);
-		else if (state == DPLL_PIN_STATE_DISCONNECTED)
-			ret = ice_dpll_pin_disable(&pf->hw, p, pin_type);
-		break;
-	case ICE_DPLL_PIN_TYPE_OUTPUT:
-		if (state == DPLL_PIN_STATE_CONNECTED)
-			ret = ice_dpll_pin_enable(&pf->hw, p, pin_type);
-		else if (state == DPLL_PIN_STATE_DISCONNECTED)
-			ret = ice_dpll_pin_disable(&pf->hw, p, pin_type);
-		break;
-	default:
-		break;
-	}
+	if (enable)
+		ret = ice_dpll_pin_enable(&pf->hw, p, pin_type);
+	else
+		ret = ice_dpll_pin_disable(&pf->hw, p, pin_type);
 	if (!ret)
 		ret = ice_dpll_pin_state_update(pf, p, pin_type);
 	ice_dpll_cb_unlock(pf);
-	dev_dbg(ice_pf_to_dev(pf),
-		"%s: dpll:%p, pin:%p, p:%p pf:%p state: %d ret:%d\n",
-		__func__, dpll, pin, p, pf, state, ret);
+	if (ret)
+		dev_err(ice_pf_to_dev(pf),
+			"%s: dpll:%p, pin:%p, p:%p pf:%p enable:%d ret:%d\n",
+			__func__, dpll, pin, p, pf, enable, ret);
 
 	return ret;
 }
@@ -726,7 +715,9 @@ static int ice_dpll_output_state_set(const struct dpll_pin *pin,
 				     const enum dpll_pin_state state,
 				     struct netlink_ext_ack *extack)
 {
-	return ice_dpll_pin_state_set(dpll, pin, pin_priv, state, extack,
+	bool enable = state == DPLL_PIN_STATE_CONNECTED ? true : false;
+
+	return ice_dpll_pin_state_set(dpll, pin, pin_priv, enable, extack,
 				      ICE_DPLL_PIN_TYPE_OUTPUT);
 }
 
@@ -752,7 +743,9 @@ static int ice_dpll_source_state_set(const struct dpll_pin *pin,
 				     const enum dpll_pin_state state,
 				     struct netlink_ext_ack *extack)
 {
-	return ice_dpll_pin_state_set(dpll, pin, pin_priv, state, extack,
+	bool enable = state == DPLL_PIN_STATE_SELECTABLE ? true : false;
+
+	return ice_dpll_pin_state_set(dpll, pin, pin_priv, enable, extack,
 				      ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
@@ -801,9 +794,10 @@ ice_dpll_pin_state_get(const struct dpll_device *dpll,
 	ret = 0;
 unlock:
 	ice_dpll_cb_unlock(pf);
-	dev_dbg(ice_pf_to_dev(pf),
-		"%s: dpll:%p, pin:%p, pf:%p state: %d ret:%d\n",
-		__func__, dpll, pin, pf, *state, ret);
+	if (ret)
+		dev_err(ice_pf_to_dev(pf),
+			"%s: dpll:%p, pin:%p, pf:%p state: %d ret:%d\n",
+			__func__, dpll, pin, pf, *state, ret);
 
 	return ret;
 }
