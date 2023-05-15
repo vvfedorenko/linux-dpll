@@ -1243,14 +1243,15 @@ static int ice_dpll_init_pins(struct ice_pf *pf, bool cgu)
 /**
  * ice_generate_clock_id - generates unique clock_id for registering dpll.
  * @pf: board private structure
- * @clock_id: holds generated clock_id
  *
  * Generates unique (per board) clock_id for allocation and search of dpll
  * devices in Linux dpll subsystem.
+ *
+ * Return: generated clock id for the board
  */
-static void ice_generate_clock_id(struct ice_pf *pf, u64 *clock_id)
+static u64 ice_generate_clock_id(struct ice_pf *pf)
 {
-	*clock_id = pci_get_dsn(pf->pdev);
+	return pci_get_dsn(pf->pdev);
 }
 
 /**
@@ -1273,7 +1274,7 @@ static int ice_dpll_init_dplls(struct ice_pf *pf, bool cgu)
 	int ret = -ENOMEM;
 	u64 clock_id;
 
-	ice_generate_clock_id(pf, &clock_id);
+	clock_id = pf->dplls.clock_id;
 	de->dpll = dpll_device_get(clock_id, de->dpll_idx, THIS_MODULE);
 	if (IS_ERR(de->dpll)) {
 		ret = PTR_ERR(de->dpll);
@@ -1661,7 +1662,7 @@ static int ice_dpll_init_info(struct ice_pf *pf, bool cgu)
 	struct ice_hw *hw = &pf->hw;
 	int ret, alloc_size, i;
 
-	ice_generate_clock_id(pf, &d->clock_id);
+	d->clock_id = ice_generate_clock_id(pf);
 	ret = ice_aq_get_cgu_abilities(hw, &abilities);
 	if (ret) {
 		dev_err(ice_pf_to_dev(pf),
