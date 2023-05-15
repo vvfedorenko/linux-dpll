@@ -1575,10 +1575,10 @@ ice_dpll_init_direct_pins(struct ice_pf *pf, enum ice_dpll_pin_type pin_type)
 						      &dp->input_prio[i]);
 			if (ret)
 				return ret;
-			pins[i].prop.capabilities +=
+			pins[i].prop.capabilities |=
 				DPLL_PIN_CAPS_PRIORITY_CAN_CHANGE;
 		}
-		pins[i].prop.capabilities += DPLL_PIN_CAPS_STATE_CAN_CHANGE;
+		pins[i].prop.capabilities |= DPLL_PIN_CAPS_STATE_CAN_CHANGE;
 		ret = ice_dpll_pin_state_update(pf, &pins[i], pin_type);
 		if (ret)
 			return ret;
@@ -1608,7 +1608,7 @@ static int ice_dpll_init_rclk_pin(struct ice_pf *pf)
 
 	pin->prop.label = dev_name(dev);
 	pin->prop.type = DPLL_PIN_TYPE_SYNCE_ETH_PORT;
-	pin->prop.capabilities += DPLL_PIN_CAPS_STATE_CAN_CHANGE;
+	pin->prop.capabilities |= DPLL_PIN_CAPS_STATE_CAN_CHANGE;
 
 	return ice_dpll_pin_state_update(pf, pin,
 					 ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
