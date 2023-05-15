@@ -1054,13 +1054,13 @@ unlock:
 	return ret;
 }
 
-static struct dpll_pin_ops ice_dpll_rclk_ops = {
+static const struct dpll_pin_ops ice_dpll_rclk_ops = {
 	.state_on_pin_set = ice_dpll_rclk_state_on_pin_set,
 	.state_on_pin_get = ice_dpll_rclk_state_on_pin_get,
 	.direction_get = ice_dpll_source_direction,
 };
 
-static struct dpll_pin_ops ice_dpll_source_ops = {
+static const struct dpll_pin_ops ice_dpll_source_ops = {
 	.frequency_get = ice_dpll_source_frequency_get,
 	.frequency_set = ice_dpll_source_frequency_set,
 	.state_on_dpll_get = ice_dpll_source_state_get,
@@ -1070,7 +1070,7 @@ static struct dpll_pin_ops ice_dpll_source_ops = {
 	.direction_get = ice_dpll_source_direction,
 };
 
-static struct dpll_pin_ops ice_dpll_output_ops = {
+static const struct dpll_pin_ops ice_dpll_output_ops = {
 	.frequency_get = ice_dpll_output_frequency_get,
 	.frequency_set = ice_dpll_output_frequency_set,
 	.state_on_dpll_get = ice_dpll_output_state_get,
@@ -1078,7 +1078,7 @@ static struct dpll_pin_ops ice_dpll_output_ops = {
 	.direction_get = ice_dpll_output_direction,
 };
 
-static struct dpll_device_ops ice_dpll_ops = {
+static const struct dpll_device_ops ice_dpll_ops = {
 	.lock_status_get = ice_dpll_lock_status_get,
 	.mode_get = ice_dpll_mode_get,
 	.mode_supported = ice_dpll_mode_supported,
@@ -1142,7 +1142,7 @@ ice_dpll_release_rclk_pin(struct ice_pf *pf)
 static void
 ice_dpll_release_pins(struct ice_pf *pf, struct dpll_device *dpll_eec,
 		      struct dpll_device *dpll_pps, struct ice_dpll_pin *pins,
-		      int count, struct dpll_pin_ops *ops, bool cgu)
+		      int count, const struct dpll_pin_ops *ops, bool cgu)
 {
 	int i;
 
@@ -1174,8 +1174,8 @@ ice_dpll_release_pins(struct ice_pf *pf, struct dpll_device *dpll_eec,
 static int ice_dpll_register_pins(struct ice_pf *pf, bool cgu)
 {
 	struct device *dev = ice_pf_to_dev(pf);
+	const struct dpll_pin_ops *ops;
 	struct ice_dpll_pin *pins;
-	struct dpll_pin_ops *ops;
 	u32 rclk_idx;
 	int ret, i;
 
