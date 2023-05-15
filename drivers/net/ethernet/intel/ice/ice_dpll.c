@@ -1149,7 +1149,7 @@ ice_dpll_release_pins(struct ice_pf *pf, struct dpll_device *dpll_eec,
 	for (i = 0; i < count; i++) {
 		struct ice_dpll_pin *p = &pins[i];
 
-		if (p && !IS_ERR_OR_NULL(p->pin)) {
+		if (p && !IS_ERR(p->pin)) {
 			if (cgu && dpll_eec)
 				dpll_pin_unregister(dpll_eec, p->pin, ops, p);
 			if (cgu && dpll_pps)
@@ -1184,10 +1184,8 @@ static int ice_dpll_register_pins(struct ice_pf *pf, bool cgu)
 	for (i = 0; i < pf->dplls.num_inputs; i++) {
 		pins[i].pin = dpll_pin_get(pf->dplls.clock_id, i,
 					   THIS_MODULE, &pins[i].prop);
-		if (IS_ERR_OR_NULL(pins[i].pin)) {
-			pins[i].pin = NULL;
-			return -ENOMEM;
-		}
+		if (IS_ERR(pins[i].pin))
+			return PTR_ERR(pins[i].pin);
 		pins[i].pf = pf;
 		if (cgu) {
 			ret = dpll_pin_register(pf->dplls.eec.dpll,
@@ -1209,10 +1207,8 @@ static int ice_dpll_register_pins(struct ice_pf *pf, bool cgu)
 			pins[i].pin = dpll_pin_get(pf->dplls.clock_id,
 						   i + pf->dplls.num_inputs,
 						   THIS_MODULE, &pins[i].prop);
-			if (IS_ERR_OR_NULL(pins[i].pin)) {
-				pins[i].pin = NULL;
-				return -ENOMEM;
-			}
+			if (IS_ERR(pins[i].pin))
+				return PTR_ERR(pins[i].pin);
 			pins[i].pf = pf;
 			ret = dpll_pin_register(pf->dplls.eec.dpll, pins[i].pin,
 						ops, &pins[i], NULL);
@@ -1227,10 +1223,8 @@ static int ice_dpll_register_pins(struct ice_pf *pf, bool cgu)
 	rclk_idx = pf->dplls.num_inputs + pf->dplls.num_outputs + pf->hw.pf_id;
 	pf->dplls.rclk.pin = dpll_pin_get(pf->dplls.clock_id, rclk_idx,
 					  THIS_MODULE, &pf->dplls.rclk.prop);
-	if (IS_ERR_OR_NULL(pf->dplls.rclk.pin)) {
-		pf->dplls.rclk.pin = NULL;
-		return -ENOMEM;
-	}
+	if (IS_ERR(pf->dplls.rclk.pin))
+		return PTR_ERR(pf->dplls.rclk.pin);
 	ops = &ice_dpll_rclk_ops;
 	pf->dplls.rclk.pf = pf;
 	for (i = 0; i < pf->dplls.rclk.num_parents; i++) {
@@ -1281,38 +1275,33 @@ static int ice_dpll_init_dplls(struct ice_pf *pf, bool cgu)
 
 	ice_generate_clock_id(pf, &clock_id);
 	de->dpll = dpll_device_get(clock_id, de->dpll_idx, THIS_MODULE);
-	if (!de->dpll) {
-		dev_err(ice_pf_to_dev(pf), "dpll_device_get failed (eec)\n");
+	if (IS_ERR(de->dpll)) {
+		ret = PTR_ERR(de->dpll);
+		dev_err(ice_pf_to_dev(pf),
+			"dpll_device_get failed (eec) err=%d\n", ret);
 		return ret;
 	}
 	de->pf = pf;
 	dp->dpll = dpll_device_get(clock_id, dp->dpll_idx, THIS_MODULE);
-	if (!dp->dpll) {
-		dev_err(ice_pf_to_dev(pf), "dpll_device_get failed (pps)\n");
-		goto put_eec;
+	if (IS_ERR(dp->dpll)) {
+		ret = PTR_ERR(dp->dpll);
+		dev_err(ice_pf_to_dev(pf),
+			"dpll_device_get failed (pps) err=%d\n", ret);
+		return ret;
 	}
 	dp->pf = pf;
 	if (cgu) {
 		ret = dpll_device_register(de->dpll, DPLL_TYPE_EEC,
 					   &ice_dpll_ops, de, dev);
 		if (ret)
-			goto put_pps;
+			return ret;
 		ret = dpll_device_register(dp->dpll, DPLL_TYPE_PPS,
 					   &ice_dpll_ops, dp, dev);
 		if (ret)
-			goto put_pps;
+			return ret;
 	}
 
 	return 0;
-
-put_pps:
-	dpll_device_put(dp->dpll);
-	dp->dpll = NULL;
-put_eec:
-	dpll_device_put(de->dpll);
-	de->dpll = NULL;
-
-	return ret;
 }
 
 /**
@@ -1494,7 +1483,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 		mutex_unlock(&pf->dplls.lock);
 	}
 	ice_dpll_release_info(pf);
-	if (dp->dpll) {
+	if (!IS_ERR(dp->dpll)) {
 		mutex_lock(&pf->dplls.lock);
 		if (cgu)
 			dpll_device_unregister(dp->dpll, &ice_dpll_ops, dp);
@@ -1503,7 +1492,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 		dev_dbg(ice_pf_to_dev(pf), "PPS dpll removed\n");
 	}
 
-	if (de->dpll) {
+	if (!IS_ERR(de->dpll)) {
 		mutex_lock(&pf->dplls.lock);
 		if (cgu)
 			dpll_device_unregister(de->dpll, &ice_dpll_ops, de);
@@ -1515,7 +1504,7 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 	if (cgu) {
 		mutex_lock(&pf->dplls.lock);
 		kthread_cancel_delayed_work_sync(&d->work);
-		if (d->kworker) {
+		if (!IS_ERR_OR_NULL(d->kworker)) {
 			kthread_destroy_worker(d->kworker);
 			d->kworker = NULL;
 			dev_dbg(ice_pf_to_dev(pf), "DPLLs worker removed\n");
