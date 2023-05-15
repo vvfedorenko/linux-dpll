@@ -1477,43 +1477,35 @@ static void ice_dpll_release_all(struct ice_pf *pf, bool cgu)
 	ice_dpll_release_rclk_pin(pf);
 	ice_dpll_release_pins(pf, de->dpll, dp->dpll, d->inputs,
 			      d->num_inputs, &ice_dpll_source_ops, cgu);
-	mutex_unlock(&pf->dplls.lock);
 	if (cgu) {
-		mutex_lock(&pf->dplls.lock);
 		ice_dpll_release_pins(pf, de->dpll, dp->dpll, d->outputs,
 				      d->num_outputs,
 				      &ice_dpll_output_ops, cgu);
-		mutex_unlock(&pf->dplls.lock);
 	}
 	ice_dpll_release_info(pf);
 	if (!IS_ERR(dp->dpll)) {
-		mutex_lock(&pf->dplls.lock);
 		if (cgu)
 			dpll_device_unregister(dp->dpll, &ice_dpll_ops, dp);
 		dpll_device_put(dp->dpll);
-		mutex_unlock(&pf->dplls.lock);
 		dev_dbg(ice_pf_to_dev(pf), "PPS dpll removed\n");
 	}
 
 	if (!IS_ERR(de->dpll)) {
-		mutex_lock(&pf->dplls.lock);
 		if (cgu)
 			dpll_device_unregister(de->dpll, &ice_dpll_ops, de);
 		dpll_device_put(de->dpll);
-		mutex_unlock(&pf->dplls.lock);
 		dev_dbg(ice_pf_to_dev(pf), "EEC dpll removed\n");
 	}
 
 	if (cgu) {
-		mutex_lock(&pf->dplls.lock);
 		kthread_cancel_delayed_work_sync(&d->work);
 		if (!IS_ERR_OR_NULL(d->kworker)) {
 			kthread_destroy_worker(d->kworker);
 			d->kworker = NULL;
 			dev_dbg(ice_pf_to_dev(pf), "DPLLs worker removed\n");
 		}
-		mutex_unlock(&pf->dplls.lock);
 	}
+	mutex_unlock(&pf->dplls.lock);
 }
 
 /**
