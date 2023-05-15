@@ -975,19 +975,17 @@ static int ice_dpll_rclk_state_on_pin_set(const struct dpll_pin *pin,
 {
 	bool enable = state == DPLL_PIN_STATE_CONNECTED ? true : false;
 	struct ice_dpll_pin *p = pin_priv, *parent = parent_pin_priv;
-	u32 hw_idx = ICE_DPLL_PIN_IDX_INVALID, i;
 	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
+	u32 hw_idx;
 
 	if (!pf)
 		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	for (i = 0; i < pf->dplls.rclk.num_parents; i++)
-		if (pf->dplls.rclk.parent_idx[i] == parent->idx)
-			hw_idx = i;
-	if (hw_idx == ICE_DPLL_PIN_IDX_INVALID)
+	hw_idx = parent->idx - pf->dplls.base_rclk_idx;
+	if (hw_idx >= pf->dplls.num_inputs)
 		goto unlock;
 
 	if ((enable && p->state[hw_idx] == DPLL_PIN_STATE_CONNECTED) ||
@@ -999,8 +997,9 @@ static int ice_dpll_rclk_state_on_pin_set(const struct dpll_pin *pin,
 					 &p->freq);
 unlock:
 	ice_dpll_cb_unlock(pf);
-	dev_dbg(ice_pf_to_dev(pf), "%s: parent:%p, pin:%p, pf:%p enable:%d ret:%d\n",
-		__func__, parent_pin, pin, pf, enable, ret);
+	dev_dbg(ice_pf_to_dev(pf),
+		"%s: parent:%p, pin:%p, pf:%p hw_idx:%u enable:%d ret:%d\n",
+		__func__, parent_pin, pin, pf, hw_idx, enable, ret);
 
 	return ret;
 }
@@ -1027,19 +1026,17 @@ static int ice_dpll_rclk_state_on_pin_get(const struct dpll_pin *pin,
 					  struct netlink_ext_ack *extack)
 {
 	struct ice_dpll_pin *p = pin_priv, *parent = parent_pin_priv;
-	u32 hw_idx = ICE_DPLL_PIN_IDX_INVALID, i;
 	struct ice_pf *pf = p->pf;
 	int ret = -EFAULT;
+	u32 hw_idx;
 
 	if (!pf)
 		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	for (i = 0; i < pf->dplls.rclk.num_parents; i++)
-		if (pf->dplls.rclk.parent_idx[i] == parent->idx)
-			hw_idx = i;
-	if (hw_idx == ICE_DPLL_PIN_IDX_INVALID)
+	hw_idx = parent->idx - pf->dplls.base_rclk_idx;
+	if (hw_idx >= pf->dplls.num_inputs)
 		goto unlock;
 
 	ret = ice_dpll_pin_state_update(pf, p, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
@@ -1051,8 +1048,8 @@ static int ice_dpll_rclk_state_on_pin_get(const struct dpll_pin *pin,
 unlock:
 	ice_dpll_cb_unlock(pf);
 	dev_dbg(ice_pf_to_dev(pf),
-		"%s: parent:%p, pin:%p, pf:%p state:%u ret:%d\n",
-		__func__, parent_pin, pin, pf, *state, ret);
+		"%s: parent:%p, pin:%p, pf:%p hw_idx:%u state:%u ret:%d\n",
+		__func__, parent_pin, pin, pf, hw_idx, *state, ret);
 
 	return ret;
 }
@@ -1678,7 +1675,6 @@ static int ice_dpll_init_info(struct ice_pf *pf, bool cgu)
 	struct ice_dplls *d = &pf->dplls;
 	struct ice_hw *hw = &pf->hw;
 	int ret, alloc_size, i;
-	u8 base_rclk_idx;
 
 	ice_generate_clock_id(pf, &d->clock_id);
 	ret = ice_aq_get_cgu_abilities(hw, &abilities);
@@ -1723,12 +1719,12 @@ static int ice_dpll_init_info(struct ice_pf *pf, bool cgu)
 			goto release_info;
 	}
 
-	ret = ice_get_cgu_rclk_pin_info(&pf->hw, &base_rclk_idx,
+	ret = ice_get_cgu_rclk_pin_info(&pf->hw, &d->base_rclk_idx,
 					&pf->dplls.rclk.num_parents);
 	if (ret)
 		return ret;
 	for (i = 0; i < pf->dplls.rclk.num_parents; i++)
-		pf->dplls.rclk.parent_idx[i] = base_rclk_idx + i;
+		pf->dplls.rclk.parent_idx[i] = d->base_rclk_idx + i;
 	ret = ice_dpll_init_pins(pf, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
 	if (ret)
 		return ret;

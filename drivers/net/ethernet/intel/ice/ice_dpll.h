@@ -74,8 +74,9 @@ struct ice_dpll {
  * @rclk: recovered pins pointer
  * @num_inputs: number of input pins available on dpll
  * @num_outputs: number of output pins available on dpll
- * @num_rclk: number of recovered clock pins available on dpll
  * @cgu_state_acq_err_num: number of errors returned during periodic work
+ * @base_rclk_idx: idx of first pin used for clock revocery pins
+ * @clock_id: clock_id of dplls
  */
 struct ice_dplls {
 	struct kthread_worker *kworker;
