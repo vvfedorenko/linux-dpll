@@ -1374,6 +1374,9 @@ static void ice_dpll_notify_changes(struct ice_dpll *d)
 		dpll_device_notify(d->dpll, DPLL_A_LOCK_STATUS);
 	}
 	if (d->prev_source != d->active_source) {
+		if (d->prev_source)
+			dpll_pin_notify(d->dpll, d->prev_source,
+					DPLL_A_PIN_STATE);
 		d->prev_source = d->active_source;
 		if (d->active_source)
 			dpll_pin_notify(d->dpll, d->active_source,
