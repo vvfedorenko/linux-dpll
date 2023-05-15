@@ -52,6 +52,7 @@ struct dpll_pin_ops {
 			     struct netlink_ext_ack *extack);
 	int (*state_on_pin_get)(const struct dpll_pin *pin, void *pin_priv,
 				const struct dpll_pin *parent_pin,
+				void *parent_pin_priv,
 				enum dpll_pin_state *state,
 				struct netlink_ext_ack *extack);
 	int (*state_on_dpll_get)(const struct dpll_pin *pin, void *pin_priv,
@@ -60,6 +61,7 @@ struct dpll_pin_ops {
 				 struct netlink_ext_ack *extack);
 	int (*state_on_pin_set)(const struct dpll_pin *pin, void *pin_priv,
 				const struct dpll_pin *parent_pin,
+				void *parent_pin_priv,
 				const enum dpll_pin_state state,
 				struct netlink_ext_ack *extack);
 	int (*state_on_dpll_set)(const struct dpll_pin *pin, void *pin_priv,

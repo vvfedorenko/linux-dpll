@@ -189,6 +189,7 @@ dpll_msg_add_pin_freq(struct sk_buff *msg, const struct dpll_pin *pin,
 
 static int
 dpll_msg_add_pin_parents(struct sk_buff *msg, struct dpll_pin *pin,
+			 struct dpll_pin_ref *dpll_ref,
 			 struct netlink_ext_ack *extack)
 {
 	enum dpll_pin_state state;
@@ -200,14 +201,15 @@ dpll_msg_add_pin_parents(struct sk_buff *msg, struct dpll_pin *pin,
 
 	xa_for_each(&pin->parent_refs, index, ref) {
 		const struct dpll_pin_ops *ops = dpll_pin_ops(ref);
+		void *parent_priv;
 
 		ppin = ref->pin;
-
+		parent_priv = dpll_pin_on_dpll_priv(dpll_ref->dpll, ppin);
 		if (WARN_ON(!ops->state_on_pin_get))
 			return -EFAULT;
 		ret = ops->state_on_pin_get(pin,
 					    dpll_pin_on_pin_priv(ppin, pin),
-					    ppin, &state, extack);
+					    ppin, parent_priv, &state, extack);
 		if (ret)
 			return -EFAULT;
 		nest = nla_nest_start(msg, DPLL_A_PIN_PARENT);
@@ -322,7 +324,7 @@ __dpll_cmd_pin_dump_one(struct sk_buff *msg, struct dpll_pin *pin,
 	ret = dpll_cmd_pin_fill_details(msg, pin, ref, extack);
 	if (ret)
 		return ret;
-	ret = dpll_msg_add_pin_parents(msg, pin, extack);
+	ret = dpll_msg_add_pin_parents(msg, pin, ref, extack);
 	if (ret)
 		return ret;
 	if (!xa_empty(&pin->dpll_refs)) {
@@ -426,7 +428,9 @@ dpll_pin_on_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 	if (ops->state_on_pin_set(pin_ref->pin,
 				  dpll_pin_on_pin_priv(parent_ref->pin,
 						       pin_ref->pin),
-				  parent_ref->pin, state, extack))
+				  parent_ref->pin,
+				  dpll_pin_on_dpll_priv(dpll, parent_ref->pin),
+				  state, extack))
 		return -EFAULT;
 	dpll_pin_parent_notify(dpll, pin_ref->pin, parent_ref->pin,
 			       DPLL_A_PIN_STATE);
@@ -846,8 +850,9 @@ dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
 		break;
 	case DPLL_A_PIN_STATE:
 		if (parent) {
-			const struct dpll_pin_ops *ops;
+			void *parent_priv = dpll_pin_on_dpll_priv(dpll, parent);
 			void *priv = dpll_pin_on_pin_priv(parent, pin);
+			const struct dpll_pin_ops *ops;
 
 			ref = xa_load(&pin->parent_refs, parent->pin_idx);
 			if (!ref)
@@ -856,7 +861,7 @@ dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
 			if (!ops->state_on_pin_get)
 				return -EOPNOTSUPP;
 			ret = ops->state_on_pin_get(pin, priv, parent,
-						    &state, NULL);
+						    parent_priv, &state, NULL);
 			if (ret)
 				return ret;
 			if (nla_put_u32(msg, DPLL_A_PIN_PARENT_IDX,
