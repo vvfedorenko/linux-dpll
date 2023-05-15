@@ -1161,7 +1161,7 @@ ice_dpll_release_pins(struct ice_pf *pf, struct dpll_device *dpll_eec,
 }
 
 /**
- * ice_dpll_register_pins - register pins with a dpll
+ * ice_dpll_init_pins - init pins and register pins with a dplls
  * @pf: board private structure
  * @cgu: if cgu is present and controlled by this NIC
  *
@@ -1171,7 +1171,7 @@ ice_dpll_release_pins(struct ice_pf *pf, struct dpll_device *dpll_eec,
  * * 0 - success
  * * negative - error
  */
-static int ice_dpll_register_pins(struct ice_pf *pf, bool cgu)
+static int ice_dpll_init_pins(struct ice_pf *pf, bool cgu)
 {
 	struct device *dev = ice_pf_to_dev(pf);
 	const struct dpll_pin_ops *ops;
@@ -1615,7 +1615,7 @@ static int ice_dpll_init_rclk_pin(struct ice_pf *pf)
 }
 
 /**
- * ice_dpll_init_pins - init pins wrapper
+ * ice_dpll_init_pins_info - init pins info wrapper
  * @pf: board private structure
  * @pin_type: type of pins being initialized
  *
@@ -1625,8 +1625,9 @@ static int ice_dpll_init_rclk_pin(struct ice_pf *pf)
  * * 0 - success
  * * negative - init failure
  */
-static int ice_dpll_init_pins(struct ice_pf *pf,
-			      const enum ice_dpll_pin_type pin_type)
+static int
+ice_dpll_init_pins_info(struct ice_pf *pf,
+			const enum ice_dpll_pin_type pin_type)
 {
 	switch (pin_type) {
 	case ICE_DPLL_PIN_TYPE_SOURCE:
@@ -1688,7 +1689,7 @@ static int ice_dpll_init_info(struct ice_pf *pf, bool cgu)
 	if (!dp->input_prio)
 		return -ENOMEM;
 
-	ret = ice_dpll_init_pins(pf, ICE_DPLL_PIN_TYPE_SOURCE);
+	ret = ice_dpll_init_pins_info(pf, ICE_DPLL_PIN_TYPE_SOURCE);
 	if (ret)
 		goto release_info;
 
@@ -1698,7 +1699,7 @@ static int ice_dpll_init_info(struct ice_pf *pf, bool cgu)
 		if (!d->outputs)
 			goto release_info;
 
-		ret = ice_dpll_init_pins(pf, ICE_DPLL_PIN_TYPE_OUTPUT);
+		ret = ice_dpll_init_pins_info(pf, ICE_DPLL_PIN_TYPE_OUTPUT);
 		if (ret)
 			goto release_info;
 	}
@@ -1709,7 +1710,7 @@ static int ice_dpll_init_info(struct ice_pf *pf, bool cgu)
 		return ret;
 	for (i = 0; i < pf->dplls.rclk.num_parents; i++)
 		pf->dplls.rclk.parent_idx[i] = d->base_rclk_idx + i;
-	ret = ice_dpll_init_pins(pf, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
+	ret = ice_dpll_init_pins_info(pf, ICE_DPLL_PIN_TYPE_RCLK_SOURCE);
 	if (ret)
 		return ret;
 
@@ -1754,7 +1755,7 @@ int ice_dpll_init(struct ice_pf *pf)
 	err = ice_dpll_init_dplls(pf, cgu_present);
 	if (err)
 		goto release;
-	err = ice_dpll_register_pins(pf, cgu_present);
+	err = ice_dpll_init_pins(pf, cgu_present);
 	if (err)
 		goto release;
 	set_bit(ICE_FLAG_DPLL, pf->flags);
