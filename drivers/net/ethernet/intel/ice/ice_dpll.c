@@ -42,47 +42,6 @@ static const char * const pin_type_name[] = {
 };
 
 /**
- * ice_find_pin_idx - find ice_dpll_pin index on a pf
- * @pf: private board structure
- * @pin: kernel's dpll_pin pointer to be searched for
- * @pin_type: type of pins to be searched for
- *
- * Find and return internal ice pin index of a searched dpll subsystem
- * pin pointer.
- *
- * Return:
- * * valid index for a given pin & pin type found on pf internal dpll struct
- * * ICE_DPLL_PIN_IDX_INVALID - if pin was not found.
- */
-static u32
-ice_find_pin_idx(struct ice_pf *pf, const struct dpll_pin *pin,
-		 enum ice_dpll_pin_type pin_type)
-
-{
-	struct ice_dpll_pin *pins;
-	int pin_num, i;
-
-	switch (pin_type) {
-	case ICE_DPLL_PIN_TYPE_SOURCE:
-		pins = pf->dplls.inputs;
-		pin_num = pf->dplls.num_inputs;
-		break;
-	case ICE_DPLL_PIN_TYPE_OUTPUT:
-		pins = pf->dplls.outputs;
-		pin_num = pf->dplls.num_outputs;
-		break;
-	default:
-		return ICE_DPLL_PIN_IDX_INVALID;
-	}
-
-	for (i = 0; i < pin_num; i++)
-		if (pin == pins[i].pin)
-			return i;
-
-	return ICE_DPLL_PIN_IDX_INVALID;
-}
-
-/**
  * ice_dpll_cb_lock - lock dplls mutex in callback context
  * @pf: private board structure
  *
@@ -1010,12 +969,13 @@ static int ice_dpll_output_direction(const struct dpll_pin *pin,
 static int ice_dpll_rclk_state_on_pin_set(const struct dpll_pin *pin,
 					  void *pin_priv,
 					  const struct dpll_pin *parent_pin,
+					  void *parent_pin_priv,
 					  const enum dpll_pin_state state,
 					  struct netlink_ext_ack *extack)
 {
 	bool enable = state == DPLL_PIN_STATE_CONNECTED ? true : false;
-	u32 parent_idx, hw_idx = ICE_DPLL_PIN_IDX_INVALID, i;
-	struct ice_dpll_pin *p = pin_priv;
+	struct ice_dpll_pin *p = pin_priv, *parent = parent_pin_priv;
+	u32 hw_idx = ICE_DPLL_PIN_IDX_INVALID, i;
 	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
@@ -1024,14 +984,8 @@ static int ice_dpll_rclk_state_on_pin_set(const struct dpll_pin *pin,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	parent_idx = ice_find_pin_idx(pf, parent_pin,
-				      ICE_DPLL_PIN_TYPE_SOURCE);
-	if (parent_idx == ICE_DPLL_PIN_IDX_INVALID) {
-		ret = -EFAULT;
-		goto unlock;
-	}
 	for (i = 0; i < pf->dplls.rclk.num_parents; i++)
-		if (pf->dplls.rclk.parent_idx[i] == parent_idx)
+		if (pf->dplls.rclk.parent_idx[i] == parent->idx)
 			hw_idx = i;
 	if (hw_idx == ICE_DPLL_PIN_IDX_INVALID)
 		goto unlock;
@@ -1045,8 +999,8 @@ static int ice_dpll_rclk_state_on_pin_set(const struct dpll_pin *pin,
 					 &p->freq);
 unlock:
 	ice_dpll_cb_unlock(pf);
-	dev_dbg(ice_pf_to_dev(pf), "%s: parent:%p, pin:%p, pf:%p ret:%d\n",
-		__func__, parent_pin, pin, pf, ret);
+	dev_dbg(ice_pf_to_dev(pf), "%s: parent:%p, pin:%p, pf:%p enable:%d ret:%d\n",
+		__func__, parent_pin, pin, pf, enable, ret);
 
 	return ret;
 }
@@ -1068,11 +1022,12 @@ unlock:
 static int ice_dpll_rclk_state_on_pin_get(const struct dpll_pin *pin,
 					  void *pin_priv,
 					  const struct dpll_pin *parent_pin,
+					  void *parent_pin_priv,
 					  enum dpll_pin_state *state,
 					  struct netlink_ext_ack *extack)
 {
-	u32 parent_idx, hw_idx = ICE_DPLL_PIN_IDX_INVALID, i;
-	struct ice_dpll_pin *p = pin_priv;
+	struct ice_dpll_pin *p = pin_priv, *parent = parent_pin_priv;
+	u32 hw_idx = ICE_DPLL_PIN_IDX_INVALID, i;
 	struct ice_pf *pf = p->pf;
 	int ret = -EFAULT;
 
@@ -1081,12 +1036,8 @@ static int ice_dpll_rclk_state_on_pin_get(const struct dpll_pin *pin,
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
-	parent_idx = ice_find_pin_idx(pf, parent_pin,
-				      ICE_DPLL_PIN_TYPE_SOURCE);
-	if (parent_idx == ICE_DPLL_PIN_IDX_INVALID)
-		goto unlock;
 	for (i = 0; i < pf->dplls.rclk.num_parents; i++)
-		if (pf->dplls.rclk.parent_idx[i] == parent_idx)
+		if (pf->dplls.rclk.parent_idx[i] == parent->idx)
 			hw_idx = i;
 	if (hw_idx == ICE_DPLL_PIN_IDX_INVALID)
 		goto unlock;
@@ -1099,8 +1050,9 @@ static int ice_dpll_rclk_state_on_pin_get(const struct dpll_pin *pin,
 	ret = 0;
 unlock:
 	ice_dpll_cb_unlock(pf);
-	dev_dbg(ice_pf_to_dev(pf), "%s: parent:%p, pin:%p, pf:%p ret:%d\n",
-		__func__, parent_pin, pin, pf, ret);
+	dev_dbg(ice_pf_to_dev(pf),
+		"%s: parent:%p, pin:%p, pf:%p state:%u ret:%d\n",
+		__func__, parent_pin, pin, pf, *state, ret);
 
 	return ret;
 }
