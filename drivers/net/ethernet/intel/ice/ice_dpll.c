@@ -153,8 +153,6 @@ ice_dpll_frequency_set(const struct dpll_pin *pin, void *pin_priv,
 	struct ice_dpll_pin *p = pin_priv;
 	int ret = -EINVAL;
 
-	if (!pf)
-		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
@@ -240,8 +238,6 @@ ice_dpll_frequency_get(const struct dpll_pin *pin, void *pin_priv,
 	struct ice_dpll_pin *p = pin_priv;
 	int ret = -EINVAL;
 
-	if (!pf)
-		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
@@ -538,8 +534,6 @@ static int ice_dpll_lock_status_get(const struct dpll_device *dpll, void *priv,
 	struct ice_pf *pf = d->pf;
 	int ret = -EINVAL;
 
-	if (!pf)
-		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
@@ -568,11 +562,6 @@ static int ice_dpll_mode_get(const struct dpll_device *dpll, void *priv,
 			     enum dpll_mode *mode,
 			     struct netlink_ext_ack *extack)
 {
-	struct ice_dpll *d = priv;
-	struct ice_pf *pf = d->pf;
-
-	if (!pf)
-		return -EINVAL;
 	*mode = DPLL_MODE_AUTOMATIC;
 
 	return 0;
@@ -596,11 +585,6 @@ static bool ice_dpll_mode_supported(const struct dpll_device *dpll, void *priv,
 				    const enum dpll_mode mode,
 				    struct netlink_ext_ack *extack)
 {
-	struct ice_dpll *d = priv;
-	struct ice_pf *pf = d->pf;
-
-	if (!pf)
-		return false;
 	if (mode == DPLL_MODE_AUTOMATIC)
 		return true;
 
@@ -633,8 +617,6 @@ ice_dpll_pin_state_set(const struct dpll_pin *pin, void *pin_priv,
 	struct ice_dpll_pin *p = pin_priv;
 	int ret = -EINVAL;
 
-	if (!pf)
-		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
@@ -737,8 +719,6 @@ ice_dpll_pin_state_get(const struct dpll_pin *pin, void *pin_priv,
 	struct ice_dpll *d;
 	int ret = -EINVAL;
 
-	if (!pf)
-		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
@@ -840,9 +820,6 @@ static int ice_dpll_source_prio_get(const struct dpll_pin *pin, void *pin_priv,
 	struct ice_pf *pf = d->pf;
 	int ret = -EINVAL;
 
-	if (!pf)
-		return ret;
-
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
@@ -878,9 +855,6 @@ static int ice_dpll_source_prio_set(const struct dpll_pin *pin, void *pin_priv,
 	struct ice_dpll *d = dpll_priv;
 	struct ice_pf *pf = d->pf;
 	int ret = -EINVAL;
-
-	if (!pf)
-		return ret;
 
 	if (prio > ICE_DPLL_PRIO_MAX) {
 		NL_SET_ERR_MSG_FMT(extack, "prio out of supported range 0-%d",
@@ -981,8 +955,6 @@ static int ice_dpll_rclk_state_on_pin_set(const struct dpll_pin *pin,
 	int ret = -EINVAL;
 	u32 hw_idx;
 
-	if (!pf)
-		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
@@ -1032,8 +1004,6 @@ static int ice_dpll_rclk_state_on_pin_get(const struct dpll_pin *pin,
 	int ret = -EFAULT;
 	u32 hw_idx;
 
-	if (!pf)
-		return ret;
 	ret = ice_dpll_cb_lock(pf);
 	if (ret)
 		return ret;
