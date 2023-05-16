@@ -133,19 +133,6 @@ enum dpll_pin_caps {
 	DPLL_PIN_CAPS_STATE_CAN_CHANGE = 4,
 };
 
-/**
- * enum dpll_event - events of dpll generic netlink family
- * @DPLL_EVENT_DEVICE_CREATE: dpll device created
- * @DPLL_EVENT_DEVICE_DELETE: dpll device deleted
- * @DPLL_EVENT_DEVICE_CHANGE: attribute of dpll device or pin changed, reason
- *   is to be found with an attribute type (DPLL_A_*) received with the event
- */
-enum dpll_event {
-	DPLL_EVENT_DEVICE_CREATE = 1,
-	DPLL_EVENT_DEVICE_DELETE,
-	DPLL_EVENT_DEVICE_CHANGE,
-};
-
 enum dplla {
 	DPLL_A_ID = 1,
 	DPLL_A_DEV_NAME,
@@ -179,8 +166,14 @@ enum dplla {
 enum {
 	DPLL_CMD_DEVICE_GET = 1,
 	DPLL_CMD_DEVICE_SET,
+	DPLL_CMD_DEVICE_CREATE_NTF,
+	DPLL_CMD_DEVICE_DELETE_NTF,
+	DPLL_CMD_DEVICE_CHANGE_NTF,
 	DPLL_CMD_PIN_GET,
 	DPLL_CMD_PIN_SET,
+	DPLL_CMD_PIN_CREATE_NTF,
+	DPLL_CMD_PIN_DELETE_NTF,
+	DPLL_CMD_PIN_CHANGE_NTF,
 
 	__DPLL_CMD_MAX,
 	DPLL_CMD_MAX = (__DPLL_CMD_MAX - 1)

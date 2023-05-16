@@ -168,24 +168,6 @@ definitions:
         name: priority-can-change
       -
         name: state-can-change
-  -
-    type: enum
-    name: event
-    doc: events of dpll generic netlink family
-    entries:
-      -
-        name: device-create
-        doc: dpll device created
-        value: 1
-      -
-        name: device-delete
-        doc: dpll device deleted
-      -
-        name: device-change
-        doc: |
-          attribute of dpll device or pin changed, reason is to be found with
-          an attribute type (DPLL_A_*) received with the event
-
 
 attribute-sets:
   -
@@ -375,7 +357,21 @@ operations:
             - bus-name
             - dev-name
             - mode
-
+    -
+      name: device-create-ntf
+      doc: Notification about device appearing
+      notify: device-get
+      mcgrp: monitor
+    -
+      name: device-delete-ntf
+      doc: Notification about device disappearing
+      notify: device-get
+      mcgrp: monitor
+    -
+      name: device-change-ntf
+      doc: Notification about device configuration being changed
+      notify: device-get
+      mcgrp: monitor
     -
       name: pin-get
       doc: |
@@ -437,6 +433,21 @@ operations:
             - pin-prio
             - pin-state
             - pin-parent-idx
+    -
+      name: pin-create-ntf
+      doc: Notification about pin appearing
+      notify: pin-get
+      mcgrp: monitor
+    -
+      name: pin-delete-ntf
+      doc: Notification about pin disappearing
+      notify: pin-get
+      mcgrp: monitor
+    -
+      name: pin-change-ntf
+      doc: Notification about pin configuration being changed
+      notify: pin-get
+      mcgrp: monitor
 
 mcast-groups:
   list:
