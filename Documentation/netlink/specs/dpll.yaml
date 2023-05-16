@@ -26,9 +26,6 @@ definitions:
       -
         name: freerun
         doc: dpll driven on system clk
-      -
-        name: nco
-        doc: dpll driven by Numerically Controlled Oscillator
     render-max: true
   -
     type: enum
@@ -40,8 +37,8 @@ definitions:
       -
         name: unlocked
         doc: |
-          dpll was not yet locked to any valid source (or is in one of
-          modes: DPLL_MODE_FREERUN, DPLL_MODE_NCO)
+          dpll was not yet locked to any valid source (or is in mode:
+            DPLL_MODE_FREERUN)
         value: 1
       -
         name: calibrating

@@ -22,7 +22,7 @@ static const struct nla_policy dpll_device_set_nl_policy[DPLL_A_MODE + 1] = {
 	[DPLL_A_ID] = { .type = NLA_U32, },
 	[DPLL_A_BUS_NAME] = { .type = NLA_NUL_STRING, },
 	[DPLL_A_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[DPLL_A_MODE] = NLA_POLICY_MAX(NLA_U8, 5),
+	[DPLL_A_MODE] = NLA_POLICY_MAX(NLA_U8, 4),
 };
 
 /* DPLL_CMD_PIN_GET - do */

@@ -17,14 +17,12 @@
  * @DPLL_MODE_AUTOMATIC: highest prio, valid source, auto selected by dpll
  * @DPLL_MODE_HOLDOVER: dpll forced into holdover mode
  * @DPLL_MODE_FREERUN: dpll driven on system clk
- * @DPLL_MODE_NCO: dpll driven by Numerically Controlled Oscillator
  */
 enum dpll_mode {
 	DPLL_MODE_MANUAL = 1,
 	DPLL_MODE_AUTOMATIC,
 	DPLL_MODE_HOLDOVER,
 	DPLL_MODE_FREERUN,
-	DPLL_MODE_NCO,
 
 	__DPLL_MODE_MAX,
 	DPLL_MODE_MAX = (__DPLL_MODE_MAX - 1)
@@ -34,14 +32,14 @@ enum dpll_mode {
  * enum dpll_lock_status - provides information of dpll device lock status,
  *   valid values for DPLL_A_LOCK_STATUS attribute
  * @DPLL_LOCK_STATUS_UNLOCKED: dpll was not yet locked to any valid source (or
- *   is in one of modes: DPLL_MODE_FREERUN, DPLL_MODE_NCO)
+ *   is in mode: DPLL_MODE_FREERUN)
  * @DPLL_LOCK_STATUS_CALIBRATING: dpll is trying to lock to a valid signal
  * @DPLL_LOCK_STATUS_LOCKED: dpll is locked
  * @DPLL_LOCK_STATUS_HOLDOVER: dpll is in holdover state - lost a valid lock or
  *   was forced by selecting DPLL_MODE_HOLDOVER mode (latter possible only when
- *   dpll lock-state was already DPLL_LOCK_STATUS_LOCKED, if it was not, the
- *   dpll's lock-status will remain DPLL_LOCK_STATUS_UNLOCKED even if user
- *   requests DPLL_MODE_HOLDOVER)
+ *   dpll lock-state was already DPLL_LOCK_STATUS_LOCKED, if dpll lock-state
+ *   was not DPLL_LOCK_STATUS_LOCKED, the dpll's lock-state shall remain
+ *   DPLL_LOCK_STATUS_UNLOCKED even if DPLL_MODE_HOLDOVER was requested)
  */
 enum dpll_lock_status {
 	DPLL_LOCK_STATUS_UNLOCKED = 1,
