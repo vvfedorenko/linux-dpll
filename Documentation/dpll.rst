@@ -251,10 +251,10 @@ Values for ``DPLL_A_LOCK_STATUS`` attribute:
   ============================= ======================================
   ``LOCK_STATUS_UNLOCKED``      dpll device is in freerun, not locked
                                 to any source pin
-  ``LOCK_STATUS_CALIBRATING``   dpll device calibrates to lock to the
-                                source pin signal
   ``LOCK_STATUS_LOCKED``        dpll device is locked to the source
-                                pin frequency
+                                but no holodver capability yet acquired
+  ``LOCK_STATUS_LOCKED_HO_ACQ`` dpll device is locked to the source
+                                pin with holdover capability acquired
   ``LOCK_STATUS_HOLDOVER``      dpll device lost a lock, using its
                                 frequency holdover capabilities
 
