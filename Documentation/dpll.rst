@@ -269,8 +269,6 @@ Values for ``DPLL_A_MODE`` attribute:
   ``MODE_HOLDOVER``   force holdover mode of dpll
   ``MODE_FREERUN``    dpll device is driven by supplied system clock
                       without holdover capabilities
-  ``MODE_NCO``        similar to FREERUN, with possibility to
-                      numerically control frequency offset
 
 Values for ``DPLL_A_TYPE`` attribute:
 
