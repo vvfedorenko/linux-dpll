@@ -131,6 +131,7 @@ ice_dpll_pin_freq_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
  * @pin: pointer to a pin
  * @pin_priv: private data pointer passed on pin registration
  * @dpll: pointer to dpll
+ * @dpll_priv: private data pointer passed on dpll registration
  * @frequency: frequency to be set
  * @extack: error reporting
  * @pin_type: type of pin being configured
@@ -143,13 +144,13 @@ ice_dpll_pin_freq_set(struct ice_pf *pf, struct ice_dpll_pin *pin,
  */
 static int
 ice_dpll_frequency_set(const struct dpll_pin *pin, void *pin_priv,
-		       const struct dpll_device *dpll,
+		       const struct dpll_device *dpll, void *dpll_priv,
 		       const u32 frequency,
 		       struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
+	struct ice_pf *pf = ((struct ice_dpll *)dpll_priv)->pf;
 	struct ice_dpll_pin *p = pin_priv;
-	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -185,8 +186,8 @@ ice_dpll_source_frequency_set(const struct dpll_pin *pin, void *pin_priv,
 			      const struct dpll_device *dpll, void *dpll_priv,
 			      u64 frequency, struct netlink_ext_ack *extack)
 {
-	return ice_dpll_frequency_set(pin, pin_priv, dpll, frequency, extack,
-				      ICE_DPLL_PIN_TYPE_SOURCE);
+	return ice_dpll_frequency_set(pin, pin_priv, dpll, dpll_priv, frequency,
+				      extack, ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
 /**
@@ -209,8 +210,8 @@ ice_dpll_output_frequency_set(const struct dpll_pin *pin, void *pin_priv,
 			      const struct dpll_device *dpll, void *dpll_priv,
 			      u64 frequency, struct netlink_ext_ack *extack)
 {
-	return ice_dpll_frequency_set(pin, pin_priv, dpll, frequency, extack,
-				      ICE_DPLL_PIN_TYPE_OUTPUT);
+	return ice_dpll_frequency_set(pin, pin_priv, dpll, dpll_priv, frequency,
+				      extack, ICE_DPLL_PIN_TYPE_OUTPUT);
 }
 
 /**
@@ -231,12 +232,12 @@ ice_dpll_output_frequency_set(const struct dpll_pin *pin, void *pin_priv,
  */
 static int
 ice_dpll_frequency_get(const struct dpll_pin *pin, void *pin_priv,
-		       const struct dpll_device *dpll, u64 *frequency,
-		       struct netlink_ext_ack *extack,
+		       const struct dpll_device *dpll, void *dpll_priv,
+		       u64 *frequency, struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
+	struct ice_pf *pf = ((struct ice_dpll *)dpll_priv)->pf;
 	struct ice_dpll_pin *p = pin_priv;
-	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -270,8 +271,8 @@ ice_dpll_source_frequency_get(const struct dpll_pin *pin, void *pin_priv,
 			      const struct dpll_device *dpll, void *dpll_priv,
 			      u64 *frequency, struct netlink_ext_ack *extack)
 {
-	return ice_dpll_frequency_get(pin, pin_priv, dpll, frequency, extack,
-				      ICE_DPLL_PIN_TYPE_SOURCE);
+	return ice_dpll_frequency_get(pin, pin_priv, dpll, dpll_priv, frequency,
+				      extack, ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
 /**
@@ -294,8 +295,8 @@ ice_dpll_output_frequency_get(const struct dpll_pin *pin, void *pin_priv,
 			      const struct dpll_device *dpll, void *dpll_priv,
 			      u64 *frequency, struct netlink_ext_ack *extack)
 {
-	return ice_dpll_frequency_get(pin, pin_priv, dpll, frequency, extack,
-				      ICE_DPLL_PIN_TYPE_OUTPUT);
+	return ice_dpll_frequency_get(pin, pin_priv, dpll, dpll_priv, frequency,
+				      extack, ICE_DPLL_PIN_TYPE_OUTPUT);
 }
 
 /**
@@ -608,9 +609,10 @@ static bool ice_dpll_mode_supported(const struct dpll_device *dpll, void *priv,
 
 /**
  * ice_dpll_pin_state_set - set pin's state on dpll
- * @dpll: dpll being configured
  * @pin: pointer to a pin
  * @pin_priv: private data pointer passed on pin registration
+ * @dpll: registered dpll pointer
+ * @dpll_priv: private data pointer passed on dpll registration
  * @state: state of pin to be set
  * @extack: error reporting
  * @pin_type: type of a pin
@@ -622,14 +624,13 @@ static bool ice_dpll_mode_supported(const struct dpll_device *dpll, void *priv,
  * * negative - error
  */
 static int
-ice_dpll_pin_state_set(const struct dpll_device *dpll,
-		       const struct dpll_pin *pin, void *pin_priv,
-		       bool enable,
-		       struct netlink_ext_ack *extack,
+ice_dpll_pin_state_set(const struct dpll_pin *pin, void *pin_priv,
+		       const struct dpll_device *dpll, void *dpll_priv,
+		       bool enable, struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
+	struct ice_pf *pf = ((struct ice_dpll *)dpll_priv)->pf;
 	struct ice_dpll_pin *p = pin_priv;
-	struct ice_pf *pf = p->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -676,8 +677,8 @@ static int ice_dpll_output_state_set(const struct dpll_pin *pin,
 {
 	bool enable = state == DPLL_PIN_STATE_CONNECTED ? true : false;
 
-	return ice_dpll_pin_state_set(dpll, pin, pin_priv, enable, extack,
-				      ICE_DPLL_PIN_TYPE_OUTPUT);
+	return ice_dpll_pin_state_set(pin, pin_priv, dpll, dpll_priv, enable,
+				      extack, ICE_DPLL_PIN_TYPE_OUTPUT);
 }
 
 /**
@@ -704,15 +705,16 @@ static int ice_dpll_source_state_set(const struct dpll_pin *pin,
 {
 	bool enable = state == DPLL_PIN_STATE_SELECTABLE ? true : false;
 
-	return ice_dpll_pin_state_set(dpll, pin, pin_priv, enable, extack,
-				      ICE_DPLL_PIN_TYPE_SOURCE);
+	return ice_dpll_pin_state_set(pin, pin_priv, dpll, dpll_priv, enable,
+				      extack, ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
 /**
  * ice_dpll_pin_state_get - set pin's state on dpll
- * @dpll: registered dpll pointer
  * @pin: pointer to a pin
  * @pin_priv: private data pointer passed on pin registration
+ * @dpll: registered dpll pointer
+ * @dpll_priv: private data pointer passed on dpll registration
  * @state: on success holds state of the pin
  * @extack: error reporting
  * @pin_type: type of questioned pin
@@ -724,14 +726,14 @@ static int ice_dpll_source_state_set(const struct dpll_pin *pin,
  * * negative - failed to get state
  */
 static int
-ice_dpll_pin_state_get(const struct dpll_device *dpll,
-		       const struct dpll_pin *pin, void *pin_priv,
+ice_dpll_pin_state_get(const struct dpll_pin *pin, void *pin_priv,
+		       const struct dpll_device *dpll,  void *dpll_priv,
 		       enum dpll_pin_state *state,
 		       struct netlink_ext_ack *extack,
 		       const enum ice_dpll_pin_type pin_type)
 {
+	struct ice_pf *pf = ((struct ice_dpll *)dpll_priv)->pf;
 	struct ice_dpll_pin *p = pin_priv;
-	struct ice_pf *pf = p->pf;
 	struct ice_dpll *d;
 	int ret = -EINVAL;
 
@@ -783,8 +785,8 @@ static int ice_dpll_output_state_get(const struct dpll_pin *pin,
 				     enum dpll_pin_state *state,
 				     struct netlink_ext_ack *extack)
 {
-	return ice_dpll_pin_state_get(dpll, pin, pin_priv, state, extack,
-				      ICE_DPLL_PIN_TYPE_OUTPUT);
+	return ice_dpll_pin_state_get(pin, pin_priv, dpll, dpll_priv, state,
+				      extack, ICE_DPLL_PIN_TYPE_OUTPUT);
 }
 
 /**
@@ -809,8 +811,8 @@ static int ice_dpll_source_state_get(const struct dpll_pin *pin,
 				     enum dpll_pin_state *state,
 				     struct netlink_ext_ack *extack)
 {
-	return ice_dpll_pin_state_get(dpll, pin, pin_priv, state, extack,
-				      ICE_DPLL_PIN_TYPE_SOURCE);
+	return ice_dpll_pin_state_get(pin, pin_priv, dpll, dpll_priv, state,
+				      extack, ICE_DPLL_PIN_TYPE_SOURCE);
 }
 
 /**
@@ -835,7 +837,7 @@ static int ice_dpll_source_prio_get(const struct dpll_pin *pin, void *pin_priv,
 {
 	struct ice_dpll_pin *p = pin_priv;
 	struct ice_dpll *d = dpll_priv;
-	struct ice_pf *pf = p->pf;
+	struct ice_pf *pf = d->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
@@ -874,7 +876,7 @@ static int ice_dpll_source_prio_set(const struct dpll_pin *pin, void *pin_priv,
 {
 	struct ice_dpll_pin *p = pin_priv;
 	struct ice_dpll *d = dpll_priv;
-	struct ice_pf *pf = p->pf;
+	struct ice_pf *pf = d->pf;
 	int ret = -EINVAL;
 
 	if (!pf)
