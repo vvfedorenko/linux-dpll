@@ -885,7 +885,7 @@ dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
 }
 
 static int
-dpll_send_event_create(enum dpll_event event, struct dpll_device *dpll)
+dpll_send_event_create(enum dplla event, struct dpll_device *dpll)
 {
 	struct sk_buff *msg;
 	int ret = -EMSGSIZE;
@@ -928,7 +928,7 @@ dpll_send_event_change(struct dpll_device *dpll, struct dpll_pin *pin,
 		return -ENOMEM;
 
 	hdr = genlmsg_put(msg, 0, 0, &dpll_nl_family, 0,
-			  DPLL_EVENT_DEVICE_CHANGE);
+			  DPLL_CMD_DEVICE_CHANGE_NTF);
 	if (!hdr)
 		goto out_free_msg;
 
@@ -950,12 +950,12 @@ out_free_msg:
 
 int dpll_notify_device_create(struct dpll_device *dpll)
 {
-	return dpll_send_event_create(DPLL_EVENT_DEVICE_CREATE, dpll);
+	return dpll_send_event_create(DPLL_CMD_DEVICE_CREATE_NTF, dpll);
 }
 
 int dpll_notify_device_delete(struct dpll_device *dpll)
 {
-	return dpll_send_event_create(DPLL_EVENT_DEVICE_DELETE, dpll);
+	return dpll_send_event_create(DPLL_CMD_DEVICE_DELETE_NTF, dpll);
 }
 
 int dpll_device_notify(struct dpll_device *dpll, enum dplla attr)
