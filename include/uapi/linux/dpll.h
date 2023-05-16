@@ -33,8 +33,9 @@ enum dpll_mode {
  *   valid values for DPLL_A_LOCK_STATUS attribute
  * @DPLL_LOCK_STATUS_UNLOCKED: dpll was not yet locked to any valid source (or
  *   is in mode: DPLL_MODE_FREERUN)
- * @DPLL_LOCK_STATUS_CALIBRATING: dpll is trying to lock to a valid signal
- * @DPLL_LOCK_STATUS_LOCKED: dpll is locked
+ * @DPLL_LOCK_STATUS_LOCKED: dpll is locked to a valid signal, but no holdover
+ *   available
+ * @DPLL_LOCK_STATUS_LOCKED_HO_ACQ: dpll is locked and holdover acquired
  * @DPLL_LOCK_STATUS_HOLDOVER: dpll is in holdover state - lost a valid lock or
  *   was forced by selecting DPLL_MODE_HOLDOVER mode (latter possible only when
  *   dpll lock-state was already DPLL_LOCK_STATUS_LOCKED, if dpll lock-state
@@ -43,8 +44,8 @@ enum dpll_mode {
  */
 enum dpll_lock_status {
 	DPLL_LOCK_STATUS_UNLOCKED = 1,
-	DPLL_LOCK_STATUS_CALIBRATING,
 	DPLL_LOCK_STATUS_LOCKED,
+	DPLL_LOCK_STATUS_LOCKED_HO_ACQ,
 	DPLL_LOCK_STATUS_HOLDOVER,
 
 	__DPLL_LOCK_STATUS_MAX,

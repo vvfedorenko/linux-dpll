@@ -41,11 +41,13 @@ definitions:
             DPLL_MODE_FREERUN)
         value: 1
       -
-        name: calibrating
-        doc: dpll is trying to lock to a valid signal
-      -
         name: locked
-        doc: dpll is locked
+        doc: |
+          dpll is locked to a valid signal, but no holdover available
+      -
+        name: locked-ho-acq
+        doc: |
+          dpll is locked and holdover acquired
       -
         name: holdover
         doc: |
