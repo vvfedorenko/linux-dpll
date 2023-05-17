@@ -75,9 +75,10 @@ Shared pins
 A single pin object can be registered to multiple dpll devices.
 Then there are two groups of configuration knobs:
 1) Set on a pin - the configuration affects all dpll devices pin is
-   registered to. (i.e. ``PIN_FREQUENCY``, ``PIN_DIRECTION``),
+   registered to. (i.e. ``DPLL_A_PIN_FREQUENCY``,
+   ``DPLL_A_PIN_DIRECTION``),
 2) Set on a pin-dpll tuple - the configuration affects only selected
-   dpll device. (i.e. PIN_PRIO, PIN_STATE).
+   dpll device. (i.e. ``DPLL_A_PIN_PRIO``, ``DPLL_A_PIN_STATE``).
 
 
 MUX-type pins
@@ -150,172 +151,166 @@ All constants identifying command types use ``DPLL_CMD_`` prefix and
 suffix according to command purpose. All attributes use ``DPLL_A_``
 prefix and suffix according to attribute purpose:
 
-  ============================  =======================================
-  ``DEVICE_GET``                command to get device info or dump list
-                                of available devices
-    ``ID``                      attr internal dpll device ID
-    ``DEV_NAME``                attr dpll device name
-    ``BUS_NAME``                attr dpll device bus name
-    ``MODE``                    attr selection mode
-    ``MODE_SUPPORTED``          attr available selection modes
-    ``LOCK_STATUS``             attr internal frequency-lock status
-    ``TEMP``                    attr device temperature information
-    ``CLOCK_ID``                attr Unique Clock Identifier (EUI-64),
-                                as defined by the IEEE 1588 standard
-    ``TYPE``                    attr type or purpose of dpll device
-  ``DEVICE_SET``                command to set dpll device configuration
-    ``ID``                      attr internal dpll device index
-    ``NAME``                    attr dpll device name (not required if
-                                dpll device index was provided)
-    ``MODE``                    attr selection mode to configure
-  ``PIN_GET``                   command to get pin info or dump list of
-                                available pins
-    ``DEVICE``                  nest attr for each dpll device pin is
-                                connected with
-      ``ID``                    attr internal dpll device ID
-      ``DEV_NAME``              attr dpll device name
-      ``BUS_NAME``              attr dpll device bus name
-      ``PIN_PRIO``              attr priority of pin on the dpll device
-      ``PIN_STATE``             attr state of pin on the dpll device
-    ``PIN_IDX``                 attr index of a pin on the dpll device
-    ``PIN_DESCRIPTION``         attr description provided by driver
-    ``PIN_TYPE``                attr type of a pin
-    ``PIN_DIRECTION``           attr direction of a pin
-    ``PIN_FREQUENCY``           attr current frequency of a pin
-    ``PIN_FREQUENCY_SUPPORTED`` attr provides supported frequencies
-    ``PIN_ANY_FREQUENCY_MIN``   attr minimum value of frequency in case
-                                pin/dpll supports any frequency
-    ``PIN_ANY_FREQUENCY_MAX``   attr maximum value of frequency in case
-                                pin/dpll supports any frequency
-    ``PIN_PARENT``              nest attr for each MUX-type parent, that
-                                pin is connected with
-      ``PIN_PARENT_IDX``        attr index of a parent pin on the dpll
-                                device
-      ``PIN_STATE``             attr state of a pin on parent pin
-    ``PIN_RCLK_DEVICE``         attr name of a device, where pin
-                                recovers clock signal from
-    ``PIN_DPLL_CAPS``           attr bitmask of pin-dpll capabilities
+  ==================================== =======================================
+  ``DPLL_CMD_DEVICE_GET``              command to get device info or dump list
+                                       of available devices
+    ``DPLL_A_ID``                      attr internal dpll device ID
+    ``DPLL_A_DEV_NAME``                attr dpll device name
+    ``DPLL_A_BUS_NAME``                attr dpll device bus name
+    ``DPLL_A_MODE``                    attr selection mode
+    ``DPLL_A_MODE_SUPPORTED``          attr available selection modes
+    ``DPLL_A_LOCK_STATUS``             attr internal frequency-lock status
+    ``DPLL_A_TEMP``                    attr device temperature information
+    ``DPLL_A_CLOCK_ID``                attr Unique Clock Identifier (EUI-64),
+                                       as defined by the IEEE 1588 standard
+    ``DPLL_A_TYPE``                    attr type or purpose of dpll device
+  ``DPLL_CMD_DEVICE_SET``              command to set dpll device configuration
+    ``DPLL_A_ID``                      attr internal dpll device index
+    ``DPLL_A_NAME``                    attr dpll device name (not required if
+                                       dpll device index was provided)
+    ``DPLL_A_MODE``                    attr selection mode to configure
+  ``DPLL_CMD_PIN_GET``                 command to get pin info or dump list of
+                                       available pins
+    ``DPLL_A_DEVICE``                  nest attr for each dpll device pin is
+                                       connected with
+      ``DPLL_A_ID``                    attr internal dpll device ID
+      ``DPLL_A_DEV_NAME``              attr dpll device name
+      ``DPLL_A_BUS_NAME``              attr dpll device bus name
+      ``DPLL_A_PIN_PRIO``              attr priority of pin on the dpll device
+      ``DPLL_A_PIN_STATE``             attr state of pin on the dpll device
+    ``DPLL_A_PIN_IDX``                 attr index of a pin on the dpll device
+    ``DPLL_A_PIN_DESCRIPTION``         attr description provided by driver
+    ``DPLL_A_PIN_TYPE``                attr type of a pin
+    ``DPLL_A_PIN_DIRECTION``           attr direction of a pin
+    ``DPLL_A_PIN_FREQUENCY``           attr current frequency of a pin
+    ``DPLL_A_PIN_FREQUENCY_SUPPORTED`` attr provides supported frequencies
+    ``DPLL_A_PIN_ANY_FREQUENCY_MIN``   attr minimum value of frequency in case
+                                       pin/dpll supports any frequency
+    ``DPLL_A_PIN_ANY_FREQUENCY_MAX``   attr maximum value of frequency in case
+                                       pin/dpll supports any frequency
+    ``DPLL_A_PIN_PARENT``              nest attr for each MUX-type parent, that
+                                       pin is connected with
+      ``DPLL_A_PIN_PARENT_IDX``        attr index of a parent pin on the dpll
+                                       device
+      ``DPLL_A_PIN_STATE``             attr state of a pin on parent pin
+    ``DPLL_A_PIN_RCLK_DEVICE``         attr name of a device, where pin
+                                       recovers clock signal from
+    ``DPLL_A_PIN_DPLL_CAPS``           attr bitmask of pin-dpll capabilities
 
-  ``PIN_SET``                   command to set pins configuration
-    ``ID``                      attr internal dpll device index
-    ``BUS_NAME``                attr dpll device name (not required if
-                                dpll device ID was provided)
-    ``DEV_NAME``                attr dpll device name (not required if
-                                dpll device ID was provided)
-    ``PIN_IDX``                 attr index of a pin on the dpll device
-    ``PIN_DIRECTION``           attr direction to be set
-    ``PIN_FREQUENCY``           attr frequency to be set
-    ``PIN_PRIO``                attr pin priority to be set
-    ``PIN_STATE``               attr pin state to be set
-    ``PIN_PARENT_IDX``          attr if provided state is to be set with
-                                parent pin instead of with dpll device
+  ``DPLL_CMD_PIN_SET``                 command to set pins configuration
+    ``DPLL_A_ID``                      attr internal dpll device index
+    ``DPLL_A_BUS_NAME``                attr dpll device name (not required if
+                                       dpll device ID was provided)
+    ``DPLL_A_DEV_NAME``                attr dpll device name (not required if
+                                       dpll device ID was provided)
+    ``DPLL_A_PIN_IDX``                 attr index of a pin on the dpll device
+    ``DPLL_A_PIN_DIRECTION``           attr direction to be set
+    ``DPLL_A_PIN_FREQUENCY``           attr frequency to be set
+    ``DPLL_A_PIN_PRIO``                attr pin priority to be set
+    ``DPLL_A_PIN_STATE``               attr pin state to be set
+    ``DPLL_A_PIN_PARENT_IDX``          attr if provided state is to be set with
+                                       parent pin instead of with dpll device
 
 Netlink dump requests
 =====================
 
-The ``DEVICE_GET`` and ``PIN_GET`` commands are capable of dump type
-netlink requests, in which case the response is in the same format as
-for their ``do`` request.
+The ``DPLL_CMD_DEVICE_GET`` and ``DPLL_CMD_PIN_GET`` commands are
+capable of dump type netlink requests, in which case the response is in
+the same format as for their ``do`` request.
 
 
 SET commands format
 ===================
 
-``DEVICE_SET`` - to target a dpll device, the user provides either a
-``ID`` or both ``BUS_NAME`` and ``DEV_NAME``, as well as parameter being
-configured (``DPLL_A_MODE``).
+``DPLL_CMD_DEVICE_SET`` - to target a dpll device, the user provides either a
+``DPLL_A_ID`` or both ``DPLL_A_BUS_NAME`` and ``DPLL_A_DEV_NAME``, as well as
+parameter being configured (``DPLL_A_MODE``).
 
-``PIN_SET`` - to target a pin user has to provide a ``PIN_IDX``, but
-pin does not exist on its own, thus a dpll device must be also targeted
-with either a ``ID`` or both ``BUS_NAME`` and ``DEV_NAME`` to which
-pin being configured was registered with. Also configured pin parameters
-must be added.
-If ``PIN_DIRECTION`` or ``PIN_FREQUENCY`` are configured, this affects
-all the dpll device they are connected.
-If ``PIN_PRIO`` or ``PIN_STATE`` are configured, this affects only
+``DPLL_CMD_PIN_SET`` - to target a pin user has to provide a ``DPLL_A_PIN_IDX``,
+but pin does not exist on its own, thus a dpll device must be also targeted
+with either a ``DPLL_A_ID`` or both ``DPLL_A_BUS_NAME`` and ``DPLL_A_DEV_NAME``
+to which pin being configured was registered with. Also configured pin
+parameters must be added.
+If ``DPLL_A_PIN_DIRECTION`` or ``DPLL_A_PIN_FREQUENCY`` are configured, this
+affects all the dpll device they are connected.
+If ``DPLL_A_PIN_PRIO`` or ``DPLL_A_PIN_STATE`` are configured, this affects only
 the dpll device being targeted.
-If valid ``PIN_PARENT_IDX`` is provided, the set command shall affect
+If valid ``DPLL_A_PIN_PARENT_IDX`` is provided, the set command shall affect
 the configuration between a pin and it's parent, which is a
-``PIN_STATE``.
+``DPLL_A_PIN_STATE``.
 In general it is possible to configure multiple parameters at once.
 
 
 Device level configuration pre-defined enums
 =================================================
 
-For all below enum names used for configuration of dpll device use
-the ``DPLL_`` prefix.
-
 Values for ``DPLL_A_LOCK_STATUS`` attribute:
 
-  ============================= ======================================
-  ``LOCK_STATUS_UNLOCKED``      dpll device is in freerun, not locked
-                                to any source pin
-  ``LOCK_STATUS_LOCKED``        dpll device is locked to the source
-                                but no holodver capability yet acquired
-  ``LOCK_STATUS_LOCKED_HO_ACQ`` dpll device is locked to the source
-                                pin with holdover capability acquired
-  ``LOCK_STATUS_HOLDOVER``      dpll device lost a lock, using its
-                                frequency holdover capabilities
+  ================================== ======================================
+  ``DPLL_LOCK_STATUS_UNLOCKED``      dpll device is in freerun, not locked
+                                     to any source pin
+  ``DPLL_LOCK_STATUS_LOCKED``        dpll device is locked to the source
+                                     but no holodver capability yet acquired
+  ``DPLL_LOCK_STATUS_LOCKED_HO_ACQ`` dpll device is locked to the source
+                                     pin with holdover capability acquired
+  ``DPLL_LOCK_STATUS_HOLDOVER``      dpll device lost a lock, using its
+                                     frequency holdover capabilities
 
 Values for ``DPLL_A_MODE`` attribute:
 
-  =================== ================================================
-  ``MODE_MANUAL``     source pin is manually selected by setting pin
-                      state to ``DPLL_PIN_STATE_CONNECTED`` on a dpll
-  ``MODE_AUTOMATIC``  source pin is auto selected according to
-                      configured pin priorities and source signal
-                      validity
-  ``MODE_HOLDOVER``   force holdover mode of dpll
-  ``MODE_FREERUN``    dpll device is driven by supplied system clock
-                      without holdover capabilities
+  ======================= ================================================
+  ``DPLL_MODE_MANUAL``    source pin is manually selected by setting pin
+                          state to ``DPLL_PIN_STATE_CONNECTED`` on a dpll
+  ``DPLL_MODE_AUTOMATIC`` source pin is auto selected according to
+                          configured pin priorities and source signal
+                          validity
+  ``DPLL_MODE_HOLDOVER``  force holdover mode of dpll
+  ``DPLL_MODE_FREERUN``   dpll device is driven by supplied system clock
+                          without holdover capabilities
 
 Values for ``DPLL_A_TYPE`` attribute:
 
-  ============= ===================================================
-  ``TYPE_PPS``  dpll device used to provide pulse-per-second output
-  ``TYPE_EEC``  dpll device used to drive ethernet equipment clock
+  ================= ===================================================
+  ``DPLL_TYPE_PPS`` dpll device used to provide pulse-per-second output
+  ``DPLL_TYPE_EEC`` dpll device used to drive ethernet equipment clock
 
 
 
 Pin level configuration pre-defined enums
 =========================================
 
-For all below enum names used for configuration of pin use the
-``DPLL_PIN_`` prefix.
-
 Values for ``DPLL_A_PIN_STATE`` attribute:
 
-  ======================= ========================================
-  ``STATE_CONNECTED``     Pin used as active source for a dpll
-                          device or for a parent pin
-  ``STATE_DISCONNECTED``  Pin disconnected from a dpll device or
-                          from a parent pin
-  ``STATE_SELECTABLE``    Pin enabled for automatic selection
+  =============================== ========================================
+  ``DPLL_PIN_STATE_CONNECTED``    Pin used as active source for a dpll
+                                  device or for a parent pin
+  ``DPLL_PIN_STATE_DISCONNECTED`` Pin disconnected from a dpll device or
+                                  from a parent pin
+  ``DPLL_PIN_STATE_SELECTABLE``   Pin enabled for automatic selection
 
 Values for ``DPLL_A_PIN_DIRECTION`` attribute:
 
-  ======================= ==============================
-  ``DIRECTION_SOURCE``    Pin used as a source of signal
-  ``DIRECTION_OUTPUT``    Pin used to output signal
+  ============================= ==============================
+  ``DPLL_PIN_DIRECTION_SOURCE`` Pin used as a source of signal
+  ``DPLL_PIN_DIRECTION_OUTPUT`` Pin used to output signal
 
 Values for ``DPLL_A_PIN_TYPE`` attributes:
 
-  ======================== ========================================
-  ``TYPE_MUX``             MUX type pin, connected pins shall have
-                           their own types
-  ``TYPE_EXT``             External pin
-  ``TYPE_SYNCE_ETH_PORT``  SyncE on Ethernet port
-  ``TYPE_INT_OSCILLATOR``  Internal Oscillator (i.e. Holdover with
-                           Atomic Clock as a Source)
-  ``TYPE_GNSS``            GNSS 1PPS source
+  ================================ ========================================
+  ``DPLL_PIN_TYPE_MUX``            MUX type pin, connected pins shall have
+                                   their own types
+  ``DPLL_PIN_TYPE_EXT``            External pin
+  ``DPLL_PIN_TYPE_SYNCE_ETH_PORT`` SyncE on Ethernet port
+  ``DPLL_PIN_TYPE_INT_OSCILLATOR`` Internal Oscillator (i.e. Holdover with
+                                   Atomic Clock as a Source)
+  ``DPLL_PIN_TYPE_GNSS``           GNSS 1PPS source
 
 Values for ``DPLL_A_PIN_DPLL_CAPS`` attributes:
 
-  ============================= ================================
-  ``CAPS_DIRECTION_CAN_CHANGE`` Bit present if direction can change
-  ``CAPS_PRIORITY_CAN_CHANGE``  Bit present if priority can change
-  ``CAPS_STATE_CAN_CHANGE``     Bit present if state can change
+  ====================================== ===================================
+  ``DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE`` Bit present if direction can change
+  ``DPLL_PIN_CAPS_PRIORITY_CAN_CHANGE``  Bit present if priority can change
+  ``DPLL_PIN_CAPS_STATE_CAN_CHANGE``     Bit present if state can change
 
 
 Notifications
@@ -323,25 +318,24 @@ Notifications
 
 dpll device can provide notifications regarding status changes of the
 device, i.e. lock status changes, source/output type changes or alarms.
-This is the multicast group that is used to notify user-space apps via
+There is one multicast group that is used to notify user-space apps via
 netlink socket: ``DPLL_MCGRP_MONITOR``
 
-Notifications messages (attrbiutes use ``DPLL_A`` prefix):
+Notifications messages:
 
-  ========================= ==========================================
-  ``EVENT_DEVICE_CREATE``   event value new dpll device was created
-    ``ID``                  attr internal dpll device ID
-    ``DEV_NAME``            attr dpll device name
-    ``BUS_NAME``            attr dpll device bus name
-  ``EVENT_DEVICE_DELETE``   event value dpll device was deleted
-    ``ID``                  attr dpll device index
-  ``EVENT_DEVICE_CHANGE``   event value dpll device attribute has
-                            changed
-    ``ID``                  attr modified dpll device ID
-    ``PIN_IDX``             attr the modified pin index
+  ============================== =====================================
+  ``DPLL_CMD_DEVICE_CREATE_NTF`` dpll device was created
+  ``DPLL_CMD_DEVICE_DELETE_NTF`` dpll device was deleted
+  ``DPLL_CMD_DEVICE_CHANGE_NTF`` dpll defice has changed
+  ``DPLL_CMD_PIN_CREATE_NTF``    dpll pin was created
+  ``DPLL_CMD_PIN_DELETE_NTF``    dpll pin was deleted
+  ``DPLL_CMD_PIN_CHANGE_NTF``    dpll pin has changed
 
-Device change event shall consiste of the attribute and the value that
-has changed.
+Events format is the same as for the corresponding get command.
+Format of ``DPLL_CMD_DEVICE_`` events is the same as response of
+``DPLL_CMD_DEVICE_GET``.
+Format of ``DPLL_CMD_PIN_`` events is same as response of
+``DPLL_CMD_PIN_GET``.
 
 
 Device driver implementation
