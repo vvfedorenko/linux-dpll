@@ -1084,6 +1084,7 @@ static void
 ice_dpll_release_rclk_pin(struct ice_pf *pf)
 {
 	struct ice_dpll_pin *rclk = &pf->dplls.rclk;
+	struct ice_vsi *vsi = ice_get_main_vsi(pf);
 	struct dpll_pin *parent;
 	int i;
 
@@ -1094,6 +1095,9 @@ ice_dpll_release_rclk_pin(struct ice_pf *pf)
 		dpll_pin_on_pin_unregister(parent, rclk->pin,
 					   &ice_dpll_rclk_ops, rclk);
 	}
+	if (WARN_ON_ONCE(!vsi || !vsi->netdev))
+		return;
+	netdev_dpll_pin_clear(vsi->netdev);
 	dpll_pin_put(rclk->pin);
 	rclk->pin = NULL;
 }
@@ -1202,11 +1206,16 @@ static int ice_dpll_init_pins(struct ice_pf *pf, bool cgu)
 	for (i = 0; i < pf->dplls.rclk.num_parents; i++) {
 		struct dpll_pin *parent =
 			pf->dplls.inputs[pf->dplls.rclk.parent_idx[i]].pin;
+		struct ice_vsi *vsi = ice_get_main_vsi(pf);
 
 		ret = dpll_pin_on_pin_register(parent, pf->dplls.rclk.pin,
 					       ops, &pf->dplls.rclk, dev);
 		if (ret)
 			return ret;
+
+		if (!vsi || !vsi->netdev)
+			return -EINVAL;
+		netdev_dpll_pin_set(vsi->netdev, pf->dplls.rclk.pin);
 	}
 
 	return 0;
