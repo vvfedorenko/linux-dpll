@@ -235,9 +235,9 @@ static void mlx5_dpll_periodic_work(struct work_struct *work)
 		goto invalid_out;
 
 	if (mdpll->last.lock_status != lock_status)
-		dpll_device_notify(mdpll->dpll, DPLL_A_LOCK_STATUS);
+		dpll_device_change_ntf(mdpll->dpll);
 	if (mdpll->last.pin_state != pin_state)
-		dpll_pin_notify(mdpll->dpll, mdpll->dpll_pin, DPLL_A_PIN_STATE);
+		dpll_pin_change_ntf(mdpll->dpll_pin);
 
 invalid_out:
 	mdpll->last.lock_status = lock_status;
