@@ -4,24 +4,40 @@
  */
 
 /**
- * dpll_notify_device_create - notify that the device has been created
+ * dpll_device_create_ntf - notify that the device has been created
  * @dpll: registered dpll pointer
  *
+ * Context: caller shall hold dpll_xa_lock.
  * Return: 0 if succeeds, error code otherwise.
  */
-int dpll_notify_device_create(struct dpll_device *dpll);
-
+int dpll_device_create_ntf(struct dpll_device *dpll);
 
 /**
- * dpll_notify_device_delete - notify that the device has been deleted
+ * dpll_device_delete_ntf - notify that the device has been deleted
  * @dpll: registered dpll pointer
  *
+ * Context: caller shall hold dpll_xa_lock.
  * Return: 0 if succeeds, error code otherwise.
  */
-int dpll_notify_device_delete(struct dpll_device *dpll);
+int dpll_device_delete_ntf(struct dpll_device *dpll);
 
-int dpll_pin_parent_notify(struct dpll_device *dpll, struct dpll_pin *pin,
-			   struct dpll_pin *parent, enum dplla attr);
+/**
+ * dpll_pin_delete_ntf - notify that the pin has been deleted
+ * @pin: registered pin pointer
+ *
+ * Context: caller shall hold dpll_xa_lock.
+ * Return: 0 if succeeds, error code otherwise.
+ */
+int dpll_pin_create_ntf(struct dpll_pin *pin);
+
+/**
+ * dpll_pin_delete_ntf - notify that the pin has been deleted
+ * @pin: registered pin pointer
+ *
+ * Context: caller shall hold dpll_xa_lock.
+ * Return: 0 if succeeds, error code otherwise.
+ */
+int dpll_pin_delete_ntf(struct dpll_pin *pin);
 
 int __init dpll_netlink_init(void);
 void dpll_netlink_finish(void);

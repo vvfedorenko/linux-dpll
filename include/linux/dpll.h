@@ -276,21 +276,29 @@ void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin,
 				const struct dpll_pin_ops *ops, void *priv);
 
 /**
- * dpll_device_notify - notify on dpll device change
+ * dpll_device_change_ntf - notify on dpll device change
  * @dpll: dpll device pointer
- * @attr: changed attribute
  *
  * Broadcast event to the netlink multicast registered listeners.
  *
+ * Context: Takes and releases a dpll_xa_lock.
  * Return:
  * * 0 - success
  * * negative - error
  */
-int dpll_device_notify(struct dpll_device *dpll, enum dplla attr);
+int dpll_device_change_ntf(struct dpll_device *dpll);
 
-int dpll_pin_notify(struct dpll_device *dpll, struct dpll_pin *pin,
-		    enum dplla attr);
-
-
+/**
+ * dpll_device_change_ntf - notify on dpll device change
+ * @dpll: dpll device pointer
+ *
+ * Broadcast event to the netlink multicast registered listeners.
+ *
+ * Context: Takes and releases a dpll_xa_lock.
+ * Return:
+ * * 0 - success
+ * * negative - error
+ */
+int dpll_pin_change_ntf(struct dpll_pin *pin);
 
 #endif

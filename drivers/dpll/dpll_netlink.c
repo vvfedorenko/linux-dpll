@@ -12,6 +12,8 @@
 #include "dpll_nl.h"
 #include <uapi/linux/dpll.h>
 
+static int __dpll_pin_change_ntf(struct dpll_pin *pin);
+
 struct dpll_dump_ctx {
 	unsigned long idx;
 };
@@ -399,7 +401,7 @@ dpll_pin_freq_set(struct dpll_pin *pin, struct nlattr *a,
 					 dpll, dpll_priv(dpll), freq, extack);
 		if (ret)
 			return -EFAULT;
-		dpll_pin_notify(dpll, pin, DPLL_A_PIN_FREQUENCY);
+		__dpll_pin_change_ntf(pin);
 	}
 
 	return 0;
@@ -432,8 +434,7 @@ dpll_pin_on_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 				  dpll_pin_on_dpll_priv(dpll, parent_ref->pin),
 				  state, extack))
 		return -EFAULT;
-	dpll_pin_parent_notify(dpll, pin_ref->pin, parent_ref->pin,
-			       DPLL_A_PIN_STATE);
+	__dpll_pin_change_ntf(pin_ref->pin);
 
 	return 0;
 }
@@ -457,7 +458,7 @@ dpll_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 	if (ops->state_on_dpll_set(pin, dpll_pin_on_dpll_priv(dpll, pin), dpll,
 				   dpll_priv(dpll), state, extack))
 		return -EINVAL;
-	dpll_pin_notify(dpll, pin, DPLL_A_PIN_STATE);
+	__dpll_pin_change_ntf(pin);
 
 	return 0;
 }
@@ -481,7 +482,7 @@ dpll_pin_prio_set(struct dpll_device *dpll, struct dpll_pin *pin,
 	if (ops->prio_set(pin, dpll_pin_on_dpll_priv(dpll, pin), dpll,
 			  dpll_priv(dpll), prio, extack))
 		return -EINVAL;
-	dpll_pin_notify(dpll, pin, DPLL_A_PIN_PRIO);
+	__dpll_pin_change_ntf(pin);
 
 	return 0;
 }
@@ -505,7 +506,7 @@ dpll_pin_direction_set(struct dpll_pin *pin, struct nlattr *a,
 				       dpll, dpll_priv(dpll), direction,
 				       extack))
 			return -EFAULT;
-		dpll_pin_notify(dpll, pin, DPLL_A_PIN_DIRECTION);
+		__dpll_pin_change_ntf(pin);
 	}
 
 	return 0;
@@ -813,83 +814,73 @@ int dpll_pin_post_dumpit(struct netlink_callback *cb)
 }
 
 static int
-dpll_event_device_change(struct sk_buff *msg, struct dpll_device *dpll,
-			 struct dpll_pin *pin, struct dpll_pin *parent,
-			 enum dplla attr)
-{
-	int ret = dpll_msg_add_dev_handle(msg, dpll);
-	struct dpll_pin_ref *ref = NULL;
-	enum dpll_pin_state state;
-
-	if (ret)
-		return ret;
-	if (pin && nla_put_u32(msg, DPLL_A_PIN_IDX, pin->pin_idx))
-		return -EMSGSIZE;
-
-	switch (attr) {
-	case DPLL_A_MODE:
-		ret = dpll_msg_add_mode(msg, dpll, NULL);
-		break;
-	case DPLL_A_LOCK_STATUS:
-		ret = dpll_msg_add_lock_status(msg, dpll, NULL);
-		break;
-	case DPLL_A_TEMP:
-		ret = dpll_msg_add_temp(msg, dpll, NULL);
-		break;
-	case DPLL_A_PIN_FREQUENCY:
-		ref = xa_load(&pin->dpll_refs, dpll->device_idx);
-		if (!ref)
-			return -EFAULT;
-		ret = dpll_msg_add_pin_freq(msg, pin, ref, NULL, false);
-		break;
-	case DPLL_A_PIN_PRIO:
-		ref = xa_load(&pin->dpll_refs, dpll->device_idx);
-		if (!ref)
-			return -EFAULT;
-		ret = dpll_msg_add_pin_prio(msg, pin, ref, NULL);
-		break;
-	case DPLL_A_PIN_STATE:
-		if (parent) {
-			void *parent_priv = dpll_pin_on_dpll_priv(dpll, parent);
-			void *priv = dpll_pin_on_pin_priv(parent, pin);
-			const struct dpll_pin_ops *ops;
-
-			ref = xa_load(&pin->parent_refs, parent->pin_idx);
-			if (!ref)
-				return -EFAULT;
-			ops = dpll_pin_ops(ref);
-			if (!ops->state_on_pin_get)
-				return -EOPNOTSUPP;
-			ret = ops->state_on_pin_get(pin, priv, parent,
-						    parent_priv, &state, NULL);
-			if (ret)
-				return ret;
-			if (nla_put_u32(msg, DPLL_A_PIN_PARENT_IDX,
-					parent->pin_idx))
-				return -EMSGSIZE;
-		} else {
-			ref = xa_load(&pin->dpll_refs, dpll->device_idx);
-			if (!ref)
-				return -EFAULT;
-			ret = dpll_msg_add_pin_on_dpll_state(msg, pin, ref,
-							     NULL);
-			if (ret)
-				return ret;
-		}
-		break;
-	default:
-		break;
-	}
-
-	return ret;
-}
-
-static int
-dpll_send_event_create(enum dplla event, struct dpll_device *dpll)
+dpll_device_event_send(enum dplla event, struct dpll_device *dpll)
 {
 	struct sk_buff *msg;
 	int ret = -EMSGSIZE;
 	void *hdr;
+
+	if (!xa_get_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED))
+		return -ENODEV;
+
+	msg = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
+	if (!msg)
+		return -ENOMEM;
+	hdr = genlmsg_put(msg, 0, 0, &dpll_nl_family, 0, event);
+	if (!hdr)
+		goto out_free_msg;
+	ret = dpll_device_get_one(dpll, msg, NULL);
+	if (ret)
+		goto out_cancel_msg;
+	genlmsg_end(msg, hdr);
+	genlmsg_multicast(&dpll_nl_family, msg, 0, 0, GFP_KERNEL);
+
+	return 0;
+
+out_cancel_msg:
+	genlmsg_cancel(msg, hdr);
+out_free_msg:
+	nlmsg_free(msg);
+
+	return ret;
+}
+
+int dpll_device_create_ntf(struct dpll_device *dpll)
+{
+	return dpll_device_event_send(DPLL_CMD_DEVICE_CREATE_NTF, dpll);
+}
+
+int dpll_device_delete_ntf(struct dpll_device *dpll)
+{
+	return dpll_device_event_send(DPLL_CMD_DEVICE_DELETE_NTF, dpll);
+}
+
+int dpll_device_change_ntf(struct dpll_device *dpll)
+{
+	int ret = -EINVAL;
+
+	if (WARN_ON(!dpll))
+		return ret;
+
+	mutex_lock(&dpll_xa_lock);
+	ret = dpll_device_event_send(DPLL_CMD_DEVICE_CHANGE_NTF, dpll);
+	mutex_unlock(&dpll_xa_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(dpll_device_change_ntf);
+
+static int
+dpll_pin_event_send(enum dplla event, struct dpll_pin *pin)
+{
+	struct dpll_pin *pin_verify;
+	struct sk_buff *msg;
+	int ret = -EMSGSIZE;
+	void *hdr;
+
+	pin_verify = xa_load(&dpll_pin_xa, pin->id);
+	if (pin != pin_verify)
+		return -ENODEV;
 
 	msg = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!msg)
@@ -898,8 +889,7 @@ dpll_send_event_create(enum dplla event, struct dpll_device *dpll)
 	hdr = genlmsg_put(msg, 0, 0, &dpll_nl_family, 0, event);
 	if (!hdr)
 		goto out_free_msg;
-
-	ret = dpll_msg_add_dev_handle(msg, dpll);
+	ret = __dpll_cmd_pin_dump_one(msg, pin, NULL);
 	if (ret)
 		goto out_cancel_msg;
 	genlmsg_end(msg, hdr);
@@ -915,70 +905,35 @@ out_free_msg:
 	return ret;
 }
 
-static int
-dpll_send_event_change(struct dpll_device *dpll, struct dpll_pin *pin,
-		       struct dpll_pin *parent, enum dplla attr)
+int dpll_pin_create_ntf(struct dpll_pin *pin)
 {
-	struct sk_buff *msg;
-	int ret = -EMSGSIZE;
-	void *hdr;
+	return dpll_pin_event_send(DPLL_CMD_PIN_CREATE_NTF, pin);
+}
 
-	msg = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
-	if (!msg)
-		return -ENOMEM;
+int dpll_pin_delete_ntf(struct dpll_pin *pin)
+{
+	return dpll_pin_event_send(DPLL_CMD_PIN_DELETE_NTF, pin);
+}
 
-	hdr = genlmsg_put(msg, 0, 0, &dpll_nl_family, 0,
-			  DPLL_CMD_DEVICE_CHANGE_NTF);
-	if (!hdr)
-		goto out_free_msg;
+static int __dpll_pin_change_ntf(struct dpll_pin *pin)
+{
+	return dpll_pin_event_send(DPLL_CMD_PIN_CHANGE_NTF, pin);
+}
 
-	ret = dpll_event_device_change(msg, dpll, pin, parent, attr);
-	if (ret)
-		goto out_cancel_msg;
-	genlmsg_end(msg, hdr);
-	genlmsg_multicast(&dpll_nl_family, msg, 0, 0, GFP_KERNEL);
+int dpll_pin_change_ntf(struct dpll_pin *pin)
+{
+	int ret = -EINVAL;
 
-	return 0;
+	if (WARN_ON(!pin))
+		return ret;
 
-out_cancel_msg:
-	genlmsg_cancel(msg, hdr);
-out_free_msg:
-	nlmsg_free(msg);
+	mutex_lock(&dpll_xa_lock);
+	ret = __dpll_pin_change_ntf(pin);
+	mutex_unlock(&dpll_xa_lock);
 
 	return ret;
 }
-
-int dpll_notify_device_create(struct dpll_device *dpll)
-{
-	return dpll_send_event_create(DPLL_CMD_DEVICE_CREATE_NTF, dpll);
-}
-
-int dpll_notify_device_delete(struct dpll_device *dpll)
-{
-	return dpll_send_event_create(DPLL_CMD_DEVICE_DELETE_NTF, dpll);
-}
-
-int dpll_device_notify(struct dpll_device *dpll, enum dplla attr)
-{
-	if (WARN_ON(!dpll))
-		return -EINVAL;
-
-	return dpll_send_event_change(dpll, NULL, NULL, attr);
-}
-EXPORT_SYMBOL_GPL(dpll_device_notify);
-
-int dpll_pin_notify(struct dpll_device *dpll, struct dpll_pin *pin,
-		    enum dplla attr)
-{
-	return dpll_send_event_change(dpll, pin, NULL, attr);
-}
-EXPORT_SYMBOL_GPL(dpll_pin_notify);
-
-int dpll_pin_parent_notify(struct dpll_device *dpll, struct dpll_pin *pin,
-			   struct dpll_pin *parent, enum dplla attr)
-{
-	return dpll_send_event_change(dpll, pin, parent, attr);
-}
+EXPORT_SYMBOL_GPL(dpll_pin_change_ntf);
 
 int __init dpll_netlink_init(void)
 {

@@ -484,7 +484,7 @@ int dpll_device_register(struct dpll_device *dpll, enum dpll_type type,
 
 	xa_set_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED);
 	mutex_unlock(&dpll_xa_lock);
-	dpll_notify_device_create(dpll);
+	dpll_device_create_ntf(dpll);
 
 	return 0;
 }
@@ -506,7 +506,7 @@ void dpll_device_unregister(struct dpll_device *dpll,
 
 	mutex_lock(&dpll_xa_lock);
 	ASSERT_DPLL_REGISTERED(dpll);
-
+	dpll_device_delete_ntf(dpll);
 	reg = dpll_device_registration_find(dpll, ops, priv);
 	if (WARN_ON(!reg)) {
 		mutex_unlock(&dpll_xa_lock);
@@ -521,7 +521,6 @@ void dpll_device_unregister(struct dpll_device *dpll,
 	}
 	xa_clear_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED);
 	mutex_unlock(&dpll_xa_lock);
-	dpll_notify_device_delete(dpll);
 }
 EXPORT_SYMBOL_GPL(dpll_device_unregister);
 
@@ -673,7 +672,7 @@ __dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
 	if (ret)
 		goto ref_pin_del;
 	else
-		dpll_pin_notify(dpll, pin, DPLL_A_PIN_IDX);
+		dpll_pin_create_ntf(pin);
 
 	return ret;
 
@@ -783,7 +782,7 @@ int dpll_pin_on_pin_register(struct dpll_pin *parent, struct dpll_pin *pin,
 			stop = i;
 			goto dpll_unregister;
 		}
-		dpll_pin_parent_notify(ref->dpll, pin, parent, DPLL_A_PIN_IDX);
+		dpll_pin_create_ntf(pin);
 	}
 
 	return ret;
@@ -819,12 +818,11 @@ void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin,
 	unsigned long i;
 
 	mutex_lock(&dpll_xa_lock);
+	dpll_pin_delete_ntf(pin);
 	dpll_xa_ref_pin_del(&pin->parent_refs, parent, ops, priv);
 	refcount_dec(&pin->refcount);
 	xa_for_each(&pin->dpll_refs, i, ref) {
 		__dpll_pin_unregister(ref->dpll, pin, ops, priv);
-		dpll_pin_parent_notify(ref->dpll, pin, parent,
-				       DPLL_A_PIN_IDX);
 	}
 	mutex_unlock(&dpll_xa_lock);
 }
