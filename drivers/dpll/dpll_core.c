@@ -14,6 +14,7 @@
 #include <linux/string.h>
 
 #include "dpll_core.h"
+#include "dpll_netlink.h"
 
 /* Mutex lock to protect DPLL subsystem devices and pins */
 DEFINE_MUTEX(dpll_lock);
@@ -379,6 +380,7 @@ int dpll_device_register(struct dpll_device *dpll, enum dpll_type type,
 	}
 
 	xa_set_mark(&dpll_device_xa, dpll->id, DPLL_REGISTERED);
+	dpll_device_create_ntf(dpll);
 	mutex_unlock(&dpll_lock);
 
 	return 0;
@@ -402,6 +404,7 @@ void dpll_device_unregister(struct dpll_device *dpll,
 
 	mutex_lock(&dpll_lock);
 	ASSERT_DPLL_REGISTERED(dpll);
+	dpll_device_delete_ntf(dpll);
 	reg = dpll_device_registration_find(dpll, ops, priv);
 	if (WARN_ON(!reg)) {
 		mutex_unlock(&dpll_lock);
@@ -526,6 +529,7 @@ __dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
 	if (ret)
 		goto ref_pin_del;
 	xa_set_mark(&dpll_pin_xa, pin->id, DPLL_REGISTERED);
+	dpll_pin_create_ntf(pin);
 
 	return ret;
 
@@ -600,6 +604,7 @@ void dpll_pin_unregister(struct dpll_device *dpll, struct dpll_pin *pin,
 		return;
 
 	mutex_lock(&dpll_lock);
+	dpll_pin_delete_ntf(pin);
 	__dpll_pin_unregister(dpll, pin, ops, priv);
 	mutex_unlock(&dpll_lock);
 }
@@ -648,6 +653,7 @@ int dpll_pin_on_pin_register(struct dpll_pin *parent, struct dpll_pin *pin,
 			stop = i;
 			goto dpll_unregister;
 		}
+		dpll_pin_create_ntf(pin);
 	}
 	mutex_unlock(&dpll_lock);
 
@@ -657,6 +663,7 @@ dpll_unregister:
 	xa_for_each(&parent->dpll_refs, i, ref)
 		if (i < stop) {
 			__dpll_pin_unregister(ref->dpll, pin, ops, priv);
+			dpll_pin_delete_ntf(pin);
 		}
 	refcount_dec(&pin->refcount);
 	dpll_xa_ref_pin_del(&pin->parent_refs, parent, ops, priv);
@@ -683,6 +690,7 @@ void dpll_pin_on_pin_unregister(struct dpll_pin *parent, struct dpll_pin *pin,
 	unsigned long i;
 
 	mutex_lock(&dpll_lock);
+	dpll_pin_delete_ntf(pin);
 	dpll_xa_ref_pin_del(&pin->parent_refs, parent, ops, priv);
 	refcount_dec(&pin->refcount);
 	xa_for_each(&pin->dpll_refs, i, ref)
