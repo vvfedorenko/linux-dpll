@@ -20,12 +20,6 @@ definitions:
       -
         name: automatic
         doc: highest prio input pin auto selected by dpll
-      -
-        name: detached
-        doc: |
-          dpll driven on system clk, not using any external sources,
-          not possible to manually set state of the pins directly connected
-          to the dpll
     render-max: true
   -
     type: enum
@@ -361,7 +355,6 @@ operations:
         request:
           attributes:
             - id
-            - mode
     -
       name: device-create-ntf
       doc: Notification about device appearing
