@@ -576,8 +576,7 @@ static bool ice_dpll_mode_supported(const struct dpll_device *dpll,
 				    enum dpll_mode mode,
 				    struct netlink_ext_ack *extack)
 {
-	if (mode == DPLL_MODE_AUTOMATIC ||
-	    mode == DPLL_MODE_DETACHED)
+	if (mode == DPLL_MODE_AUTOMATIC)
 		return true;
 
 	return false;
@@ -612,57 +611,6 @@ static int ice_dpll_mode_get(const struct dpll_device *dpll, void *dpll_priv,
 	ice_dpll_cb_unlock(pf);
 
 	return 0;
-}
-
-/**
- * ice_dpll_mode_set - set dpll's working mode
- * @dpll: registered dpll pointer
- * @dpll_priv: private data pointer passed on dpll registration
- * @mode: requested working mode of dpll
- * @extack: error reporting
- *
- * Dpll subsystem callback. User requests working mode of dpll.
- *
- * Context: Acquires pf->dplls.lock
- * Return:
- * * 0 - success
- * * negative - failure
- */
-static int ice_dpll_mode_set(const struct dpll_device *dpll, void *dpll_priv,
-			     enum dpll_mode mode,
-			     struct netlink_ext_ack *extack)
-{
-	struct ice_dpll *d = dpll_priv;
-	struct ice_pf *pf = d->pf;
-	u8 config;
-	int ret;
-
-	switch (mode) {
-	case DPLL_MODE_AUTOMATIC:
-		config = ICE_AQC_SET_CGU_DPLL_CONFIG_MODE_AUTOMATIC;
-		break;
-	case DPLL_MODE_DETACHED:
-		config = ICE_AQC_SET_CGU_DPLL_CONFIG_MODE_FREERUN;
-		break;
-	default:
-		return -EINVAL;
-	}
-	ret = ice_dpll_cb_lock(pf, extack);
-	if (ret)
-		return ret;
-	ret = ice_aq_set_cgu_dpll_config(&pf->hw, d->dpll_idx, d->ref_state,
-					 config, d->eec_mode);
-	if (ret)
-		NL_SET_ERR_MSG_FMT(extack,
-				   "err:%d %s failed to set mode:%u on dpll:%u\n",
-				   ret,
-				   ice_aq_str(pf->hw.adminq.sq_last_status),
-				   mode, d->dpll_idx);
-	else
-		d->mode = mode;
-	ice_dpll_cb_unlock(pf);
-
-	return ret;
 }
 
 /**
@@ -1121,7 +1069,6 @@ static const struct dpll_device_ops ice_dpll_ops = {
 	.lock_status_get = ice_dpll_lock_status_get,
 	.mode_supported = ice_dpll_mode_supported,
 	.mode_get = ice_dpll_mode_get,
-	.mode_set = ice_dpll_mode_set,
 };
 
 /**
@@ -1180,7 +1127,7 @@ ice_dpll_update_state(struct ice_pf *pf, struct ice_dpll *d, bool init)
 
 	ret = ice_get_cgu_state(&pf->hw, d->dpll_idx, d->prev_dpll_state,
 				&d->input_idx, &d->ref_state, &d->eec_mode,
-				&d->phase_shift, &d->dpll_state, &d->mode);
+				&d->phase_shift, &d->dpll_state);
 
 	dev_dbg(ice_pf_to_dev(pf),
 		"update dpll=%d, prev_src_idx:%u, src_idx:%u, state:%d, prev:%d mode:%d\n",
