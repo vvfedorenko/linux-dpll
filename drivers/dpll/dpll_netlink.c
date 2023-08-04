@@ -10,6 +10,7 @@
 #include <linux/kernel.h>
 #include <net/genetlink.h>
 #include "dpll_core.h"
+#include "dpll_netlink.h"
 #include "dpll_nl.h"
 #include <uapi/linux/dpll.h>
 
@@ -708,7 +709,7 @@ dpll_pin_parent_device_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 	int ret;
 
 	nla_parse_nested(tb, DPLL_A_MAX, parent_nest,
-			 NULL, extack);
+			 dpll_pin_parent_device_nl_policy, extack);
 	if (!tb[DPLL_A_ID]) {
 		NL_SET_ERR_MSG(extack, "device parent id expected");
 		return -EINVAL;
@@ -750,7 +751,7 @@ dpll_pin_parent_pin_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 	int ret;
 
 	nla_parse_nested(tb, DPLL_A_MAX, parent_nest,
-			 NULL, extack);
+			 dpll_pin_parent_pin_nl_policy, extack);
 	if (!tb[DPLL_A_PIN_ID]) {
 		NL_SET_ERR_MSG(extack, "parent pin id expected");
 		return -EINVAL;

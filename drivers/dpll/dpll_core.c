@@ -215,21 +215,8 @@ dpll_xa_ref_dpll_del(struct xarray *xa_dplls, struct dpll_device *dpll,
 			WARN_ON(!list_empty(&ref->registration_list));
 			kfree(ref);
 		}
-		return;
+		break;
 	}
-}
-
-struct dpll_pin_ref *
-dpll_xa_ref_dpll_find(struct xarray *xa_refs, const struct dpll_device *dpll)
-{
-	struct dpll_pin_ref *ref;
-	unsigned long i;
-
-	xa_for_each(xa_refs, i, ref)
-		if (ref->dpll == dpll)
-			return ref;
-
-	return NULL;
 }
 
 struct dpll_pin_ref *dpll_xa_ref_dpll_first(struct xarray *xa_refs)

@@ -1887,7 +1887,6 @@ void ice_dpll_init(struct ice_pf *pf)
 		if (err)
 			goto deinit_pins;
 	}
-	set_bit(ICE_FLAG_DPLL, pf->flags);
 
 	return;
 
