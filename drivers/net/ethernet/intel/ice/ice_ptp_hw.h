@@ -280,7 +280,8 @@ const char *ice_cgu_get_pin_name(struct ice_hw *hw, u8 pin, bool input);
 int ice_get_cgu_state(struct ice_hw *hw, u8 dpll_idx,
 		      enum dpll_lock_status last_dpll_state, u8 *pin,
 		      u8 *ref_state, u8 *eec_mode, s64 *phase_offset,
-		      enum dpll_lock_status *dpll_state);
+		      enum dpll_lock_status *dpll_state,
+		      enum dpll_mode *mode);
 int ice_get_cgu_rclk_pin_info(struct ice_hw *hw, u8 *base_idx, u8 *pin_num);
 
 #define PFTSYN_SEM_BYTES	4

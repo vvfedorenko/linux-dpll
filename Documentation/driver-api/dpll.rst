@@ -95,6 +95,15 @@ In automatic mode (``DPLL_MODE_AUTOMATIC``) the user can only receive
 pin state ``DPLL_PIN_STATE_CONNECTED`` once automatic selection
 algorithm locks a dpll device with one of the inputs.
 
+In detached mode (``DPLL_MODE_DETACHED``) the pin selection on dpll
+device is not available, while all the input pin signals shall be
+broken. For some devices detached mode may be only way to stop dpll
+from using input pins signals. For example, changing pin state to
+``DPLL_PIN_STATE_DISCONNECTED`` on all of the input pins of dpll device
+in automatic mode must not disconnect those pins, they can still be
+monitored and measured, but changing mode to detached shall break all
+actively monitored connections.
+
 Shared pins
 ===========
 

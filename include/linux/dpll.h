@@ -17,6 +17,9 @@ struct dpll_pin;
 struct dpll_device_ops {
 	int (*mode_get)(const struct dpll_device *dpll, void *dpll_priv,
 			enum dpll_mode *mode, struct netlink_ext_ack *extack);
+	int (*mode_set)(const struct dpll_device *dpll, void *dpll_priv,
+			const enum dpll_mode mode,
+			struct netlink_ext_ack *extack);
 	bool (*mode_supported)(const struct dpll_device *dpll, void *dpll_priv,
 			       const enum dpll_mode mode,
 			       struct netlink_ext_ack *extack);
