@@ -15,14 +15,10 @@
  *   DPLL_A_MODE attribute
  * @DPLL_MODE_MANUAL: input can be only selected by sending a request to dpll
  * @DPLL_MODE_AUTOMATIC: highest prio input pin auto selected by dpll
- * @DPLL_MODE_DETACHED: dpll driven on system clk, not using any external
- *   sources, not possible to manually set state of the pins directly connected
- *   to the dpll
  */
 enum dpll_mode {
 	DPLL_MODE_MANUAL = 1,
 	DPLL_MODE_AUTOMATIC,
-	DPLL_MODE_DETACHED,
 
 	/* private: */
 	__DPLL_MODE_MAX,

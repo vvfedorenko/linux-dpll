@@ -617,24 +617,14 @@ dpll_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 		   enum dpll_pin_state state,
 		   struct netlink_ext_ack *extack)
 {
-	const struct dpll_device_ops *dpll_ops = dpll_device_ops(dpll);
 	const struct dpll_pin_ops *ops;
 	struct dpll_pin_ref *ref;
-	enum dpll_mode mode;
 	int ret;
 
 	if (!(DPLL_PIN_CAPS_STATE_CAN_CHANGE & pin->prop->capabilities)) {
 		NL_SET_ERR_MSG_FMT(extack, "pin:%u not allowed to change state",
 				   pin->id);
 		return -EOPNOTSUPP;
-	}
-	ret = dpll_ops->mode_get(dpll, dpll_priv(dpll), &mode, extack);
-	if (ret)
-		return ret;
-	if (mode == DPLL_MODE_DETACHED) {
-		NL_SET_ERR_MSG_FMT(extack, "pin:%u cannot change state on dpll in DETACHED mode",
-				   pin->id);
-		return -EINVAL;
 	}
 	ref = xa_load(&pin->dpll_refs, dpll->device_idx);
 	ASSERT_NOT_NULL(ref);
@@ -1008,30 +998,6 @@ int dpll_nl_pin_set_doit(struct sk_buff *skb, struct genl_info *info)
 	return dpll_pin_set_from_nlattr(pin, info);
 }
 
-static int
-dpll_set_from_nlattr(struct dpll_device *dpll, struct genl_info *info)
-{
-	const struct dpll_device_ops *ops = dpll_device_ops(dpll);
-	struct nlattr *tb[DPLL_A_MAX + 1];
-	int ret;
-
-	nla_parse(tb, DPLL_A_MAX, genlmsg_data(info->genlhdr),
-		  genlmsg_len(info->genlhdr), NULL, info->extack);
-	if (tb[DPLL_A_MODE]) {
-		if (!ops->mode_set) {
-			NL_SET_ERR_MSG(info->extack, "mode set not supported");
-			return -EINVAL;
-		}
-		ret = ops->mode_set(dpll, dpll_priv(dpll),
-				    nla_get_u8(tb[DPLL_A_MODE]), info->extack);
-		if (ret)
-			return ret;
-		__dpll_device_change_ntf(dpll);
-	}
-
-	return 0;
-}
-
 static struct dpll_device *
 dpll_device_find(u64 clock_id, struct nlattr *mod_name_attr,
 		 enum dpll_type type, struct netlink_ext_ack *extack)
@@ -1157,9 +1123,8 @@ int dpll_nl_device_get_doit(struct sk_buff *skb, struct genl_info *info)
 
 int dpll_nl_device_set_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct dpll_device *dpll = info->user_ptr[0];
-
-	return dpll_set_from_nlattr(dpll, info);
+	/* placeholder for set command */
+	return 0;
 }
 
 int dpll_nl_device_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb)

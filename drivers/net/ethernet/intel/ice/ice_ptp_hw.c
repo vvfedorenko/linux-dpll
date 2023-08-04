@@ -3797,7 +3797,6 @@ const char *ice_cgu_get_pin_name(struct ice_hw *hw, u8 pin, bool input)
  * @eec_mode: eec mode of the DPLL
  * @phase_offset: pointer to a buffer for returning phase offset
  * @dpll_state: state of the DPLL (output)
- * @mode: work mode of the DPLL
  *
  * This function will read the state of the DPLL(dpll_idx). Non-null
  * 'pin', 'ref_state', 'eec_mode' and 'phase_offset' parameters are used to
@@ -3808,8 +3807,7 @@ const char *ice_cgu_get_pin_name(struct ice_hw *hw, u8 pin, bool input)
 int ice_get_cgu_state(struct ice_hw *hw, u8 dpll_idx,
 		      enum dpll_lock_status last_dpll_state, u8 *pin,
 		      u8 *ref_state, u8 *eec_mode, s64 *phase_offset,
-		      enum dpll_lock_status *dpll_state,
-		      enum dpll_mode *mode)
+		      enum dpll_lock_status *dpll_state)
 {
 	u8 hw_ref_state, hw_dpll_state, hw_eec_mode, hw_config;
 	s64 hw_phase_offset;
@@ -3830,20 +3828,6 @@ int ice_get_cgu_state(struct ice_hw *hw, u8 dpll_idx,
 		*ref_state = hw_ref_state;
 	if (eec_mode)
 		*eec_mode = hw_eec_mode;
-	if (mode) {
-		switch (hw_config & ICE_AQC_GET_CGU_DPLL_CONFIG_MODE) {
-		case ICE_AQC_GET_CGU_DPLL_CONFIG_MODE_FREERUN:
-			*mode = DPLL_MODE_DETACHED;
-			if (dpll_state)
-				*dpll_state = DPLL_LOCK_STATUS_UNLOCKED;
-			return 0;
-		case ICE_AQC_GET_CGU_DPLL_CONFIG_MODE_AUTOMATIC:
-			*mode = DPLL_MODE_AUTOMATIC;
-			break;
-		default:
-			break;
-		}
-	}
 	if (!dpll_state)
 		return 0;
 
