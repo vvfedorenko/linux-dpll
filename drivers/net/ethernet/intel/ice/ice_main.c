@@ -4657,8 +4657,7 @@ static void ice_deinit_features(struct ice_pf *pf)
 		ice_gnss_exit(pf);
 	if (test_bit(ICE_FLAG_PTP_SUPPORTED, pf->flags))
 		ice_ptp_release(pf);
-	if (ice_is_feature_supported(pf, ICE_F_PHY_RCLK) ||
-	    ice_is_feature_supported(pf, ICE_F_CGU))
+	if (test_bit(ICE_FLAG_DPLL, pf->flags))
 		ice_dpll_deinit(pf);
 }
 
