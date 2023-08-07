@@ -5228,7 +5228,7 @@ ice_aq_get_cgu_dpll_status(struct ice_hw *hw, u8 dpll_num, u8 *ref_state,
 			   u8 *eec_mode)
 {
 	struct ice_aqc_get_cgu_dpll_status *cmd;
-	const s64 NSEC_PER_PSEC = 1000LL;
+	const s64 nsec_per_psec = 1000LL;
 	struct ice_aq_desc desc;
 	int status;
 
@@ -5244,8 +5244,8 @@ ice_aq_get_cgu_dpll_status(struct ice_hw *hw, u8 dpll_num, u8 *ref_state,
 		*phase_offset = le32_to_cpu(cmd->phase_offset_h);
 		*phase_offset <<= 32;
 		*phase_offset += le32_to_cpu(cmd->phase_offset_l);
-		*phase_offset = sign_extend64(*phase_offset, 47) /
-			NSEC_PER_PSEC;
+		*phase_offset = div64_s64(sign_extend64(*phase_offset, 47),
+					  nsec_per_psec);
 		*eec_mode = cmd->eec_mode;
 	}
 
@@ -5281,7 +5281,7 @@ ice_aq_set_cgu_dpll_config(struct ice_hw *hw, u8 dpll_num, u8 ref_state,
 }
 
 /**
- * ice_aq_set_cgu_ref_prio - set input refernce priority
+ * ice_aq_set_cgu_ref_prio - set input reference priority
  * @hw: pointer to the HW struct
  * @dpll_num: DPLL index
  * @ref_idx: Reference pin index
