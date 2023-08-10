@@ -3351,9 +3351,9 @@ ice_get_pca9575_handle(struct ice_hw *hw, u16 *pca9575_handle)
 bool ice_is_phy_rclk_present(struct ice_hw *hw)
 {
 	if (ice_find_netlist_node(hw, ICE_AQC_LINK_TOPO_NODE_TYPE_CLK_CTRL,
-				  ICE_ACQ_GET_LINK_TOPO_NODE_NR_C827, NULL) &&
+				  ICE_AQC_GET_LINK_TOPO_NODE_NR_C827, NULL) &&
 	    ice_find_netlist_node(hw, ICE_AQC_LINK_TOPO_NODE_TYPE_CLK_CTRL,
-				  ICE_ACQ_GET_LINK_TOPO_NODE_NR_E822_PHY, NULL))
+				  ICE_AQC_GET_LINK_TOPO_NODE_NR_E822_PHY, NULL))
 		return false;
 
 	return true;
@@ -3371,7 +3371,7 @@ bool ice_is_phy_rclk_present(struct ice_hw *hw)
 bool ice_is_clock_mux_present_e810t(struct ice_hw *hw)
 {
 	if (ice_find_netlist_node(hw, ICE_AQC_LINK_TOPO_NODE_TYPE_CLK_MUX,
-				  ICE_ACQ_GET_LINK_TOPO_NODE_NR_GEN_CLK_MUX,
+				  ICE_AQC_GET_LINK_TOPO_NODE_NR_GEN_CLK_MUX,
 				  NULL))
 		return false;
 
@@ -3410,7 +3410,7 @@ int ice_get_pf_c827_idx(struct ice_hw *hw, u8 *idx)
 
 	status = ice_aq_get_netlist_node(hw, &cmd, &node_part_number,
 					 &node_handle);
-	if (status || node_part_number != ICE_ACQ_GET_LINK_TOPO_NODE_NR_C827)
+	if (status || node_part_number != ICE_AQC_GET_LINK_TOPO_NODE_NR_C827)
 		return -ENOENT;
 
 	if (node_handle == E810C_QSFP_C827_0_HANDLE)
@@ -3604,15 +3604,15 @@ int ice_get_phy_tx_tstamp_ready(struct ice_hw *hw, u8 block, u64 *tstamp_ready)
 bool ice_is_cgu_present(struct ice_hw *hw)
 {
 	if (!ice_find_netlist_node(hw, ICE_AQC_LINK_TOPO_NODE_TYPE_CLK_CTRL,
-				   ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032,
+				   ICE_AQC_GET_LINK_TOPO_NODE_NR_ZL30632_80032,
 				   NULL)) {
-		hw->cgu_part_number = ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032;
+		hw->cgu_part_number = ICE_AQC_GET_LINK_TOPO_NODE_NR_ZL30632_80032;
 		return true;
 	} else if (!ice_find_netlist_node(hw,
 					  ICE_AQC_LINK_TOPO_NODE_TYPE_CLK_CTRL,
-					  ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384,
+					  ICE_AQC_GET_LINK_TOPO_NODE_NR_SI5383_5384,
 					  NULL)) {
-		hw->cgu_part_number = ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384;
+		hw->cgu_part_number = ICE_AQC_GET_LINK_TOPO_NODE_NR_SI5383_5384;
 		return true;
 	}
 
@@ -3633,7 +3633,7 @@ ice_cgu_get_pin_desc_e823(struct ice_hw *hw, bool input, int *size)
 	static const struct ice_cgu_pin_desc *t;
 
 	if (hw->cgu_part_number ==
-	    ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032) {
+	    ICE_AQC_GET_LINK_TOPO_NODE_NR_ZL30632_80032) {
 		if (input) {
 			t = ice_e823_zl_cgu_inputs;
 			*size = ARRAY_SIZE(ice_e823_zl_cgu_inputs);
@@ -3642,7 +3642,7 @@ ice_cgu_get_pin_desc_e823(struct ice_hw *hw, bool input, int *size)
 			*size = ARRAY_SIZE(ice_e823_zl_cgu_outputs);
 		}
 	} else if (hw->cgu_part_number ==
-		   ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384) {
+		   ICE_AQC_GET_LINK_TOPO_NODE_NR_SI5383_5384) {
 		if (input) {
 			t = ice_e823_si_cgu_inputs;
 			*size = ARRAY_SIZE(ice_e823_si_cgu_inputs);
@@ -3895,10 +3895,10 @@ int ice_get_cgu_rclk_pin_info(struct ice_hw *hw, u8 *base_idx, u8 *pin_num)
 		*pin_num = ICE_E822_RCLK_PINS_NUM;
 		ret = 0;
 		if (hw->cgu_part_number ==
-		    ICE_ACQ_GET_LINK_TOPO_NODE_NR_ZL30632_80032)
+		    ICE_AQC_GET_LINK_TOPO_NODE_NR_ZL30632_80032)
 			*base_idx = ZL_REF1P;
 		else if (hw->cgu_part_number ==
-			 ICE_ACQ_GET_LINK_TOPO_NODE_NR_SI5383_5384)
+			 ICE_AQC_GET_LINK_TOPO_NODE_NR_SI5383_5384)
 			*base_idx = SI_REF1P;
 		else
 			ret = -ENODEV;
