@@ -1840,11 +1840,10 @@ void ice_dpll_deinit(struct ice_pf *pf)
 {
 	bool cgu = ice_is_feature_supported(pf, ICE_F_CGU);
 
-	if (!test_bit(ICE_FLAG_DPLL, pf->flags))
+	if (!test_and_clear_bit(ICE_FLAG_DPLL, pf->flags))
 		return;
 	if (cgu)
 		ice_dpll_deinit_worker(pf);
-	clear_bit(ICE_FLAG_DPLL, pf->flags);
 
 	ice_dpll_deinit_pins(pf, cgu);
 	ice_dpll_deinit_dpll(pf, &pf->dplls.pps, cgu);
