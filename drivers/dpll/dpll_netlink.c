@@ -219,7 +219,8 @@ dpll_msg_add_pin_freq(struct sk_buff *msg, struct dpll_pin *pin,
 				 dpll_priv(dpll), &freq, extack);
 	if (ret)
 		return ret;
-	if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY, sizeof(freq), &freq, 0))
+	if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY, sizeof(freq), &freq,
+			  DPLL_A_PAD))
 		return -EMSGSIZE;
 	for (fs = 0; fs < pin->prop->freq_supported_num; fs++) {
 		nest = nla_nest_start(msg, DPLL_A_PIN_FREQUENCY_SUPPORTED);
@@ -227,13 +228,13 @@ dpll_msg_add_pin_freq(struct sk_buff *msg, struct dpll_pin *pin,
 			return -EMSGSIZE;
 		freq = pin->prop->freq_supported[fs].min;
 		if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY_MIN, sizeof(freq),
-				  &freq, 0)) {
+				  &freq, DPLL_A_PAD)) {
 			nla_nest_cancel(msg, nest);
 			return -EMSGSIZE;
 		}
 		freq = pin->prop->freq_supported[fs].max;
 		if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY_MAX, sizeof(freq),
-				  &freq, 0)) {
+				  &freq, DPLL_A_PAD)) {
 			nla_nest_cancel(msg, nest);
 			return -EMSGSIZE;
 		}
@@ -349,7 +350,7 @@ dpll_cmd_pin_get_one(struct sk_buff *msg, struct dpll_pin *pin,
 	if (nla_put_string(msg, DPLL_A_MODULE_NAME, module_name(pin->module)))
 		return -EMSGSIZE;
 	if (nla_put_64bit(msg, DPLL_A_CLOCK_ID, sizeof(pin->clock_id),
-			  &pin->clock_id, 0))
+			  &pin->clock_id, DPLL_A_PAD))
 		return -EMSGSIZE;
 	if (prop->board_label &&
 	    nla_put_string(msg, DPLL_A_PIN_BOARD_LABEL, prop->board_label))
@@ -388,7 +389,7 @@ dpll_device_get_one(struct dpll_device *dpll, struct sk_buff *msg,
 	if (nla_put_string(msg, DPLL_A_MODULE_NAME, module_name(dpll->module)))
 		return -EMSGSIZE;
 	if (nla_put_64bit(msg, DPLL_A_CLOCK_ID, sizeof(dpll->clock_id),
-			  &dpll->clock_id, 0))
+			  &dpll->clock_id, DPLL_A_PAD))
 		return -EMSGSIZE;
 	ret = dpll_msg_add_temp(msg, dpll, extack);
 	if (ret)
