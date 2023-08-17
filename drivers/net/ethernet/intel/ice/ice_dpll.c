@@ -1834,14 +1834,13 @@ deinit_info:
  * resources and unregistering the dpll, pin and all resources used for
  * handling them.
  *
- * Context: Destroys pf->dplls.lock mutex.
+ * Context: Destroys pf->dplls.lock mutex. Call only if ICE_FLAG_DPLL was set.
  */
 void ice_dpll_deinit(struct ice_pf *pf)
 {
 	bool cgu = ice_is_feature_supported(pf, ICE_F_CGU);
 
-	if (!test_and_clear_bit(ICE_FLAG_DPLL, pf->flags))
-		return;
+	clear_bit(ICE_FLAG_DPLL, pf->flags);
 	if (cgu)
 		ice_dpll_deinit_worker(pf);
 
