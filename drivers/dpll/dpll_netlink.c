@@ -80,7 +80,7 @@ dpll_msg_add_mode(struct sk_buff *msg, struct dpll_device *dpll,
 	ret = ops->mode_get(dpll, dpll_priv(dpll), &mode, extack);
 	if (ret)
 		return ret;
-	if (nla_put_u8(msg, DPLL_A_MODE, mode))
+	if (nla_put_u32(msg, DPLL_A_MODE, mode))
 		return -EMSGSIZE;
 
 	return 0;
@@ -97,7 +97,7 @@ dpll_msg_add_mode_supported(struct sk_buff *msg, struct dpll_device *dpll,
 		return 0;
 	for (mode = DPLL_MODE_MANUAL; mode <= DPLL_MODE_MAX; mode++)
 		if (ops->mode_supported(dpll, dpll_priv(dpll), mode, extack))
-			if (nla_put_u8(msg, DPLL_A_MODE_SUPPORTED, mode))
+			if (nla_put_u32(msg, DPLL_A_MODE_SUPPORTED, mode))
 				return -EMSGSIZE;
 
 	return 0;
@@ -114,7 +114,7 @@ dpll_msg_add_lock_status(struct sk_buff *msg, struct dpll_device *dpll,
 	ret = ops->lock_status_get(dpll, dpll_priv(dpll), &status, extack);
 	if (ret)
 		return ret;
-	if (nla_put_u8(msg, DPLL_A_LOCK_STATUS, status))
+	if (nla_put_u32(msg, DPLL_A_LOCK_STATUS, status))
 		return -EMSGSIZE;
 
 	return 0;
@@ -177,7 +177,7 @@ dpll_msg_add_pin_on_dpll_state(struct sk_buff *msg, struct dpll_pin *pin,
 				     dpll, dpll_priv(dpll), &state, extack);
 	if (ret)
 		return ret;
-	if (nla_put_u8(msg, DPLL_A_PIN_STATE, state))
+	if (nla_put_u32(msg, DPLL_A_PIN_STATE, state))
 		return -EMSGSIZE;
 
 	return 0;
@@ -197,7 +197,7 @@ dpll_msg_add_pin_direction(struct sk_buff *msg, struct dpll_pin *pin,
 				 dpll_priv(dpll), &direction, extack);
 	if (ret)
 		return ret;
-	if (nla_put_u8(msg, DPLL_A_PIN_DIRECTION, direction))
+	if (nla_put_u32(msg, DPLL_A_PIN_DIRECTION, direction))
 		return -EMSGSIZE;
 
 	return 0;
@@ -284,7 +284,7 @@ dpll_msg_add_pin_parents(struct sk_buff *msg, struct dpll_pin *pin,
 		ret = dpll_msg_add_pin_handle(msg, ppin);
 		if (ret)
 			goto nest_cancel;
-		if (nla_put_u8(msg, DPLL_A_PIN_STATE, state)) {
+		if (nla_put_u32(msg, DPLL_A_PIN_STATE, state)) {
 			ret = -EMSGSIZE;
 			goto nest_cancel;
 		}
@@ -362,7 +362,7 @@ dpll_cmd_pin_get_one(struct sk_buff *msg, struct dpll_pin *pin,
 	    nla_put_string(msg, DPLL_A_PIN_PACKAGE_LABEL,
 			   prop->package_label))
 		return -EMSGSIZE;
-	if (nla_put_u8(msg, DPLL_A_PIN_TYPE, prop->type))
+	if (nla_put_u32(msg, DPLL_A_PIN_TYPE, prop->type))
 		return -EMSGSIZE;
 	if (nla_put_u32(msg, DPLL_A_PIN_DPLL_CAPS, prop->capabilities))
 		return -EMSGSIZE;
@@ -403,7 +403,7 @@ dpll_device_get_one(struct dpll_device *dpll, struct sk_buff *msg,
 	ret = dpll_msg_add_mode_supported(msg, dpll, extack);
 	if (ret)
 		return ret;
-	if (nla_put_u8(msg, DPLL_A_TYPE, dpll->type))
+	if (nla_put_u32(msg, DPLL_A_TYPE, dpll->type))
 		return -EMSGSIZE;
 
 	return ret;
@@ -716,19 +716,19 @@ dpll_pin_parent_device_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 	ref = xa_load(&pin->dpll_refs, dpll->device_idx);
 	ASSERT_NOT_NULL(ref);
 	if (tb[DPLL_A_PIN_STATE]) {
-		state = nla_get_u8(tb[DPLL_A_PIN_STATE]);
+		state = nla_get_u32(tb[DPLL_A_PIN_STATE]);
 		ret = dpll_pin_state_set(dpll, pin, state, extack);
 		if (ret)
 			return ret;
 	}
 	if (tb[DPLL_A_PIN_PRIO]) {
-		prio = nla_get_u8(tb[DPLL_A_PIN_PRIO]);
+		prio = nla_get_u32(tb[DPLL_A_PIN_PRIO]);
 		ret = dpll_pin_prio_set(dpll, pin, prio, extack);
 		if (ret)
 			return ret;
 	}
 	if (tb[DPLL_A_PIN_DIRECTION]) {
-		direction = nla_get_u8(tb[DPLL_A_PIN_DIRECTION]);
+		direction = nla_get_u32(tb[DPLL_A_PIN_DIRECTION]);
 		ret = dpll_pin_direction_set(pin, dpll, direction, extack);
 		if (ret)
 			return ret;
@@ -751,8 +751,8 @@ dpll_pin_parent_pin_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 		NL_SET_ERR_MSG(extack, "parent pin id expected");
 		return -EINVAL;
 	}
-	ppin_idx = nla_get_u32(tb[DPLL_A_PIN_ID]);
-	state = nla_get_u8(tb[DPLL_A_PIN_STATE]);
+	ppin_idx = nla_get_u32(tb[DPLL_A_PIN_PARENT_ID]);
+	state = nla_get_u32(tb[DPLL_A_PIN_STATE]);
 	ret = dpll_pin_on_pin_state_set(pin, ppin_idx, state, extack);
 	if (ret)
 		return ret;
@@ -861,7 +861,7 @@ static struct dpll_pin *dpll_pin_find_from_nlattr(struct genl_info *info)
 		case DPLL_A_PIN_TYPE:
 			if (type)
 				goto duplicated_attr;
-			type = nla_get_u8(attr);
+			type = nla_get_u32(attr);
 		break;
 		case DPLL_A_PIN_BOARD_LABEL:
 			if (board_label_attr)
@@ -1042,7 +1042,7 @@ dpll_device_find_from_nlattr(struct genl_info *info)
 		case DPLL_A_TYPE:
 			if (type)
 				goto duplicated_attr;
-			type = nla_get_u8(attr);
+			type = nla_get_u32(attr);
 			break;
 		default:
 			break;
