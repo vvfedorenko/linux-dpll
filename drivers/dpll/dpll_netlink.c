@@ -38,6 +38,15 @@ dpll_msg_add_dev_handle(struct sk_buff *msg, struct dpll_device *dpll)
 	return 0;
 }
 
+static int
+dpll_msg_add_dev_parent_handle(struct sk_buff *msg, u32 id)
+{
+	if (nla_put_u32(msg, DPLL_A_PIN_PARENT_ID, id))
+		return -EMSGSIZE;
+
+	return 0;
+}
+
 /**
  * dpll_msg_pin_handle_size - get size of pin handle attribute for given pin
  * @pin: pin pointer
@@ -281,7 +290,7 @@ dpll_msg_add_pin_parents(struct sk_buff *msg, struct dpll_pin *pin,
 		nest = nla_nest_start(msg, DPLL_A_PIN_PARENT_PIN);
 		if (!nest)
 			return -EMSGSIZE;
-		ret = dpll_msg_add_pin_handle(msg, ppin);
+		ret = dpll_msg_add_dev_parent_handle(msg, ppin->id);
 		if (ret)
 			goto nest_cancel;
 		if (nla_put_u32(msg, DPLL_A_PIN_STATE, state)) {
@@ -311,7 +320,7 @@ dpll_msg_add_pin_dplls(struct sk_buff *msg, struct dpll_pin *pin,
 		attr = nla_nest_start(msg, DPLL_A_PIN_PARENT_DEVICE);
 		if (!attr)
 			return -EMSGSIZE;
-		ret = dpll_msg_add_dev_handle(msg, ref->dpll);
+		ret = dpll_msg_add_dev_parent_handle(msg, ref->dpll->id);
 		if (ret)
 			goto nest_cancel;
 		ret = dpll_msg_add_pin_on_dpll_state(msg, pin, ref, extack);
@@ -347,10 +356,11 @@ dpll_cmd_pin_get_one(struct sk_buff *msg, struct dpll_pin *pin,
 	ret = dpll_msg_add_pin_handle(msg, pin);
 	if (ret)
 		return ret;
-	if (nla_put_string(msg, DPLL_A_MODULE_NAME, module_name(pin->module)))
+	if (nla_put_string(msg, DPLL_A_PIN_MODULE_NAME,
+			   module_name(pin->module)))
 		return -EMSGSIZE;
-	if (nla_put_64bit(msg, DPLL_A_CLOCK_ID, sizeof(pin->clock_id),
-			  &pin->clock_id, DPLL_A_PAD))
+	if (nla_put_64bit(msg, DPLL_A_PIN_CLOCK_ID, sizeof(pin->clock_id),
+			  &pin->clock_id, DPLL_A_PIN_PAD))
 		return -EMSGSIZE;
 	if (prop->board_label &&
 	    nla_put_string(msg, DPLL_A_PIN_BOARD_LABEL, prop->board_label))
@@ -695,7 +705,7 @@ static int
 dpll_pin_parent_device_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 			   struct netlink_ext_ack *extack)
 {
-	struct nlattr *tb[DPLL_A_MAX + 1];
+	struct nlattr *tb[DPLL_A_PIN_MAX + 1];
 	enum dpll_pin_direction direction;
 	enum dpll_pin_state state;
 	struct dpll_pin_ref *ref;
@@ -703,13 +713,13 @@ dpll_pin_parent_device_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 	u32 pdpll_idx, prio;
 	int ret;
 
-	nla_parse_nested(tb, DPLL_A_MAX, parent_nest,
+	nla_parse_nested(tb, DPLL_A_PIN_MAX, parent_nest,
 			 dpll_pin_parent_device_nl_policy, extack);
-	if (!tb[DPLL_A_ID]) {
+	if (!tb[DPLL_A_PIN_PARENT_ID]) {
 		NL_SET_ERR_MSG(extack, "device parent id expected");
 		return -EINVAL;
 	}
-	pdpll_idx = nla_get_u32(tb[DPLL_A_ID]);
+	pdpll_idx = nla_get_u32(tb[DPLL_A_PIN_PARENT_ID]);
 	dpll = xa_load(&dpll_device_xa, pdpll_idx);
 	if (!dpll)
 		return -EINVAL;
@@ -740,15 +750,15 @@ static int
 dpll_pin_parent_pin_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 			struct netlink_ext_ack *extack)
 {
-	struct nlattr *tb[DPLL_A_MAX + 1];
+	struct nlattr *tb[DPLL_A_PIN_MAX + 1];
 	enum dpll_pin_state state;
 	u32 ppin_idx;
 	int ret;
 
-	nla_parse_nested(tb, DPLL_A_MAX, parent_nest,
+	nla_parse_nested(tb, DPLL_A_PIN_MAX, parent_nest,
 			 dpll_pin_parent_pin_nl_policy, extack);
-	if (!tb[DPLL_A_PIN_ID]) {
-		NL_SET_ERR_MSG(extack, "parent pin id expected");
+	if (!tb[DPLL_A_PIN_PARENT_ID]) {
+		NL_SET_ERR_MSG(extack, "device parent id expected");
 		return -EINVAL;
 	}
 	ppin_idx = nla_get_u32(tb[DPLL_A_PIN_PARENT_ID]);
@@ -763,8 +773,8 @@ dpll_pin_parent_pin_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 static int
 dpll_pin_set_from_nlattr(struct dpll_pin *pin, struct genl_info *info)
 {
-	int rem, ret = -EINVAL;
 	struct nlattr *a;
+	int rem, ret;
 
 	nla_for_each_attr(a, genlmsg_data(info->genlhdr),
 			  genlmsg_len(info->genlhdr), rem) {
@@ -783,9 +793,6 @@ dpll_pin_set_from_nlattr(struct dpll_pin *pin, struct genl_info *info)
 			ret = dpll_pin_parent_pin_set(pin, a, info->extack);
 			if (ret)
 				return ret;
-			break;
-		case DPLL_A_PIN_ID:
-		case DPLL_A_ID:
 			break;
 		}
 	}
@@ -848,12 +855,12 @@ static struct dpll_pin *dpll_pin_find_from_nlattr(struct genl_info *info)
 	nla_for_each_attr(attr, genlmsg_data(info->genlhdr),
 			  genlmsg_len(info->genlhdr), rem) {
 		switch (nla_type(attr)) {
-		case DPLL_A_CLOCK_ID:
+		case DPLL_A_PIN_CLOCK_ID:
 			if (clock_id)
 				goto duplicated_attr;
 			clock_id = nla_get_u64(attr);
 			break;
-		case DPLL_A_MODULE_NAME:
+		case DPLL_A_PIN_MODULE_NAME:
 			if (mod_name_attr)
 				goto duplicated_attr;
 			mod_name_attr = attr;
