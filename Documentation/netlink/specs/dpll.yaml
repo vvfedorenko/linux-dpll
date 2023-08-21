@@ -202,95 +202,111 @@ attribute-sets:
         name: type
         type: u32
         enum: type
-      -
-        name: pin-id
-        type: u32
-      -
-        name: pin-board-label
-        type: string
-      -
-        name: pin-panel-label
-        type: string
-      -
-        name: pin-package-label
-        type: string
-      -
-        name: pin-type
-        type: u32
-        enum: pin-type
-      -
-        name: pin-direction
-        type: u32
-        enum: pin-direction
-      -
-        name: pin-frequency
-        type: u64
-      -
-        name: pin-frequency-supported
-        type: nest
-        multi-attr: true
-        nested-attributes: pin-frequency-range
-      -
-        name: pin-frequency-min
-        type: u64
-      -
-        name: pin-frequency-max
-        type: u64
-      -
-        name: pin-prio
-        type: u32
-      -
-        name: pin-state
-        type: u32
-        enum: pin-state
-      -
-        name: pin-dpll-caps
-        type: u32
-      -
-        name: pin-parent-device
-        type: nest
-        multi-attr: true
-        nested-attributes: pin-parent-device
-      -
-        name: pin-parent-pin
-        type: nest
-        multi-attr: true
-        nested-attributes: pin-parent-pin
   -
-    name: pin-parent-device
-    subset-of: dpll
+    name: pin
+    enum-name: dpll_a_pin
     attributes:
       -
         name: id
         type: u32
       -
-        name: pin-direction
+        name: parent-id
         type: u32
       -
-        name: pin-prio
+        name: module-name
+        type: string
+      -
+        name: pad
+        type: pad
+      -
+        name: clock-id
+        type: u64
+      -
+        name: board-label
+        type: string
+      -
+        name: panel-label
+        type: string
+      -
+        name: package-label
+        type: string
+      -
+        name: type
+        type: u32
+        enum: pin-type
+      -
+        name: direction
+        type: u32
+        enum: pin-direction
+      -
+        name: frequency
+        type: u64
+      -
+        name: frequency-supported
+        type: nest
+        multi-attr: true
+        nested-attributes: frequency-range
+      -
+        name: frequency-min
+        type: u64
+      -
+        name: frequency-max
+        type: u64
+      -
+        name: prio
         type: u32
       -
-        name: pin-state
+        name: state
+        type: u32
+        enum: pin-state
+      -
+        name: dpll-caps
+        type: u32
+      -
+        name: parent-device
+        type: nest
+        multi-attr: true
+        nested-attributes: pin-parent-device
+      -
+        name: parent-pin
+        type: nest
+        multi-attr: true
+        nested-attributes: pin-parent-pin
+  -
+    name: pin-parent-device
+    subset-of: pin
+    attributes:
+      -
+        name: parent-id
+        type: u32
+      -
+        name: direction
+        type: u32
+      -
+        name: prio
+        type: u32
+      -
+        name: state
         type: u32
   -
     name: pin-parent-pin
-    subset-of: dpll
+    subset-of: pin
     attributes:
       -
-        name: pin-state
+        name: parent-id
         type: u32
       -
-        name: pin-id
+        name: state
         type: u32
   -
-    name: pin-frequency-range
-    subset-of: dpll
+    name: frequency-range
+    subset-of: pin
     attributes:
       -
-        name: pin-frequency-min
+        name: frequency-min
         type: u64
       -
-        name: pin-frequency-max
+        name: frequency-max
         type: u64
 
 operations:
@@ -375,7 +391,7 @@ operations:
       name: pin-id-get
       doc: |
         Get id of a pin that matches given attributes
-      attribute-set: dpll
+      attribute-set: pin
       flags: [ admin-perm ]
 
       do:
@@ -385,13 +401,13 @@ operations:
           attributes:
             - module-name
             - clock-id
-            - pin-board-label
-            - pin-panel-label
-            - pin-package-label
-            - pin-type
+            - board-label
+            - panel-label
+            - package-label
+            - type
         reply:
           attributes:
-            - pin-id
+            - id
 
     -
       name: pin-get
@@ -402,7 +418,7 @@ operations:
         - dump request with target dpll - list all the pins registered with
           a given dpll device
         - do request with target dpll and target pin - single pin attributes
-      attribute-set: dpll
+      attribute-set: pin
       flags: [ admin-perm ]
 
       do:
@@ -410,19 +426,19 @@ operations:
         post: dpll-pin-post-doit
         request:
           attributes:
-            - pin-id
+            - id
         reply: &pin-attrs
           attributes:
-            - pin-id
-            - pin-board-label
-            - pin-panel-label
-            - pin-package-label
-            - pin-type
-            - pin-frequency
-            - pin-frequency-supported
-            - pin-dpll-caps
-            - pin-parent-device
-            - pin-parent-pin
+            - id
+            - board-label
+            - panel-label
+            - package-label
+            - type
+            - frequency
+            - frequency-supported
+            - dpll-caps
+            - parent-device
+            - parent-pin
 
       dump:
         pre: dpll-lock-dumpit
@@ -435,7 +451,7 @@ operations:
     -
       name: pin-set
       doc: Set attributes of a target pin
-      attribute-set: dpll
+      attribute-set: pin
       flags: [ admin-perm ]
 
       do:
@@ -443,13 +459,13 @@ operations:
         post: dpll-pin-post-doit
         request:
           attributes:
-            - pin-id
-            - pin-frequency
-            - pin-direction
-            - pin-prio
-            - pin-state
-            - pin-parent-device
-            - pin-parent-pin
+            - id
+            - frequency
+            - direction
+            - prio
+            - state
+            - parent-device
+            - parent-pin
     -
       name: pin-create-ntf
       doc: Notification about pin appearing
