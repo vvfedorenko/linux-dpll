@@ -724,7 +724,10 @@ dpll_pin_parent_device_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 	if (!dpll)
 		return -EINVAL;
 	ref = xa_load(&pin->dpll_refs, dpll->device_idx);
-	ASSERT_NOT_NULL(ref);
+	if (!ref) {
+		NL_SET_ERR_MSG(extack, "pin not connected to given parent device");
+		return -EINVAL;
+	}
 	if (tb[DPLL_A_PIN_STATE]) {
 		state = nla_get_u32(tb[DPLL_A_PIN_STATE]);
 		ret = dpll_pin_state_set(dpll, pin, state, extack);
