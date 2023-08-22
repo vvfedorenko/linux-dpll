@@ -11,7 +11,7 @@ PLL - Phase Locked Loop is an electronic circuit which syntonizes clock
 signal of a device with an external clock signal. Effectively enabling
 device to run on the same clock signal beat as provided on a PLL input.
 
-DPLL - Digital Phase Locked Loop is am integrated circuit which in
+DPLL - Digital Phase Locked Loop is an integrated circuit which in
 addition to plain PLL behavior incorporates a digital phase detector
 and may have digital divider in the loop. As a result, the frequency on
 DPLL's input and output may be configurable.
@@ -102,9 +102,9 @@ A single pin object can be attached to multiple dpll devices.
 Then there are two groups of configuration knobs:
 
 1) Set on a pin - the configuration affects all dpll devices pin is
-   registered to (i.e. ``DPLL_A_PIN_FREQUENCY``),
+   registered to (i.e., ``DPLL_A_PIN_FREQUENCY``),
 2) Set on a pin-dpll tuple - the configuration affects only selected
-   dpll device (i.e. ``DPLL_A_PIN_PRIO``, ``DPLL_A_PIN_STATE``,
+   dpll device (i.e., ``DPLL_A_PIN_PRIO``, ``DPLL_A_PIN_STATE``,
    ``DPLL_A_PIN_DIRECTION``).
 
 MUX-type pins
@@ -114,35 +114,37 @@ A pin can be MUX-type, it aggregates child pins and serves as a pin
 multiplexer. One or more pins are registered with MUX-type instead of
 being directly registered to a dpll device.
 Pins registered with a MUX-type pin provide user with additional nested
-attribute ``DPLL_A_PIN_PARENT`` for each parent they were registered
+attribute ``DPLL_A_PIN_PARENT_PIN`` for each parent they were registered
 with.
 If a pin was registered with multiple parent pins, they behave like a
 multiple output multiplexer. In this case output of a
 ``DPLL_CMD_PIN_GET`` would contain multiple pin-parent nested
-attributes with current state related to each parent, like::
+attributes with current state related to each parent, like:
 
-  'pin': [{
-   {'clock-id': 282574471561216,
-    'module-name': 'ice',
-    'pin-dpll-caps': 4,
-    'pin-id': 13,
-    'pin-parent': [{'pin-id': 2, 'pin-state': 'connected'},
-                   {'pin-id': 3, 'pin-state': 'disconnected'}],
-    'pin-type': 'synce-eth-port'}
-  }]
+'pin': [{{
+  'clock-id': 282574471561216,
+  'module-name': 'ice',
+  'dpll-caps': 4,
+  'id': 13,
+  'parent-pin': [
+  {'parent-id': 2, 'state': 'connected'},
+  {'parent-id': 3, 'state': 'disconnected'}
+  ],
+  'type': 'synce-eth-port'
+  }}]
 
 Only one child pin can provide its signal to the parent MUX-type pin at
 a time, the selection is done by requesting change of a child pin state
 on desired parent, with the use of ``DPLL_A_PIN_PARENT`` nested
 attribute. Example of netlink `set state on parent pin` message format:
 
-  ====================== =============================================
-  ``DPLL_A_PIN_ID``      child pin id
-  ``DPLL_A_PIN_PARENT``  nested attribute for requesting configuration
-                         related to parent pin
-    ``DPLL_A_PIN_ID``    parent pin id
-    ``DPLL_A_PIN_STATE`` requested pin state on parent
-  ====================== =============================================
+  ========================== =============================================
+  ``DPLL_A_PIN_ID``          child pin id
+  ``DPLL_A_PIN_PARENT_PIN``  nested attribute for requesting configuration
+                             related to parent pin
+    ``DPLL_A_PIN_PARENT_ID`` parent pin id
+    ``DPLL_A_PIN_STATE``     requested pin state on parent
+  ========================== =============================================
 
 Pin priority
 ============
@@ -158,16 +160,16 @@ connected pins with a priority ``DPLL_A_PIN_PRIO``, the device would
 pick a highest priority valid signal and use it to control the DPLL
 device. Example of netlink `set priority on parent pin` message format:
 
-  =====================  =============================================
-  ``DPLL_A_PIN_ID``      child pin id
-  ``DPLL_A_PIN_PARENT``  nested attribute for requesting configuration
-                         related to parent pin
-    ``DPLL_A_ID``        parent dpll id
-    ``DPLL_A_PIN_PRIO``  requested pin prio on parent dpll
-  =====================  =============================================
+  ============================ =============================================
+  ``DPLL_A_PIN_ID``            configured pin id
+  ``DPLL_A_PIN_PARENT_DEVICE`` nested attribute for requesting configuration
+                               related to parent dpll device
+    ``DPLL_A_PIN_PARENT_ID``   parent dpll device id
+    ``DPLL_A_PIN_PRIO``        requested pin prio on parent dpll
+  ============================ =============================================
 
-Child pin of MUX-type is not capable of automatic input pin selection,
-in order to configure a input of a MUX-type pin, the user needs to
+Child pin of MUX-type pin is not capable of automatic input pin selection,
+in order to configure active input of a MUX-type pin, the user needs to
 request desired pin state of the child pin on the parent pin,
 as described in the ``MUX-type pins`` chapter.
 
@@ -186,13 +188,14 @@ any spamming/DoS from unauthorized userspace applications.
 List of netlink commands with possible attributes
 =================================================
 
-All constants identifying command types use a ``DPLL_CMD_`` prefix and
-suffix according to command purpose. All attributes use a ``DPLL_A_``
-prefix and suffix according to attribute purpose:
+Constants identifying command types for dpll device uses a
+``DPLL_CMD_`` prefix and suffix according to command purpose.
+The dpll device related attributes use a ``DPLL_A_`` prefix and
+suffix according to attribute purpose.
 
   ==================================== =================================
   ``DPLL_CMD_DEVICE_ID_GET``           command to get device ID
-  ``DPLL_A_MODULE_NAME``               attr module name of registerer
+    ``DPLL_A_MODULE_NAME``             attr module name of registerer
     ``DPLL_A_CLOCK_ID``                attr Unique Clock Identifier
                                        (EUI-64), as defined by the
                                        IEEE 1588 standard
@@ -220,10 +223,15 @@ prefix and suffix according to attribute purpose:
     ``DPLL_A_MODE``                    attr selection mode to configure
   ==================================== =================================
 
+Constants identifying command types for pins uses a
+``DPLL_CMD_PIN_`` prefix and suffix according to command purpose.
+The pin related attributes use a ``DPLL_A_PIN_`` prefix and suffix
+according to attribute purpose.
+
   ==================================== =================================
   ``DPLL_CMD_PIN_ID_GET``              command to get pin ID
-    ``DPLL_A_MODULE_NAME``             attr module name of registerer
-    ``DPLL_A_CLOCK_ID``                attr Unique Clock Identifier
+    ``DPLL_A_PIN_MODULE_NAME``         attr module name of registerer
+    ``DPLL_A_PIN_CLOCK_ID``            attr Unique Clock Identifier
                                        (EUI-64), as defined by the
                                        IEEE 1588 standard
     ``DPLL_A_PIN_BOARD_LABEL``         attr pin board label provided
@@ -235,12 +243,12 @@ prefix and suffix according to attribute purpose:
     ``DPLL_A_PIN_TYPE``                attr type of a pin
   ==================================== =================================
 
-  ==================================== =================================
+  ==================================== ==================================
   ``DPLL_CMD_PIN_GET``                 command to get pin info or dump
                                        list of available pins
     ``DPLL_A_PIN_ID``                  attr unique a pin ID
-    ``DPLL_A_MODULE_NAME``             attr module name of registerer
-    ``DPLL_A_CLOCK_ID``                attr Unique Clock Identifier
+    ``DPLL_A_PIN_MODULE_NAME``         attr module name of registerer
+    ``DPLL_A_PIN_CLOCK_ID``            attr Unique Clock Identifier
                                        (EUI-64), as defined by the
                                        IEEE 1588 standard
     ``DPLL_A_PIN_BOARD_LABEL``         attr pin board label provided
@@ -250,7 +258,6 @@ prefix and suffix according to attribute purpose:
     ``DPLL_A_PIN_PACKAGE_LABEL``       attr pin package label provided
                                        by registerer
     ``DPLL_A_PIN_TYPE``                attr type of a pin
-    ``DPLL_A_PIN_DIRECTION``           attr direction of a pin
     ``DPLL_A_PIN_FREQUENCY``           attr current frequency of a pin
     ``DPLL_A_PIN_FREQUENCY_SUPPORTED`` nested attr provides supported
                                        frequencies
@@ -258,36 +265,37 @@ prefix and suffix according to attribute purpose:
       ``DPLL_A_PIN_ANY_FREQUENCY_MAX`` attr maximum value of frequency
     ``DPLL_A_PIN_PARENT_DEVICE``       nested attr for each parent device
                                        the pin is connected with
-      ``DPLL_A_ID``                    attr provided if parent is dpll
-                                       device
+      ``DPLL_A_PIN_PARENT_ID``         attr parent dpll device id
       ``DPLL_A_PIN_PRIO``              attr priority of pin on the
                                        dpll device
       ``DPLL_A_PIN_STATE``             attr state of pin on the parent
                                        dpll device
+     ``DPLL_A_PIN_DIRECTION``          attr direction of a pin on the
+                                       parent dpll device
     ``DPLL_A_PIN_PARENT_PIN``          nested attr for each parent pin
                                        the pin is connected with
-      ``DPLL_A_PIN_ID``                attr provided if parent is a pin
+      ``DPLL_A_PIN_PARENT_ID``         attr parent pin id
       ``DPLL_A_PIN_STATE``             attr state of pin on the parent
                                        pin
     ``DPLL_A_PIN_DPLL_CAPS``           attr bitmask of pin-dpll
                                        capabilities
-  ==================================== =================================
+  ==================================== ==================================
 
   ==================================== =================================
   ``DPLL_CMD_PIN_SET``                 command to set pins configuration
     ``DPLL_A_PIN_ID``                  attr unique a pin ID
-    ``DPLL_A_PIN_DIRECTION``           attr requested direction of a pin
     ``DPLL_A_PIN_FREQUENCY``           attr requested frequency of a pin
-    ``DPLL_A_PIN_PARENT_DEVICE``       nested attr for each parent
-                                       device configuration of a pin
-      ``DPLL_A_ID``                    attr parent dpll device id
+    ``DPLL_A_PIN_PARENT_DEVICE``       nested attr for each parent dpll
+                                       device configuration request
+      ``DPLL_A_PIN_PARENT_ID``         attr parent dpll device id
+      ``DPLL_A_PIN_DIRECTION``         attr requested direction of a pin
       ``DPLL_A_PIN_PRIO``              attr requested priority of pin on
                                        the dpll device
       ``DPLL_A_PIN_STATE``             attr requested state of pin on
                                        the dpll device
     ``DPLL_A_PIN_PARENT_PIN``          nested attr for each parent pin
-                                       configuration
-      ``DPLL_A_PIN_ID``                attr parent pin id
+                                       configuration request
+      ``DPLL_A_PIN_PARENT_ID``         attr parent pin id
       ``DPLL_A_PIN_STATE``             attr requested state of pin on
                                        parent pin
   ==================================== =================================
@@ -307,19 +315,21 @@ SET commands format
 ``DPLL_A_ID``, which is unique identifier of dpll device in the system,
 as well as parameter being configured (``DPLL_A_MODE``).
 
-``DPLL_CMD_PIN_SET`` - to target a pin user has to provide a
+``DPLL_CMD_PIN_SET`` - to target a pin user must provide a
 ``DPLL_A_PIN_ID``, which is unique identifier of a pin in the system.
 Also configured pin parameters must be added.
-If ``DPLL_A_PIN_DIRECTION`` or ``DPLL_A_PIN_FREQUENCY`` are configured,
-this affects all the dpll device they are connected, that is why those
-attributes shall not be enclosed in ``DPLL_A_PIN_PARENT``.
-Other attributes:
-``DPLL_A_PIN_PRIO`` or ``DPLL_A_PIN_STATE`` must be enclosed in
-``DPLL_A_PIN_PARENT`` as their configuration relates to only one
-parent dpll or parent pin.
-Nested attribute of either ``DPLL_A_ID`` or ``DPLL_A_PIN_ID`` determines
-if configuration was requested on a dpll device or on a pin
-respectively.
+If ``DPLL_A_PIN_FREQUENCY`` is configured, this affects all the dpll
+devices that are connected with the pin, that is why frequency attribute
+shall not be enclosed in ``DPLL_A_PIN_PARENT_DEVICE``.
+Other attributes: ``DPLL_A_PIN_PRIO``, ``DPLL_A_PIN_STATE`` or
+``DPLL_A_PIN_DIRECTION`` must be enclosed in
+``DPLL_A_PIN_PARENT_DEVICE`` as their configuration relates to only one
+of parent dplls, targeted by ``DPLL_A_PIN_PARENT_ID`` attribute which is
+also required inside that nest.
+For MUX-type pins the ``DPLL_A_PIN_STATE`` attribute is configured in
+similar way, by enclosing required state in ``DPLL_A_PIN_PARENT_PIN``
+nested attribute and targeted parent pin id in ``DPLL_A_PIN_PARENT_ID``.
+
 In general, it is possible to configure multiple parameters at once, but
 internally each parameter change will be invoked separately, where order
 of configuration is not guaranteed by any means.
