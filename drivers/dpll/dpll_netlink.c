@@ -229,7 +229,7 @@ dpll_msg_add_pin_freq(struct sk_buff *msg, struct dpll_pin *pin,
 	if (ret)
 		return ret;
 	if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY, sizeof(freq), &freq,
-			  DPLL_A_PAD))
+			  DPLL_A_PIN_PAD))
 		return -EMSGSIZE;
 	for (fs = 0; fs < pin->prop->freq_supported_num; fs++) {
 		nest = nla_nest_start(msg, DPLL_A_PIN_FREQUENCY_SUPPORTED);
@@ -237,13 +237,13 @@ dpll_msg_add_pin_freq(struct sk_buff *msg, struct dpll_pin *pin,
 			return -EMSGSIZE;
 		freq = pin->prop->freq_supported[fs].min;
 		if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY_MIN, sizeof(freq),
-				  &freq, DPLL_A_PAD)) {
+				  &freq, DPLL_A_PIN_PAD)) {
 			nla_nest_cancel(msg, nest);
 			return -EMSGSIZE;
 		}
 		freq = pin->prop->freq_supported[fs].max;
 		if (nla_put_64bit(msg, DPLL_A_PIN_FREQUENCY_MAX, sizeof(freq),
-				  &freq, DPLL_A_PAD)) {
+				  &freq, DPLL_A_PIN_PAD)) {
 			nla_nest_cancel(msg, nest);
 			return -EMSGSIZE;
 		}
