@@ -636,7 +636,7 @@ dpll_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 		NL_SET_ERR_MSG(extack, "state changing is not allowed");
 		return -EOPNOTSUPP;
 	}
-	ref = xa_load(&pin->dpll_refs, dpll->device_idx);
+	ref = xa_load(&pin->dpll_refs, dpll->id);
 	ASSERT_NOT_NULL(ref);
 	ops = dpll_pin_ops(ref);
 	if (!ops->state_on_dpll_set)
@@ -663,7 +663,7 @@ dpll_pin_prio_set(struct dpll_device *dpll, struct dpll_pin *pin,
 		NL_SET_ERR_MSG(extack, "prio changing is not allowed");
 		return -EOPNOTSUPP;
 	}
-	ref = xa_load(&pin->dpll_refs, dpll->device_idx);
+	ref = xa_load(&pin->dpll_refs, dpll->id);
 	ASSERT_NOT_NULL(ref);
 	ops = dpll_pin_ops(ref);
 	if (!ops->prio_set)
@@ -691,7 +691,7 @@ dpll_pin_direction_set(struct dpll_pin *pin, struct dpll_device *dpll,
 		NL_SET_ERR_MSG(extack, "direction changing is not allowed");
 		return -EOPNOTSUPP;
 	}
-	ref = xa_load(&pin->dpll_refs, dpll->device_idx);
+	ref = xa_load(&pin->dpll_refs, dpll->id);
 	ASSERT_NOT_NULL(ref);
 	ops = dpll_pin_ops(ref);
 	if (!ops->direction_set)
@@ -725,9 +725,11 @@ dpll_pin_parent_device_set(struct dpll_pin *pin, struct nlattr *parent_nest,
 	}
 	pdpll_idx = nla_get_u32(tb[DPLL_A_PIN_PARENT_ID]);
 	dpll = xa_load(&dpll_device_xa, pdpll_idx);
-	if (!dpll)
+	if (!dpll) {
+		NL_SET_ERR_MSG(extack, "parent device not found");
 		return -EINVAL;
-	ref = xa_load(&pin->dpll_refs, dpll->device_idx);
+	}
+	ref = xa_load(&pin->dpll_refs, dpll->id);
 	if (!ref) {
 		NL_SET_ERR_MSG(extack, "pin not connected to given parent device");
 		return -EINVAL;
