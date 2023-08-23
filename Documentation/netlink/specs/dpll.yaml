@@ -150,10 +150,10 @@ definitions:
     render-max: true
   -
     type: flags
-    name: pin-caps
+    name: pin-capabilities
     doc: |
       defines possible capabilities of a pin, valid flags on
-      DPLL_A_PIN_CAPS attribute
+      DPLL_A_PIN_CAPABILITIES attribute
     entries:
       -
         name: direction-can-change
@@ -260,7 +260,7 @@ attribute-sets:
         type: u32
         enum: pin-state
       -
-        name: dpll-caps
+        name: capabilities
         type: u32
       -
         name: parent-device
@@ -436,7 +436,7 @@ operations:
             - type
             - frequency
             - frequency-supported
-            - dpll-caps
+            - capabilities
             - parent-device
             - parent-pin
 
