@@ -171,7 +171,7 @@ dpll_xa_ref_dpll_add(struct xarray *xa_dplls, struct dpll_device *dpll,
 			return -ENOMEM;
 		ref->dpll = dpll;
 		INIT_LIST_HEAD(&ref->registration_list);
-		ret = xa_insert(xa_dplls, dpll->device_idx, ref, GFP_KERNEL);
+		ret = xa_insert(xa_dplls, dpll->id, ref, GFP_KERNEL);
 		if (ret) {
 			kfree(ref);
 			return ret;
@@ -182,7 +182,7 @@ dpll_xa_ref_dpll_add(struct xarray *xa_dplls, struct dpll_device *dpll,
 	reg = kzalloc(sizeof(*reg), GFP_KERNEL);
 	if (!reg) {
 		if (!ref_exists) {
-			xa_erase(xa_dplls, dpll->device_idx);
+			xa_erase(xa_dplls, dpll->id);
 			kfree(ref);
 		}
 		return -ENOMEM;
