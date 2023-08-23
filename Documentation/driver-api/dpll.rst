@@ -124,7 +124,7 @@ attributes with current state related to each parent, like:
 'pin': [{{
   'clock-id': 282574471561216,
   'module-name': 'ice',
-  'dpll-caps': 4,
+  'capabilities': 4,
   'id': 13,
   'parent-pin': [
   {'parent-id': 2, 'state': 'connected'},
@@ -277,8 +277,7 @@ according to attribute purpose.
       ``DPLL_A_PIN_PARENT_ID``         attr parent pin id
       ``DPLL_A_PIN_STATE``             attr state of pin on the parent
                                        pin
-    ``DPLL_A_PIN_DPLL_CAPS``           attr bitmask of pin-dpll
-                                       capabilities
+    ``DPLL_A_PIN_CAPABILITIES``        attr bitmask of pin capabilities
   ==================================== ==================================
 
   ==================================== =================================
