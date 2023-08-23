@@ -2306,7 +2306,7 @@ ptp_ocp_sma_fb_init(struct ptp_ocp *bp)
 	struct dpll_pin_properties prop = {
 		.board_label = NULL,
 		.type = DPLL_PIN_TYPE_EXT,
-		.capabilities = DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE,
+		.capabilities = DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE,
 		.freq_supported_num = ARRAY_SIZE(ptp_ocp_sma_freq),
 		.freq_supported = ptp_ocp_sma_freq,
 
@@ -2331,7 +2331,7 @@ ptp_ocp_sma_fb_init(struct ptp_ocp *bp)
 			bp->sma[i].fixed_fcn = true;
 			bp->sma[i].fixed_dir = true;
 			bp->sma[1].dpll_prop.capabilities &=
-				~DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE;
+				~DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE;
 		}
 		return;
 	}
@@ -2522,12 +2522,12 @@ ptp_ocp_art_sma_init(struct ptp_ocp *bp)
 		case 8:
 			bp->sma[i].mode = SMA_MODE_IN;
 			bp->sma[i].dpll_prop.capabilities =
-				DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE;
+				DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE;
 			break;
 		default:
 			bp->sma[i].mode = SMA_MODE_OUT;
 			bp->sma[i].dpll_prop.capabilities =
-				DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE;
+				DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE;
 			break;
 		}
 	}
