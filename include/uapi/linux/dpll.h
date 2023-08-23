@@ -126,16 +126,16 @@ enum dpll_pin_state {
 };
 
 /**
- * enum dpll_pin_caps - defines possible capabilities of a pin, valid flags on
- *   DPLL_A_PIN_CAPS attribute
- * @DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE: pin direction can be changed
- * @DPLL_PIN_CAPS_PRIORITY_CAN_CHANGE: pin priority can be changed
- * @DPLL_PIN_CAPS_STATE_CAN_CHANGE: pin state can be changed
+ * enum dpll_pin_capabilities - defines possible capabilities of a pin, valid
+ *   flags on DPLL_A_PIN_CAPABILITIES attribute
+ * @DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE: pin direction can be changed
+ * @DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE: pin priority can be changed
+ * @DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE: pin state can be changed
  */
-enum dpll_pin_caps {
-	DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE = 1,
-	DPLL_PIN_CAPS_PRIORITY_CAN_CHANGE = 2,
-	DPLL_PIN_CAPS_STATE_CAN_CHANGE = 4,
+enum dpll_pin_capabilities {
+	DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE = 1,
+	DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE = 2,
+	DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE = 4,
 };
 
 enum dpll_a {
@@ -170,7 +170,7 @@ enum dpll_a_pin {
 	DPLL_A_PIN_FREQUENCY_MAX,
 	DPLL_A_PIN_PRIO,
 	DPLL_A_PIN_STATE,
-	DPLL_A_PIN_DPLL_CAPS,
+	DPLL_A_PIN_CAPABILITIES,
 	DPLL_A_PIN_PARENT_DEVICE,
 	DPLL_A_PIN_PARENT_PIN,
 
