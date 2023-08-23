@@ -196,7 +196,7 @@ static const struct dpll_pin_ops mlx5_dpll_pins_ops = {
 
 static const struct dpll_pin_properties mlx5_dpll_pin_properties = {
 	.type = DPLL_PIN_TYPE_SYNCE_ETH_PORT,
-	.capabilities = DPLL_PIN_CAPS_STATE_CAN_CHANGE,
+	.capabilities = DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE,
 };
 
 #define MLX5_DPLL_PERIODIC_WORK_INTERVAL 500 /* ms */
