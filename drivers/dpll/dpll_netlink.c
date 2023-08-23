@@ -374,7 +374,7 @@ dpll_cmd_pin_get_one(struct sk_buff *msg, struct dpll_pin *pin,
 		return -EMSGSIZE;
 	if (nla_put_u32(msg, DPLL_A_PIN_TYPE, prop->type))
 		return -EMSGSIZE;
-	if (nla_put_u32(msg, DPLL_A_PIN_DPLL_CAPS, prop->capabilities))
+	if (nla_put_u32(msg, DPLL_A_PIN_CAPABILITIES, prop->capabilities))
 		return -EMSGSIZE;
 	ret = dpll_msg_add_pin_freq(msg, pin, ref, extack);
 	if (ret)
@@ -595,7 +595,8 @@ dpll_pin_on_pin_state_set(struct dpll_pin *pin, u32 parent_idx,
 	unsigned long i;
 	int ret;
 
-	if (!(DPLL_PIN_CAPS_STATE_CAN_CHANGE & pin->prop->capabilities)) {
+	if (!(DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE &
+	      pin->prop->capabilities)) {
 		NL_SET_ERR_MSG(extack, "state changing is not allowed");
 		return -EOPNOTSUPP;
 	}
@@ -630,7 +631,8 @@ dpll_pin_state_set(struct dpll_device *dpll, struct dpll_pin *pin,
 	struct dpll_pin_ref *ref;
 	int ret;
 
-	if (!(DPLL_PIN_CAPS_STATE_CAN_CHANGE & pin->prop->capabilities)) {
+	if (!(DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE &
+	      pin->prop->capabilities)) {
 		NL_SET_ERR_MSG(extack, "state changing is not allowed");
 		return -EOPNOTSUPP;
 	}
@@ -656,7 +658,8 @@ dpll_pin_prio_set(struct dpll_device *dpll, struct dpll_pin *pin,
 	struct dpll_pin_ref *ref;
 	int ret;
 
-	if (!(DPLL_PIN_CAPS_PRIORITY_CAN_CHANGE & pin->prop->capabilities)) {
+	if (!(DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE &
+	      pin->prop->capabilities)) {
 		NL_SET_ERR_MSG(extack, "prio changing is not allowed");
 		return -EOPNOTSUPP;
 	}
@@ -683,7 +686,8 @@ dpll_pin_direction_set(struct dpll_pin *pin, struct dpll_device *dpll,
 	struct dpll_pin_ref *ref;
 	int ret;
 
-	if (!(DPLL_PIN_CAPS_DIRECTION_CAN_CHANGE & pin->prop->capabilities)) {
+	if (!(DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE &
+	      pin->prop->capabilities)) {
 		NL_SET_ERR_MSG(extack, "direction changing is not allowed");
 		return -EOPNOTSUPP;
 	}
